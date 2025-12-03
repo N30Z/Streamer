@@ -66,8 +66,6 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/*.whl
-
-  # --- NEW JOB: Docker Build and Push to GHCR ---
   docker-release:
     needs: extract-version
     runs-on: ubuntu-latest
