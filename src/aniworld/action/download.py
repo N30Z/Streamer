@@ -184,7 +184,7 @@ class CliProgressBar:
                     total_bytes_str = f"~{_format_bytes(total_bytes)}"
 
             # Clean ANSI color codes
-            import re
+
 
             if speed_str != "N/A" and speed_str:
                 speed_str = re.sub(r"\x1b\[[0-9;]*m", "", str(speed_str)).strip()
@@ -199,8 +199,7 @@ class CliProgressBar:
                 total_bytes_str = re.sub(
                     r"\x1b\[[0-9;]*m", "", str(total_bytes_str)
                 ).strip()
-            else:
-                total_bytes_str = "N/A"
+
 
             # Create progress bar
             bar_width = 40
