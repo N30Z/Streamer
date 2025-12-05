@@ -8,5 +8,4 @@ services:
     volumes:
       - ./downloads:/app/downloads
       - ./data:/app/data
-    tty: true
     restart: unless-stopped
