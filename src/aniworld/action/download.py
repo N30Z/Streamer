@@ -37,7 +37,7 @@ def _create_quiet_logger():
 def _format_bytes(bytes_value: int) -> str:
     """Format bytes to human-readable string (e.g., 1.5GiB, 500MiB)."""
     size = float(bytes_value)
-    for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB']:
+    for unit in ["B", "KiB", "MiB", "GiB", "TiB"]:
         if size < 1024.0:
             return f"{size:.2f}{unit}"
         size /= 1024.0
@@ -162,17 +162,19 @@ class CliProgressBar:
             # Get speed and ETA with cleaning
             speed_str = d.get("_speed_str", "N/A")
             eta_str = d.get("_eta_str", "N/A")
-            
+
             # Try multiple methods to get total size
             total_bytes_str = "N/A"
-            
+
             # Method 1: Use formatted string from yt-dlp (check for actual content, not just existence)
             _total_bytes_str = d.get("_total_bytes_str", "").strip()
             if _total_bytes_str and _total_bytes_str != "N/A":
                 total_bytes_str = _total_bytes_str
             else:
                 # Try estimate string
-                _total_bytes_estimate_str = d.get("_total_bytes_estimate_str", "").strip()
+                _total_bytes_estimate_str = d.get(
+                    "_total_bytes_estimate_str", ""
+                ).strip()
                 if _total_bytes_estimate_str and _total_bytes_estimate_str != "N/A":
                     total_bytes_str = _total_bytes_estimate_str
                 # Method 2: Calculate from raw bytes
@@ -184,7 +186,6 @@ class CliProgressBar:
                     total_bytes_str = f"~{_format_bytes(total_bytes)}"
 
             # Clean ANSI color codes
-
 
             if speed_str != "N/A" and speed_str:
                 speed_str = re.sub(r"\x1b\[[0-9;]*m", "", str(speed_str)).strip()
@@ -199,7 +200,6 @@ class CliProgressBar:
                 total_bytes_str = re.sub(
                     r"\x1b\[[0-9;]*m", "", str(total_bytes_str)
                 ).strip()
-
 
             # Create progress bar
             bar_width = 40
