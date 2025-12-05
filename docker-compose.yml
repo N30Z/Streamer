@@ -2,12 +2,11 @@ version: '3.8'
 services:
   aniworld:
     container_name: aniworld-downloader
-    image: ghcr.io/phoenixthrush/aniworld-downloader
+    image: phoenixthrush/aniworld-downloader
     ports:
       - "8080:8080"
     volumes:
       - ./downloads:/app/downloads
       - ./data:/app/data
-    stdin_open: true
     tty: true
     restart: unless-stopped
