@@ -2,7 +2,7 @@
 
 # AniWorld Downloader
 
-AniWorld Downloader is a command-line tool for downloading and streaming content from aniworld.to and s.to. Currently available for Windows, macOS and Linux, it supports LoadX, VOE, Vidmoly, Filemoon, Luluvdo, Doodstream, Vidoza, SpeedFiles and Streamtape.
+AniWorld Downloader is a command-line tool for downloading and streaming anime movies and series from aniworld.to, as well as regular movies and TV shows from s.to. Currently available for Windows, macOS and Linux, it supports LoadX, VOE, Vidmoly, Filemoon, Luluvdo, Doodstream, Vidoza, SpeedFiles and Streamtape.
 
 [![PyPI Downloads](https://static.pepy.tech/badge/aniworld)](https://pepy.tech/projects/aniworld)
 ![PyPI Downloads](https://img.shields.io/pypi/dm/aniworld?label=downloads&color=blue)
