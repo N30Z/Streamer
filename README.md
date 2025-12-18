@@ -12,7 +12,7 @@ AniWorld Downloader is a command-line tool for downloading and streaming anime m
 
 ## TL;DR - Quick Start
 
-```bash
+```text
 pip install aniworld && aniworld
 ```
 
