@@ -2636,6 +2636,16 @@ body[data-theme="dark"] .episode-progress-text {
     transform: translateY(-1px);
 }
 
+.file-action-btn.download-btn {
+    background: #48bb78;
+    color: white;
+}
+
+.file-action-btn.download-btn:hover {
+    background: #38a169;
+    transform: translateY(-1px);
+}
+
 .file-action-btn.cast-btn {
     background: #9f7aea;
     color: white;
