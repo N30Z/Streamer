@@ -1593,6 +1593,57 @@ class WebApp:
                     "error": f"Failed to stream file: {str(e)}"
                 }), 500
 
+        @self.app.route("/api/files/download/<path:file_path>")
+        @self._require_api_auth
+        def api_download_file(file_path):
+            """Download a video file endpoint."""
+            try:
+                # Get download directory
+                download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+                if (
+                    self.arguments
+                    and hasattr(self.arguments, "output_dir")
+                    and self.arguments.output_dir is not None
+                ):
+                    download_path = str(self.arguments.output_dir)
+
+                download_dir = Path(download_path)
+                full_path = download_dir / file_path
+
+                # Security check: ensure file is within download directory
+                try:
+                    full_path.resolve().relative_to(download_dir.resolve())
+                except ValueError:
+                    return jsonify({
+                        "success": False,
+                        "error": "Invalid file path"
+                    }), 403
+
+                if not full_path.exists():
+                    return jsonify({
+                        "success": False,
+                        "error": "File not found"
+                    }), 404
+
+                # Get MIME type
+                mime_type, _ = mimetypes.guess_type(str(full_path))
+                if not mime_type:
+                    mime_type = "application/octet-stream"
+
+                return send_file(
+                    full_path,
+                    mimetype=mime_type,
+                    as_attachment=True,
+                    download_name=full_path.name
+                )
+
+            except Exception as e:
+                logging.error(f"Failed to download file: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to download file: {str(e)}"
+                }), 500
+
         @self.app.route("/api/files/play", methods=["POST"])
         @self._require_api_auth
         def api_play_file():

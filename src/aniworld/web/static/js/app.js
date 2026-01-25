@@ -1650,6 +1650,9 @@ document.head.appendChild(style);
                         <button class="file-action-btn stream-btn" title="Stream in browser">
                             <i class="fas fa-play"></i> Stream
                         </button>
+                        <button class="file-action-btn download-btn" title="Download file">
+                            <i class="fas fa-download"></i> Download
+                        </button>
                         <button class="file-action-btn delete-btn" title="Delete file">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -1658,10 +1661,12 @@ document.head.appendChild(style);
 
                 // Add event listeners
                 const streamBtn = fileItem.querySelector('.stream-btn');
+                const downloadBtn = fileItem.querySelector('.download-btn');
                 const deleteBtn = fileItem.querySelector('.delete-btn');
                 const continueBtnEl = fileItem.querySelector('.continue-btn');
 
                 streamBtn.addEventListener('click', () => streamFile(file));
+                downloadBtn.addEventListener('click', () => downloadFile(file));
                 deleteBtn.addEventListener('click', () => deleteFile(file));
                 if (continueBtnEl && progress) {
                     continueBtnEl.addEventListener('click', () => streamFile(file, progress.current_time));
@@ -2329,6 +2334,18 @@ document.head.appendChild(style);
         .catch(error => {
             console.error('Cast control error:', error);
         });
+    }
+
+    function downloadFile(file) {
+        // Create a download link and trigger it
+        const downloadUrl = `/api/files/download/${encodeURIComponent(file.path)}`;
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = file.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showNotification(`Downloading "${file.name}"...`, 'info');
     }
 
     function deleteFile(file) {
