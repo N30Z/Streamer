@@ -801,50 +801,58 @@ class WebApp:
 
                     slug = path_parts[-1]
 
-                    # Try to fetch anime details from the direct URL
+                    # Use search functionality to get the full anime details
                     from ..search import fetch_anime_list
-                    import requests
-
+                    
                     try:
-                        # Fetch the anime page to get details
-                        response = requests.get(url, timeout=10)
-                        response.raise_for_status()
-
-                        # Extract anime title from the page
-                        from html.parser import HTMLParser
-
-                        class TitleExtractor(HTMLParser):
-                            def __init__(self):
-                                super().__init__()
-                                self.title = None
-                                self.in_title = False
-
-                            def handle_starttag(self, tag, attrs):
-                                if tag == "h1":
-                                    self.in_title = True
-
-                            def handle_data(self, data):
-                                if self.in_title:
-                                    self.title = data.strip()
-
-                            def handle_endtag(self, tag):
-                                if tag == "h1":
-                                    self.in_title = False
-
-                        parser = TitleExtractor()
-                        parser.feed(response.text)
-                        anime_title = parser.title or slug.replace("-", " ").title()
-
-                        # Return anime details in same format as search results
-                        anime_result = {
-                            "title": anime_title,
-                            "url": url,
-                            "slug": slug,
-                            "site": site,
-                            "description": "",
-                            "cover": "",
-                        }
-
+                        # First, search for the anime using its name to get full details
+                        search_query = slug.replace("-", " ")
+                        
+                        if site == "s.to":
+                            search_url = f"{config.S_TO}/ajax/seriesSearch?keyword={search_query}"
+                        else:
+                            search_url = f"{config.ANIWORLD_TO}/ajax/seriesSearch?keyword={search_query}"
+                        
+                        # Fetch anime list from search
+                        search_results = fetch_anime_list(search_url)
+                        
+                        # Find matching anime by slug
+                        matching_anime = None
+                        for anime in search_results:
+                            if anime.get("link", "").strip() == slug:
+                                matching_anime = anime
+                                break
+                        
+                        # If found, use the complete details
+                        if matching_anime:
+                            name = matching_anime.get("name", slug.replace("-", " ").title())
+                            year = matching_anime.get("productionYear", "")
+                            
+                            # Create title like search does
+                            if year and year != "Unknown Year" and str(year) not in name:
+                                title = f"{name} {year}"
+                            else:
+                                title = name
+                            
+                            anime_result = {
+                                "title": title,
+                                "url": url,
+                                "slug": slug,
+                                "site": site,
+                                "description": matching_anime.get("description", ""),
+                                "cover": matching_anime.get("cover", ""),
+                            }
+                        else:
+                            # Fallback if not found in search
+                            anime_result = {
+                                "title": slug.replace("-", " ").title(),
+                                "url": url,
+                                "slug": slug,
+                                "site": site,
+                                "description": "",
+                                "cover": "",
+                            }
+                        
                         return jsonify(
                             {
                                 "success": True,
@@ -852,10 +860,10 @@ class WebApp:
                                 "source": "direct_url",
                             }
                         )
-
-                    except requests.RequestException as e:
-                        logging.warning(f"Failed to fetch from direct URL: {e}")
-                        # Return basic result even if fetch fails
+                    
+                    except Exception as search_err:
+                        logging.warning(f"Failed to fetch details from search for direct URL: {search_err}")
+                        # Fallback to basic result
                         anime_result = {
                             "title": slug.replace("-", " ").title(),
                             "url": url,
