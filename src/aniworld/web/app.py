@@ -155,31 +155,30 @@ class WebApp:
             tuple: (cast, browser) if found, (None, None) if not found
         """
         import pychromecast
-        from pychromecast.discovery import CastBrowser, SimpleCastListener
-        import time
+        import zeroconf
         import threading
 
         found_cast = None
         found_event = threading.Event()
-        browser = None
+        zconf = zeroconf.Zeroconf()
 
-        class DeviceListener(SimpleCastListener):
-            def add_cast(self, uuid, service):
-                nonlocal found_cast, browser
-                if str(uuid) == device_uuid and service.host:
-                    # Create Chromecast from the discovered service
+        def callback(uuid, service):
+            nonlocal found_cast
+            if str(uuid) == device_uuid:
+                service_info = browser.devices.get(uuid)
+                if service_info and service_info.host:
                     found_cast = pychromecast.get_chromecast_from_cast_info(
-                        service, browser.zc
+                        service_info, zconf
                     )
                     found_event.set()
 
-        listener = DeviceListener()
-        browser = CastBrowser(listener)
+        listener = pychromecast.SimpleCastListener(callback)
+        browser = pychromecast.CastBrowser(listener, zconf)
         browser.start_discovery()
 
         # Wait for the specific device or timeout
         found_event.wait(timeout=timeout)
-        browser.stop_discovery()
+        pychromecast.discovery.stop_discovery(browser)
 
         return found_cast, browser
 
@@ -1237,7 +1236,7 @@ class WebApp:
             try:
                 try:
                     import pychromecast
-                    from pychromecast.discovery import CastBrowser, SimpleCastListener
+                    import zeroconf
                 except ImportError:
                     return jsonify({
                         "success": False,
@@ -1245,27 +1244,20 @@ class WebApp:
                         "devices": []
                     })
 
-                # Use discovery listener to collect fully-resolved devices
-                discovered_devices = {}
+                # Create zeroconf instance for discovery
+                zconf = zeroconf.Zeroconf()
 
-                class DeviceListener(SimpleCastListener):
-                    def add_cast(self, uuid, service):
-                        discovered_devices[uuid] = service
-
-                    def update_cast(self, uuid, service):
-                        discovered_devices[uuid] = service
-
-                listener = DeviceListener()
-                browser = CastBrowser(listener)
+                # Use SimpleCastListener with callback to track discovered devices
+                listener = pychromecast.SimpleCastListener(lambda uuid, service: None)
+                browser = pychromecast.CastBrowser(listener, zconf)
                 browser.start_discovery()
 
                 # Wait for discovery to find devices
-                import time
                 time.sleep(5)
 
-                # Collect device info before stopping
+                # Collect device info from browser.devices before stopping
                 devices = []
-                for uuid, service in discovered_devices.items():
+                for uuid, service in browser.devices.items():
                     # Only include devices with resolved host
                     if service.host:
                         devices.append({
@@ -1276,7 +1268,7 @@ class WebApp:
                             "port": service.port
                         })
 
-                browser.stop_discovery()
+                pychromecast.discovery.stop_discovery(browser)
 
                 return jsonify({
                     "success": True,
