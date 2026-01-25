@@ -747,6 +747,147 @@ class WebApp:
                     {"success": False, "error": f"Search failed: {str(err)}"}
                 ), 500
 
+        @self.app.route("/api/direct", methods=["POST"])
+        @self._require_api_auth
+        def api_direct():
+            """Handle direct URL input endpoint."""
+            try:
+                from flask import request
+                from urllib.parse import urlparse
+                from .. import config
+
+                data = request.get_json()
+                if not data or "url" not in data:
+                    return jsonify(
+                        {"success": False, "error": "URL parameter is required"}
+                    ), 400
+
+                url = data["url"].strip()
+                if not url:
+                    return jsonify(
+                        {"success": False, "error": "URL cannot be empty"}
+                    ), 400
+
+                # Validate and parse the URL
+                try:
+                    parsed_url = urlparse(url)
+                    domain = parsed_url.netloc.lower()
+
+                    # Check if URL is from a supported site
+                    if "aniworld.to" not in domain and "s.to" not in domain:
+                        return jsonify(
+                            {
+                                "success": False,
+                                "error": "URL must be from aniworld.to or s.to",
+                            }
+                        ), 400
+
+                    # Determine site and stream path
+                    if "s.to" in domain:
+                        site = "s.to"
+                        base_url = config.S_TO
+                        stream_path = "serie/stream"
+                    else:
+                        site = "aniworld.to"
+                        base_url = config.ANIWORLD_TO
+                        stream_path = "anime/stream"
+
+                    # Extract slug from URL (last part of path)
+                    path_parts = [p for p in parsed_url.path.split("/") if p]
+                    if not path_parts:
+                        return jsonify(
+                            {"success": False, "error": "Invalid URL format"}
+                        ), 400
+
+                    slug = path_parts[-1]
+
+                    # Try to fetch anime details from the direct URL
+                    from ..search import fetch_anime_list
+                    import requests
+
+                    try:
+                        # Fetch the anime page to get details
+                        response = requests.get(url, timeout=10)
+                        response.raise_for_status()
+
+                        # Extract anime title from the page
+                        from html.parser import HTMLParser
+
+                        class TitleExtractor(HTMLParser):
+                            def __init__(self):
+                                super().__init__()
+                                self.title = None
+                                self.in_title = False
+
+                            def handle_starttag(self, tag, attrs):
+                                if tag == "h1":
+                                    self.in_title = True
+
+                            def handle_data(self, data):
+                                if self.in_title:
+                                    self.title = data.strip()
+
+                            def handle_endtag(self, tag):
+                                if tag == "h1":
+                                    self.in_title = False
+
+                        parser = TitleExtractor()
+                        parser.feed(response.text)
+                        anime_title = parser.title or slug.replace("-", " ").title()
+
+                        # Return anime details
+                        anime_result = {
+                            "title": anime_title,
+                            "url": url,
+                            "slug": slug,
+                            "site": site,
+                            "base_url": base_url,
+                            "stream_path": stream_path,
+                            "description": "",
+                            "cover": "",
+                        }
+
+                        return jsonify(
+                            {
+                                "success": True,
+                                "result": anime_result,
+                                "source": "direct_url",
+                            }
+                        )
+
+                    except requests.RequestException as e:
+                        logging.warning(f"Failed to fetch from direct URL: {e}")
+                        # Return basic result even if fetch fails
+                        anime_result = {
+                            "title": slug.replace("-", " ").title(),
+                            "url": url,
+                            "slug": slug,
+                            "site": site,
+                            "base_url": base_url,
+                            "stream_path": stream_path,
+                            "description": "",
+                            "cover": "",
+                        }
+                        return jsonify(
+                            {
+                                "success": True,
+                                "result": anime_result,
+                                "source": "direct_url",
+                            }
+                        )
+
+                except Exception as url_err:
+                    logging.error(f"URL parsing error: {url_err}")
+                    return jsonify(
+                        {"success": False, "error": f"Invalid URL: {str(url_err)}"}
+                    ), 400
+
+            except Exception as err:
+                logging.error(f"Direct URL error: {err}")
+                return jsonify(
+                    {"success": False, "error": f"Failed to process URL: {str(err)}"}
+                ), 500
+
         @self.app.route("/api/download", methods=["POST"])
         @self._require_api_auth
         def api_download():
