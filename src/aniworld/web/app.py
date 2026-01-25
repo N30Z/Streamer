@@ -1166,7 +1166,7 @@ class WebApp:
         @self.app.route("/api/files")
         @self._require_api_auth
         def api_list_files():
-            """List downloaded files endpoint."""
+            """List downloaded files endpoint - supports folder navigation."""
             try:
                 # Get download directory
                 download_path = str(config.DEFAULT_DOWNLOAD_PATH)
@@ -1179,38 +1179,80 @@ class WebApp:
 
                 download_dir = Path(download_path)
 
-                if not download_dir.exists():
+                # Get the relative subpath from query parameter
+                subpath = request.args.get("path", "")
+
+                # Calculate current directory
+                if subpath:
+                    current_dir = download_dir / subpath
+                else:
+                    current_dir = download_dir
+
+                # Security check: ensure current_dir is within download_dir
+                try:
+                    current_dir.resolve().relative_to(download_dir.resolve())
+                except ValueError:
+                    return jsonify({
+                        "success": False,
+                        "error": "Invalid path"
+                    }), 403
+
+                if not current_dir.exists():
                     return jsonify({
                         "success": True,
                         "path": download_path,
+                        "current_path": subpath,
+                        "folders": [],
                         "files": []
                     })
 
-                # Get all video files recursively
                 video_extensions = {'.mp4', '.mkv', '.avi', '.webm', '.mov', '.m4v', '.flv', '.wmv'}
+                folders = []
                 files = []
 
-                for file_path in download_dir.rglob('*'):
-                    if file_path.is_file() and file_path.suffix.lower() in video_extensions:
-                        stat = file_path.stat()
-                        relative_path = file_path.relative_to(download_dir)
+                # List immediate children (folders and video files)
+                for item in current_dir.iterdir():
+                    if item.is_dir():
+                        # Count video files in this folder (recursively)
+                        video_count = sum(1 for _ in item.rglob('*') if _.is_file() and _.suffix.lower() in video_extensions)
+                        if video_count > 0:  # Only show folders with videos
+                            relative_path = item.relative_to(download_dir)
+                            folders.append({
+                                "name": item.name,
+                                "path": str(relative_path),
+                                "type": "folder",
+                                "video_count": video_count
+                            })
+                    elif item.is_file() and item.suffix.lower() in video_extensions:
+                        stat = item.stat()
+                        relative_path = item.relative_to(download_dir)
                         files.append({
-                            "name": file_path.name,
+                            "name": item.name,
                             "path": str(relative_path),
-                            "full_path": str(file_path),
+                            "full_path": str(item),
+                            "type": "file",
                             "size": stat.st_size,
                             "size_human": self._format_file_size(stat.st_size),
                             "modified": stat.st_mtime,
                             "modified_human": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
-                            "parent": str(relative_path.parent) if str(relative_path.parent) != "." else ""
                         })
 
-                # Sort by modification time (newest first)
+                # Sort folders alphabetically, files by modification time
+                folders.sort(key=lambda x: x["name"].lower())
                 files.sort(key=lambda x: x["modified"], reverse=True)
+
+                # Calculate parent path for navigation
+                parent_path = ""
+                if subpath:
+                    parent = Path(subpath).parent
+                    parent_path = str(parent) if str(parent) != "." else ""
 
                 return jsonify({
                     "success": True,
                     "path": download_path,
+                    "current_path": subpath,
+                    "parent_path": parent_path,
+                    "folders": folders,
                     "files": files
                 })
 
@@ -1219,6 +1261,108 @@ class WebApp:
                 return jsonify({
                     "success": False,
                     "error": f"Failed to list files: {str(e)}"
+                }), 500
+
+        @self.app.route("/api/watch-progress", methods=["GET"])
+        @self._require_api_auth
+        def api_get_watch_progress():
+            """Get watch progress for all files or a specific file."""
+            try:
+                file_path = request.args.get("file")
+                progress_file = self._get_watch_progress_file()
+
+                progress_data = self._load_watch_progress(progress_file)
+
+                if file_path:
+                    # Return progress for specific file
+                    return jsonify({
+                        "success": True,
+                        "progress": progress_data.get(file_path, {})
+                    })
+                else:
+                    # Return all progress
+                    return jsonify({
+                        "success": True,
+                        "progress": progress_data
+                    })
+            except Exception as e:
+                logging.error(f"Failed to get watch progress: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": str(e)
+                }), 500
+
+        @self.app.route("/api/watch-progress", methods=["POST"])
+        @self._require_api_auth
+        def api_set_watch_progress():
+            """Set watch progress for a file."""
+            try:
+                data = request.get_json()
+                file_path = data.get("file")
+                current_time = data.get("current_time", 0)
+                duration = data.get("duration", 0)
+
+                if not file_path:
+                    return jsonify({
+                        "success": False,
+                        "error": "File path is required"
+                    }), 400
+
+                progress_file = self._get_watch_progress_file()
+                progress_data = self._load_watch_progress(progress_file)
+
+                # Update progress for this file
+                progress_data[file_path] = {
+                    "current_time": current_time,
+                    "duration": duration,
+                    "last_watched": datetime.now().isoformat(),
+                    "percentage": (current_time / duration * 100) if duration > 0 else 0
+                }
+
+                # Save progress
+                self._save_watch_progress(progress_file, progress_data)
+
+                return jsonify({
+                    "success": True,
+                    "message": "Progress saved"
+                })
+            except Exception as e:
+                logging.error(f"Failed to save watch progress: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": str(e)
+                }), 500
+
+        @self.app.route("/api/watch-progress", methods=["DELETE"])
+        @self._require_api_auth
+        def api_delete_watch_progress():
+            """Delete watch progress for a file."""
+            try:
+                data = request.get_json()
+                file_path = data.get("file")
+
+                if not file_path:
+                    return jsonify({
+                        "success": False,
+                        "error": "File path is required"
+                    }), 400
+
+                progress_file = self._get_watch_progress_file()
+                progress_data = self._load_watch_progress(progress_file)
+
+                if file_path in progress_data:
+                    del progress_data[file_path]
+                    self._save_watch_progress(progress_file, progress_data)
+
+                return jsonify({
+                    "success": True,
+                    "message": "Progress deleted"
+                })
+            except Exception as e:
+                logging.error(f"Failed to delete watch progress: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": str(e)
                 }), 500
 
         @self.app.route("/api/files/delete", methods=["POST"])
@@ -1717,6 +1861,42 @@ class WebApp:
                 return f"{size_bytes:.1f} {unit}"
             size_bytes /= 1024.0
         return f"{size_bytes:.1f} PB"
+
+    def _get_watch_progress_file(self) -> Path:
+        """Get the path to the watch progress JSON file."""
+        download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+        if (
+            self.arguments
+            and hasattr(self.arguments, "output_dir")
+            and self.arguments.output_dir is not None
+        ):
+            download_path = str(self.arguments.output_dir)
+
+        download_dir = Path(download_path)
+        return download_dir / ".watch_progress.json"
+
+    def _load_watch_progress(self, progress_file: Path) -> dict:
+        """Load watch progress from JSON file."""
+        import json
+        if progress_file.exists():
+            try:
+                with open(progress_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                logging.error(f"Failed to load watch progress: {e}")
+                return {}
+        return {}
+
+    def _save_watch_progress(self, progress_file: Path, data: dict) -> None:
+        """Save watch progress to JSON file."""
+        import json
+        try:
+            # Ensure parent directory exists
+            progress_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(progress_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logging.error(f"Failed to save watch progress: {e}")
 
     def _format_uptime(self, seconds: int) -> str:
         """Format uptime in human readable format."""
