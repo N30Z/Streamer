@@ -848,14 +848,14 @@ class WebApp:
                         return jsonify(
                             {
                                 "success": True,
-                                "results": [anime_result],
+                                "result": anime_result,
                                 "source": "direct_url",
                             }
                         )
 
                     except requests.RequestException as e:
                         logging.warning(f"Failed to fetch from direct URL: {e}")
-                        # Return basic result even if fetch fails - same format as search
+                        # Return basic result even if fetch fails
                         anime_result = {
                             "title": slug.replace("-", " ").title(),
                             "url": url,
@@ -867,7 +867,7 @@ class WebApp:
                         return jsonify(
                             {
                                 "success": True,
-                                "results": [anime_result],
+                                "result": anime_result,
                                 "source": "direct_url",
                             }
                         )

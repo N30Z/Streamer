@@ -306,8 +306,8 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (!data) return;
             if (data.success) {
-                // Display the results array (contains single item from direct URL)
-                displaySearchResults(data.results);
+                // Display the result as a single anime card
+                displaySearchResults([data.result]);
                 showNotification('URL loaded successfully', 'success');
             } else {
                 showNotification(data.error || 'Failed to load URL', 'error');
