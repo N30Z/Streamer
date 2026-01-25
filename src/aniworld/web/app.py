@@ -55,6 +55,9 @@ class WebApp:
         # Create Flask app
         self.app = self._create_app()
 
+        # Scan for manually placed files at startup
+        self._scan_media_library()
+
         # Setup routes
         self._setup_routes()
 
@@ -74,6 +77,87 @@ class WebApp:
         app.config["JSON_SORT_KEYS"] = False
 
         return app
+
+    def _scan_media_library(self):
+        """Scan the download directory for manually placed files at startup."""
+        try:
+            # Get download directory
+            download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+            if (
+                self.arguments
+                and hasattr(self.arguments, "output_dir")
+                and self.arguments.output_dir is not None
+            ):
+                download_path = str(self.arguments.output_dir)
+
+            download_dir = Path(download_path)
+
+            if not download_dir.exists():
+                logging.info(f"Media library directory does not exist yet: {download_path}")
+                return
+
+            # Scan for video files
+            video_extensions = {'.mp4', '.mkv', '.avi', '.webm', '.mov', '.m4v', '.flv', '.wmv'}
+
+            series_count = 0
+            season_count = 0
+            episode_count = 0
+            total_size = 0
+
+            # Scan directory structure: series/seasonX/episodes
+            for series_dir in download_dir.iterdir():
+                if series_dir.is_dir():
+                    series_count += 1
+                    has_seasons = False
+
+                    for item in series_dir.iterdir():
+                        if item.is_dir():
+                            # Check if it's a season folder
+                            folder_name = item.name.lower()
+                            if folder_name.startswith('season') or folder_name == 'movies':
+                                has_seasons = True
+                                season_count += 1
+
+                                # Count episodes in this season
+                                for episode_file in item.iterdir():
+                                    if episode_file.is_file() and episode_file.suffix.lower() in video_extensions:
+                                        episode_count += 1
+                                        total_size += episode_file.stat().st_size
+
+                        elif item.is_file() and item.suffix.lower() in video_extensions:
+                            # Video file directly in series folder (old structure)
+                            episode_count += 1
+                            total_size += item.stat().st_size
+
+                    # If no seasons found, check for videos directly in series folder
+                    if not has_seasons:
+                        for video_file in series_dir.rglob('*'):
+                            if video_file.is_file() and video_file.suffix.lower() in video_extensions:
+                                if video_file.parent == series_dir:
+                                    continue  # Already counted above
+                                episode_count += 1
+                                total_size += video_file.stat().st_size
+
+            # Format total size
+            def format_size(size_bytes):
+                for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+                    if size_bytes < 1024.0:
+                        return f"{size_bytes:.1f} {unit}"
+                    size_bytes /= 1024.0
+                return f"{size_bytes:.1f} PB"
+
+            if episode_count > 0:
+                logging.info(
+                    f"Media library scan complete: {series_count} series, "
+                    f"{season_count} seasons, {episode_count} episodes "
+                    f"({format_size(total_size)})"
+                )
+                print(f"📚 Media Library: {series_count} series, {season_count} seasons, {episode_count} episodes ({format_size(total_size)})")
+            else:
+                logging.info(f"Media library is empty: {download_path}")
+
+        except Exception as e:
+            logging.warning(f"Failed to scan media library: {e}")
 
     def _require_api_auth(self, f):
         """Decorator to require authentication for API routes."""

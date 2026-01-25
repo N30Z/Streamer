@@ -52,13 +52,18 @@ def _format_episode_title(anime: Anime, episode) -> str:
     return f"{anime.title} - S{episode.season:02}E{episode.episode:03} - ({anime.language}).mp4"
 
 
+def _get_season_folder(episode) -> str:
+    """Generate season folder name based on episode type."""
+    if episode.season == 0:
+        return "Movies"
+    return f"Season {episode.season}"
+
+
 def _get_output_filename(anime: Anime, episode, sanitized_title: str) -> str:
     """Generate output filename based on episode type."""
     if episode.season == 0:
-        return (
-            f"{sanitized_title} - Movie {episode.episode:03} - ({anime.language}).mp4"
-        )
-    return f"{sanitized_title} - S{episode.season:02}E{episode.episode:03} - ({anime.language}).mp4"
+        return f"Movie {episode.episode:03} - ({anime.language}).mp4"
+    return f"Episode {episode.episode:03} - ({anime.language}).mp4"
 
 
 def _build_ytdl_options(
@@ -295,9 +300,10 @@ def download(anime: Anime, web_progress_callback: Optional[Callable] = None) -> 
             print(f"{direct_link}\n")
             continue
 
-        # Generate output path
+        # Generate output path with series/seasonX/episode structure
+        season_folder = _get_season_folder(episode)
         output_file = _get_output_filename(anime, episode, sanitized_anime_title)
-        output_path = Path(arguments.output_dir) / sanitized_anime_title / output_file
+        output_path = Path(arguments.output_dir) / sanitized_anime_title / season_folder / output_file
 
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
