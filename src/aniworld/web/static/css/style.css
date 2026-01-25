@@ -1143,6 +1143,85 @@ body[data-theme="dark"] .particle:nth-child(10) {
     font-size: 1.1rem;
 }
 
+/* Direct URL Input Container */
+.direct-container {
+    display: flex;
+    max-width: 600px;
+    margin: 0 auto 1rem auto;
+    gap: 0.5rem;
+}
+
+.direct-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: var(--input-bg);
+    color: var(--text-secondary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.direct-input::placeholder {
+    color: var(--text-tertiary);
+    transition: color 0.3s ease;
+}
+
+.direct-input:focus {
+    outline: none;
+    box-shadow: 0 4px 20px rgba(72, 187, 120, 0.3);
+    transform: translateY(-1px);
+}
+
+.direct-btn {
+    padding: 10px 20px;
+    background: #48bb78;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 140px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(72, 187, 120, 0.2);
+}
+
+.direct-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.direct-btn:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(72, 187, 120, 0.4);
+    background: #38a169;
+}
+
+.direct-btn:hover::before {
+    left: 100%;
+}
+
+.direct-btn:active {
+    transform: translateY(-1px) scale(0.98);
+    animation: pulse 0.2s ease-in-out;
+}
+
+.direct-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
 .search-container {
     display: flex;
     max-width: 600px;
@@ -2591,6 +2670,201 @@ body[data-theme="dark"] .episode-progress-text {
 
 .file-empty p {
     font-size: 1rem;
+}
+
+/* Folder Navigation Styles */
+.file-browser-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--tree-bg);
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    border: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+.breadcrumb-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.breadcrumb-link {
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: color 0.2s ease;
+    text-decoration: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.breadcrumb-link:hover {
+    color: #4299e1;
+    background: var(--tree-hover);
+}
+
+.breadcrumb-current {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.breadcrumb-separator {
+    color: var(--text-tertiary);
+}
+
+.folder-item {
+    display: flex;
+    align-items: center;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+    gap: 1rem;
+    cursor: pointer;
+}
+
+.folder-item:hover {
+    background: var(--tree-hover);
+}
+
+.folder-icon {
+    font-size: 1.5rem;
+    color: #ed8936;
+    width: 40px;
+    text-align: center;
+}
+
+.folder-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.folder-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.folder-meta {
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    margin-top: 0.25rem;
+}
+
+.folder-arrow {
+    color: var(--text-tertiary);
+    font-size: 1rem;
+}
+
+/* Watch Progress Indicator */
+.file-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+.file-progress-bar {
+    flex: 1;
+    max-width: 100px;
+    height: 4px;
+    background: var(--progress-bg);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.file-progress-fill {
+    height: 100%;
+    background: #4299e1;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.file-progress-text {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.file-progress-watched {
+    color: #48bb78;
+    font-weight: 500;
+}
+
+/* Continue Watching Button */
+.file-action-btn.continue-btn {
+    background: #ed8936;
+    color: white;
+}
+
+.file-action-btn.continue-btn:hover {
+    background: #dd6b20;
+    transform: translateY(-1px);
+}
+
+/* Cast Media Progress */
+.cast-media-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+.cast-media-progress-bar {
+    flex: 1;
+    max-width: 80px;
+    height: 3px;
+    background: var(--progress-bg);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.cast-media-progress-fill {
+    height: 100%;
+    background: #4299e1;
+    border-radius: 2px;
+}
+
+.cast-media-progress-text {
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+}
+
+.cast-media-watched {
+    color: #48bb78 !important;
+    font-weight: 500;
+}
+
+/* Delete Watched Button in Cast */
+.cast-delete-watched-btn {
+    background: #fc8181;
+    color: white;
+    border: none;
+    padding: 0.4rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.cast-delete-watched-btn:hover {
+    background: #f56565;
+}
+
+/* Back button in file browser */
+.back-folder-item {
+    background: var(--tree-header-bg);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.back-folder-item:hover {
+    background: var(--tree-hover);
+}
+
+.back-folder-item .folder-icon {
+    color: #4299e1;
 }
 
 /* ========================================

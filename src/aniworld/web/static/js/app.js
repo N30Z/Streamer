@@ -1381,6 +1381,10 @@ document.head.appendChild(style);
     let castMediaFiles = [];
     let castDurationValue = 0;
 
+    // Folder navigation state
+    let currentFolderPath = '';
+    let watchProgress = {};
+
     // Initialize file browser
     if (fileBrowserBtn) {
         fileBrowserBtn.addEventListener('click', openFileBrowser);
@@ -1467,19 +1471,31 @@ document.head.appendChild(style);
         fileBrowserModal.style.display = 'none';
     }
 
-    function loadFiles() {
+    function loadFiles(folderPath = '') {
         fileBrowserLoading.style.display = 'flex';
         fileList.style.display = 'none';
         fileEmpty.style.display = 'none';
 
-        fetch('/api/files')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    currentPathEl.textContent = data.path;
-                    renderFileList(data.files);
+        currentFolderPath = folderPath;
+
+        // Build URL with optional path parameter
+        let url = '/api/files';
+        if (folderPath) {
+            url += `?path=${encodeURIComponent(folderPath)}`;
+        }
+
+        // Also load watch progress
+        Promise.all([
+            fetch(url).then(r => r.json()),
+            fetch('/api/watch-progress').then(r => r.json())
+        ])
+            .then(([filesData, progressData]) => {
+                if (filesData.success) {
+                    watchProgress = progressData.success ? progressData.progress : {};
+                    updateBreadcrumb(filesData.current_path, filesData.path);
+                    renderFileList(filesData.folders, filesData.files, filesData.parent_path);
                 } else {
-                    showNotification(data.error || 'Failed to load files', 'error');
+                    showNotification(filesData.error || 'Failed to load files', 'error');
                 }
             })
             .catch(error => {
@@ -1491,8 +1507,41 @@ document.head.appendChild(style);
             });
     }
 
-    function renderFileList(files) {
-        if (!files || files.length === 0) {
+    function updateBreadcrumb(currentPath, basePath) {
+        // Update the path display with breadcrumb navigation
+        if (!currentPath) {
+            currentPathEl.innerHTML = `<i class="fas fa-home"></i> ${escapeHtmlFB(basePath)}`;
+        } else {
+            const parts = currentPath.split(/[\/\\]/);
+            let breadcrumb = `<span class="breadcrumb-link" onclick="window.navigateToFolder('')"><i class="fas fa-home"></i> Root</span>`;
+
+            let pathSoFar = '';
+            parts.forEach((part, index) => {
+                pathSoFar += (pathSoFar ? '/' : '') + part;
+                const isLast = index === parts.length - 1;
+
+                breadcrumb += ` <span class="breadcrumb-separator">/</span> `;
+                if (isLast) {
+                    breadcrumb += `<span class="breadcrumb-current">${escapeHtmlFB(part)}</span>`;
+                } else {
+                    const folderPathForClick = pathSoFar;
+                    breadcrumb += `<span class="breadcrumb-link" onclick="window.navigateToFolder('${escapeHtmlFB(folderPathForClick)}')">${escapeHtmlFB(part)}</span>`;
+                }
+            });
+
+            currentPathEl.innerHTML = breadcrumb;
+        }
+    }
+
+    // Make navigateToFolder globally accessible
+    window.navigateToFolder = function(path) {
+        loadFiles(path);
+    };
+
+    function renderFileList(folders, files, parentPath) {
+        const hasContent = (folders && folders.length > 0) || (files && files.length > 0);
+
+        if (!hasContent && !currentFolderPath) {
             fileEmpty.style.display = 'block';
             fileList.style.display = 'none';
             return;
@@ -1501,50 +1550,136 @@ document.head.appendChild(style);
         fileList.innerHTML = '';
         fileList.style.display = 'block';
 
-        files.forEach(file => {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item';
-
-            const extension = file.name.split('.').pop().toLowerCase();
-            let iconClass = 'fas fa-video';
-            if (['mkv', 'avi'].includes(extension)) {
-                iconClass = 'fas fa-film';
-            }
-
-            fileItem.innerHTML = `
-                <div class="file-icon">
-                    <i class="${iconClass}"></i>
+        // Add back button if we're in a subfolder
+        if (currentFolderPath) {
+            const backItem = document.createElement('div');
+            backItem.className = 'folder-item back-folder-item';
+            backItem.innerHTML = `
+                <div class="folder-icon">
+                    <i class="fas fa-arrow-left"></i>
                 </div>
-                <div class="file-info">
-                    <div class="file-name">${escapeHtmlFB(file.name)}</div>
-                    <div class="file-meta">
-                        <span class="file-size">${file.size_human}</span>
-                        <span class="file-date">${file.modified_human}</span>
-                        ${file.parent ? `<span class="file-parent">${escapeHtmlFB(file.parent)}</span>` : ''}
-                    </div>
-                </div>
-                <div class="file-actions">
-                    <button class="file-action-btn stream-btn" title="Stream in browser">
-                        <i class="fas fa-play"></i> Stream
-                    </button>
-                    <button class="file-action-btn delete-btn" title="Delete file">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                <div class="folder-info">
+                    <div class="folder-name">.. Back</div>
+                    <div class="folder-meta">Go to parent folder</div>
                 </div>
             `;
+            backItem.addEventListener('click', () => loadFiles(parentPath || ''));
+            fileList.appendChild(backItem);
+        }
 
-            // Add event listeners
-            const streamBtn = fileItem.querySelector('.stream-btn');
-            const deleteBtn = fileItem.querySelector('.delete-btn');
+        // Render folders
+        if (folders && folders.length > 0) {
+            folders.forEach(folder => {
+                const folderItem = document.createElement('div');
+                folderItem.className = 'folder-item';
+                folderItem.innerHTML = `
+                    <div class="folder-icon">
+                        <i class="fas fa-folder"></i>
+                    </div>
+                    <div class="folder-info">
+                        <div class="folder-name">${escapeHtmlFB(folder.name)}</div>
+                        <div class="folder-meta">${folder.video_count} video${folder.video_count !== 1 ? 's' : ''}</div>
+                    </div>
+                    <div class="folder-arrow">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                `;
+                folderItem.addEventListener('click', () => loadFiles(folder.path));
+                fileList.appendChild(folderItem);
+            });
+        }
 
-            streamBtn.addEventListener('click', () => streamFile(file));
-            deleteBtn.addEventListener('click', () => deleteFile(file));
+        // Render files
+        if (files && files.length > 0) {
+            files.forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
 
-            fileList.appendChild(fileItem);
-        });
+                const extension = file.name.split('.').pop().toLowerCase();
+                let iconClass = 'fas fa-video';
+                if (['mkv', 'avi'].includes(extension)) {
+                    iconClass = 'fas fa-film';
+                }
+
+                // Check watch progress for this file
+                const progress = watchProgress[file.path] || null;
+                let progressHtml = '';
+                let continueBtn = '';
+
+                if (progress) {
+                    const percentage = progress.percentage || 0;
+                    const isWatched = percentage > 95; // Consider watched if > 95%
+
+                    if (isWatched) {
+                        progressHtml = `
+                            <div class="file-progress">
+                                <span class="file-progress-watched"><i class="fas fa-check-circle"></i> Watched</span>
+                            </div>
+                        `;
+                    } else if (percentage > 0) {
+                        progressHtml = `
+                            <div class="file-progress">
+                                <div class="file-progress-bar">
+                                    <div class="file-progress-fill" style="width: ${percentage}%"></div>
+                                </div>
+                                <span class="file-progress-text">${Math.round(percentage)}%</span>
+                            </div>
+                        `;
+                        continueBtn = `
+                            <button class="file-action-btn continue-btn" title="Continue watching from ${formatTime(progress.current_time)}">
+                                <i class="fas fa-play-circle"></i> Continue
+                            </button>
+                        `;
+                    }
+                }
+
+                fileItem.innerHTML = `
+                    <div class="file-icon">
+                        <i class="${iconClass}"></i>
+                    </div>
+                    <div class="file-info">
+                        <div class="file-name">${escapeHtmlFB(file.name)}</div>
+                        <div class="file-meta">
+                            <span class="file-size">${file.size_human}</span>
+                            <span class="file-date">${file.modified_human}</span>
+                        </div>
+                        ${progressHtml}
+                    </div>
+                    <div class="file-actions">
+                        ${continueBtn}
+                        <button class="file-action-btn stream-btn" title="Stream in browser">
+                            <i class="fas fa-play"></i> Stream
+                        </button>
+                        <button class="file-action-btn delete-btn" title="Delete file">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+
+                // Add event listeners
+                const streamBtn = fileItem.querySelector('.stream-btn');
+                const deleteBtn = fileItem.querySelector('.delete-btn');
+                const continueBtnEl = fileItem.querySelector('.continue-btn');
+
+                streamBtn.addEventListener('click', () => streamFile(file));
+                deleteBtn.addEventListener('click', () => deleteFile(file));
+                if (continueBtnEl && progress) {
+                    continueBtnEl.addEventListener('click', () => streamFile(file, progress.current_time));
+                }
+
+                fileList.appendChild(fileItem);
+            });
+        }
+
+        // Show empty state if no content (but we are in a subfolder)
+        if (!hasContent) {
+            fileEmpty.style.display = 'block';
+        } else {
+            fileEmpty.style.display = 'none';
+        }
     }
 
-    function streamFile(file) {
+    function streamFile(file, startTime = 0) {
         // Open video in new tab or modal
         const streamUrl = `/api/files/stream/${encodeURIComponent(file.path)}`;
 
@@ -1572,19 +1707,68 @@ document.head.appendChild(style);
         document.body.appendChild(videoModal);
         videoModal.style.display = 'flex';
 
-        const closeBtn = videoModal.querySelector('#close-video-player');
-        closeBtn.addEventListener('click', () => {
-            const video = videoModal.querySelector('video');
+        const video = videoModal.querySelector('video');
+        let progressSaveInterval = null;
+
+        // Set start time once video is ready
+        video.addEventListener('loadedmetadata', () => {
+            if (startTime > 0) {
+                video.currentTime = startTime;
+            }
+        });
+
+        // Save progress periodically
+        video.addEventListener('play', () => {
+            progressSaveInterval = setInterval(() => {
+                saveWatchProgress(file.path, video.currentTime, video.duration);
+            }, 5000); // Save every 5 seconds
+        });
+
+        video.addEventListener('pause', () => {
+            if (progressSaveInterval) {
+                clearInterval(progressSaveInterval);
+                progressSaveInterval = null;
+            }
+            // Save immediately on pause
+            saveWatchProgress(file.path, video.currentTime, video.duration);
+        });
+
+        const closeModal = () => {
+            if (progressSaveInterval) {
+                clearInterval(progressSaveInterval);
+            }
+            // Save final progress
+            if (video.currentTime > 0) {
+                saveWatchProgress(file.path, video.currentTime, video.duration);
+            }
             video.pause();
             videoModal.remove();
-        });
+        };
+
+        const closeBtn = videoModal.querySelector('#close-video-player');
+        closeBtn.addEventListener('click', closeModal);
 
         videoModal.addEventListener('click', (e) => {
             if (e.target === videoModal) {
-                const video = videoModal.querySelector('video');
-                video.pause();
-                videoModal.remove();
+                closeModal();
             }
+        });
+    }
+
+    function saveWatchProgress(filePath, currentTime, duration) {
+        fetch('/api/watch-progress', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                file: filePath,
+                current_time: currentTime,
+                duration: duration
+            })
+        })
+        .catch(error => {
+            console.error('Failed to save watch progress:', error);
         });
     }
 
@@ -1701,17 +1885,30 @@ document.head.appendChild(style);
         scanChromecastDevices();
     }
 
-    function loadCastMediaFiles() {
+    function loadCastMediaFiles(folderPath = '') {
         castMediaLoading.style.display = 'flex';
         castMediaList.innerHTML = '';
         castMediaEmpty.style.display = 'none';
 
-        fetch('/api/files')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.files.length > 0) {
-                    castMediaFiles = data.files;
-                    renderCastMediaList(data.files);
+        // Build URL with optional path parameter
+        let url = '/api/files';
+        if (folderPath) {
+            url += `?path=${encodeURIComponent(folderPath)}`;
+        }
+
+        // Also load watch progress
+        Promise.all([
+            fetch(url).then(r => r.json()),
+            fetch('/api/watch-progress').then(r => r.json())
+        ])
+            .then(([data, progressData]) => {
+                const allProgress = progressData.success ? progressData.progress : {};
+                if (data.success) {
+                    // Combine folders and files
+                    const folders = data.folders || [];
+                    const files = data.files || [];
+                    castMediaFiles = files;
+                    renderCastMediaList(folders, files, allProgress, data.parent_path, folderPath);
                 } else {
                     castMediaEmpty.style.display = 'block';
                 }
@@ -1725,57 +1922,217 @@ document.head.appendChild(style);
             });
     }
 
-    function renderCastMediaList(files) {
+    // Track current cast folder path
+    let currentCastFolderPath = '';
+
+    function renderCastMediaList(folders, files, allProgress, parentPath, currentPath) {
         castMediaList.innerHTML = '';
+        currentCastFolderPath = currentPath || '';
 
-        files.forEach(file => {
-            const mediaItem = document.createElement('div');
-            mediaItem.className = 'cast-media-item';
+        const hasContent = (folders && folders.length > 0) || (files && files.length > 0);
 
-            const extension = file.name.split('.').pop().toLowerCase();
-            let iconClass = 'fas fa-video';
-            if (['mkv', 'avi'].includes(extension)) {
-                iconClass = 'fas fa-film';
-            }
+        if (!hasContent && !currentCastFolderPath) {
+            castMediaEmpty.style.display = 'block';
+            return;
+        }
 
-            const isCurrentlyPlaying = currentCastFile && currentCastFile.path === file.path;
+        castMediaEmpty.style.display = 'none';
 
-            mediaItem.innerHTML = `
+        // Add back button if in subfolder
+        if (currentCastFolderPath) {
+            const backItem = document.createElement('div');
+            backItem.className = 'cast-media-item back-folder-item';
+            backItem.style.cursor = 'pointer';
+            backItem.innerHTML = `
                 <div class="cast-media-icon">
-                    <i class="${iconClass}"></i>
+                    <i class="fas fa-arrow-left" style="color: #4299e1;"></i>
                 </div>
                 <div class="cast-media-info">
-                    <div class="cast-media-name">${escapeHtmlFB(file.name)}</div>
-                    <div class="cast-media-meta">
-                        <span class="cast-media-size">${file.size_human}</span>
-                        ${file.parent ? `<span class="cast-media-parent">${escapeHtmlFB(file.parent)}</span>` : ''}
-                    </div>
+                    <div class="cast-media-name">.. Back</div>
+                    <div class="cast-media-meta">Go to parent folder</div>
                 </div>
-                <button class="cast-media-btn ${isCurrentlyPlaying ? 'playing' : ''}" title="${isCurrentlyPlaying ? 'Currently Playing' : 'Cast this file'}">
-                    <i class="fas ${isCurrentlyPlaying ? 'fa-broadcast-tower' : 'fa-play'}"></i>
-                    ${isCurrentlyPlaying ? 'Playing' : 'Cast'}
-                </button>
             `;
+            backItem.addEventListener('click', () => loadCastMediaFiles(parentPath || ''));
+            castMediaList.appendChild(backItem);
+        }
 
-            const castBtn = mediaItem.querySelector('.cast-media-btn');
-            if (!isCurrentlyPlaying) {
-                castBtn.addEventListener('click', () => castFile(file));
+        // Render folders
+        if (folders && folders.length > 0) {
+            folders.forEach(folder => {
+                const folderItem = document.createElement('div');
+                folderItem.className = 'cast-media-item';
+                folderItem.style.cursor = 'pointer';
+                folderItem.innerHTML = `
+                    <div class="cast-media-icon">
+                        <i class="fas fa-folder" style="color: #ed8936;"></i>
+                    </div>
+                    <div class="cast-media-info">
+                        <div class="cast-media-name">${escapeHtmlFB(folder.name)}</div>
+                        <div class="cast-media-meta">${folder.video_count} video${folder.video_count !== 1 ? 's' : ''}</div>
+                    </div>
+                    <div style="color: var(--text-tertiary);">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                `;
+                folderItem.addEventListener('click', () => loadCastMediaFiles(folder.path));
+                castMediaList.appendChild(folderItem);
+            });
+        }
+
+        // Render files
+        if (files && files.length > 0) {
+            files.forEach(file => {
+                const mediaItem = document.createElement('div');
+                mediaItem.className = 'cast-media-item';
+
+                const extension = file.name.split('.').pop().toLowerCase();
+                let iconClass = 'fas fa-video';
+                if (['mkv', 'avi'].includes(extension)) {
+                    iconClass = 'fas fa-film';
+                }
+
+                const isCurrentlyPlaying = currentCastFile && currentCastFile.path === file.path;
+
+                // Check watch progress
+                const progress = allProgress[file.path] || null;
+                let progressHtml = '';
+                let actionButtons = '';
+
+                // Credit time: 2 minutes = 120 seconds
+                const CREDIT_TIME = 120;
+
+                if (progress) {
+                    const percentage = progress.percentage || 0;
+                    const duration = progress.duration || 0;
+                    const timeRemaining = duration - progress.current_time;
+                    const isWatched = percentage > 95 || timeRemaining < CREDIT_TIME;
+
+                    if (isWatched) {
+                        progressHtml = `
+                            <div class="cast-media-progress">
+                                <span class="cast-media-watched"><i class="fas fa-check-circle"></i> Watched</span>
+                            </div>
+                        `;
+                        // Add delete button for watched episodes
+                        actionButtons = `
+                            <button class="cast-delete-watched-btn" title="Delete watched episode">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        `;
+                    } else if (percentage > 0) {
+                        progressHtml = `
+                            <div class="cast-media-progress">
+                                <div class="cast-media-progress-bar">
+                                    <div class="cast-media-progress-fill" style="width: ${percentage}%"></div>
+                                </div>
+                                <span class="cast-media-progress-text">${Math.round(percentage)}%</span>
+                            </div>
+                        `;
+                    }
+                }
+
+                mediaItem.innerHTML = `
+                    <div class="cast-media-icon">
+                        <i class="${iconClass}"></i>
+                    </div>
+                    <div class="cast-media-info">
+                        <div class="cast-media-name">${escapeHtmlFB(file.name)}</div>
+                        <div class="cast-media-meta">
+                            <span class="cast-media-size">${file.size_human}</span>
+                        </div>
+                        ${progressHtml}
+                    </div>
+                    ${actionButtons}
+                    ${progress && progress.percentage > 0 && progress.percentage < 95 ? `
+                        <button class="cast-media-btn" style="background: #ed8936; margin-right: 0.25rem;" title="Continue from ${formatTime(progress.current_time)}">
+                            <i class="fas fa-play-circle"></i> Resume
+                        </button>
+                    ` : ''}
+                    <button class="cast-media-btn ${isCurrentlyPlaying ? 'playing' : ''}" title="${isCurrentlyPlaying ? 'Currently Playing' : 'Cast this file'}">
+                        <i class="fas ${isCurrentlyPlaying ? 'fa-broadcast-tower' : 'fa-play'}"></i>
+                        ${isCurrentlyPlaying ? 'Playing' : 'Cast'}
+                    </button>
+                `;
+
+                // Add event listeners
+                const castBtns = mediaItem.querySelectorAll('.cast-media-btn');
+                if (castBtns.length > 1 && progress && progress.percentage > 0 && progress.percentage < 95) {
+                    // Resume button
+                    castBtns[0].addEventListener('click', () => castFile(file, progress.current_time));
+                    // Cast from start button
+                    if (!isCurrentlyPlaying) {
+                        castBtns[1].addEventListener('click', () => castFile(file, 0));
+                    }
+                } else if (castBtns.length > 0 && !isCurrentlyPlaying) {
+                    castBtns[castBtns.length - 1].addEventListener('click', () => castFile(file, 0));
+                }
+
+                // Delete watched button
+                const deleteWatchedBtn = mediaItem.querySelector('.cast-delete-watched-btn');
+                if (deleteWatchedBtn) {
+                    deleteWatchedBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        deleteWatchedFile(file);
+                    });
+                }
+
+                castMediaList.appendChild(mediaItem);
+            });
+        }
+    }
+
+    function deleteWatchedFile(file) {
+        if (!confirm(`Delete "${file.name}"?\n\nThis file appears to be fully watched.`)) {
+            return;
+        }
+
+        fetch('/api/files/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                path: file.path
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Watched episode deleted', 'success');
+                // Also delete watch progress
+                fetch('/api/watch-progress', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        file: file.path
+                    })
+                });
+                // Refresh the list
+                loadCastMediaFiles(currentCastFolderPath);
+            } else {
+                showNotification(data.error || 'Failed to delete file', 'error');
             }
-
-            castMediaList.appendChild(mediaItem);
+        })
+        .catch(error => {
+            console.error('Delete error:', error);
+            showNotification('Failed to delete file', 'error');
         });
     }
 
-    function castFile(file) {
+    function castFile(file, startTime = 0) {
         if (!currentCastDevice) {
             showNotification('No device selected', 'error');
             return;
         }
 
         currentCastFile = file;
+        castStartTime = startTime;
 
         // Show loading state
-        showNotification(`Casting "${file.name}" to ${currentCastDevice.name}...`, 'info');
+        const startMsg = startTime > 0 ? ` (resuming from ${formatTime(startTime)})` : '';
+        showNotification(`Casting "${file.name}" to ${currentCastDevice.name}${startMsg}...`, 'info');
 
         fetch('/api/chromecast/cast', {
             method: 'POST',
@@ -1797,10 +2154,17 @@ document.head.appendChild(style);
                 castStatus.textContent = `Casting to ${currentCastDevice.name}`;
                 castNowPlayingFile.textContent = file.name;
 
-                // Update media list to show current playing
-                renderCastMediaList(castMediaFiles);
+                // If we have a start time, seek to it after a brief delay
+                if (startTime > 0) {
+                    setTimeout(() => {
+                        castControl('seek', startTime);
+                    }, 2000);
+                }
 
-                // Start polling for status
+                // Refresh media list to show current playing
+                loadCastMediaFiles(currentCastFolderPath);
+
+                // Start polling for status (which will also save progress)
                 startCastStatusPolling();
             } else {
                 showNotification(data.error || 'Failed to cast', 'error');
@@ -1812,6 +2176,9 @@ document.head.appendChild(style);
         });
     }
 
+    // Track cast start time for resume functionality
+    let castStartTime = 0;
+
     function startCastStatusPolling() {
         if (castStatusInterval) {
             clearInterval(castStatusInterval);
@@ -1820,6 +2187,9 @@ document.head.appendChild(style);
         castStatusInterval = setInterval(updateCastStatus, 1000);
         updateCastStatus();
     }
+
+    // Track last saved progress time to avoid excessive saves
+    let lastSavedCastTime = 0;
 
     function updateCastStatus() {
         if (!currentCastDevice) return;
@@ -1856,6 +2226,14 @@ document.head.appendChild(style);
                         castVolumeSlider.value = status.volume;
                         updateVolumeDisplay(status.volume);
                     }
+
+                    // Save watch progress periodically (every 10 seconds of playback)
+                    if (currentCastFile && status.current_time > 0 && status.duration > 0) {
+                        if (Math.abs(status.current_time - lastSavedCastTime) >= 10) {
+                            lastSavedCastTime = status.current_time;
+                            saveWatchProgress(currentCastFile.path, status.current_time, status.duration);
+                        }
+                    }
                 }
             })
             .catch(error => {
@@ -1889,6 +2267,16 @@ document.head.appendChild(style);
     function stopCasting() {
         if (!currentCastDevice) return;
 
+        // Save final progress before stopping
+        if (currentCastFile && castDurationValue > 0) {
+            const progressBar = castProgressFill;
+            const widthPercent = parseFloat(progressBar.style.width) || 0;
+            const currentTime = (widthPercent / 100) * castDurationValue;
+            if (currentTime > 0) {
+                saveWatchProgress(currentCastFile.path, currentTime, castDurationValue);
+            }
+        }
+
         castControl('stop');
 
         // Reset UI
@@ -1900,16 +2288,15 @@ document.head.appendChild(style);
 
         currentCastFile = null;
         castDurationValue = 0;
+        lastSavedCastTime = 0;
 
         if (castStatusInterval) {
             clearInterval(castStatusInterval);
             castStatusInterval = null;
         }
 
-        // Update media list to remove "playing" status
-        if (castMediaFiles.length > 0) {
-            renderCastMediaList(castMediaFiles);
-        }
+        // Refresh media list to show updated progress
+        loadCastMediaFiles(currentCastFolderPath);
 
         showNotification('Stopped casting', 'info');
     }
