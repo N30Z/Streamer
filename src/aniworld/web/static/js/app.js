@@ -63,6 +63,21 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize theme (default is dark mode)
     initializeTheme();
 
+    // Direct input functionality
+    const directInput = document.getElementById('direct-input');
+    const directBtn = document.getElementById('direct-btn');
+    
+    if (directBtn) {
+        directBtn.addEventListener('click', handleDirectInput);
+    }
+    if (directInput) {
+        directInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleDirectInput();
+            }
+        });
+    }
+
     // Search functionality
     if (searchBtn) {
         searchBtn.addEventListener('click', performSearch);
@@ -256,6 +271,57 @@ document.addEventListener('DOMContentLoaded', function() {
         .finally(() => {
             searchBtn.disabled = false;
             searchBtn.textContent = 'Search';
+            hideLoadingState();
+        });
+    }
+
+    function handleDirectInput() {
+        const url = directInput.value.trim();
+        if (!url) {
+            showNotification('Please enter a URL', 'error');
+            return;
+        }
+
+        // Show loading state
+        showLoadingState();
+        directBtn.disabled = true;
+        directBtn.textContent = 'Loading...';
+
+        fetch('/api/direct', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                url: url
+            })
+        })
+        .then(response => {
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data) return;
+            if (data.success) {
+                // Display the result as a single anime card
+                displaySearchResults([data.result]);
+                showNotification('URL loaded successfully', 'success');
+            } else {
+                showNotification(data.error || 'Failed to load URL', 'error');
+                showEmptyState();
+            }
+        })
+        .catch(error => {
+            console.error('Direct URL error:', error);
+            showNotification('Failed to load URL. Please check and try again.', 'error');
+            showEmptyState();
+        })
+        .finally(() => {
+            directBtn.disabled = false;
+            directBtn.textContent = 'Use direct Link';
             hideLoadingState();
         });
     }
