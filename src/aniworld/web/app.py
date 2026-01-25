@@ -1214,8 +1214,8 @@ class WebApp:
                         "name": cc.name,
                         "model": cc.model_name,
                         "uuid": str(cc.uuid),
-                        "host": cc.host,
-                        "port": cc.port
+                        "host": cc.cast_info.host,
+                        "port": cc.cast_info.port
                     })
 
                 return jsonify({
