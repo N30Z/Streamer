@@ -835,7 +835,16 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.success) {
                 const count = selectedEpisodes.size;
-                showNotification(`Download started for ${count} episode${count !== 1 ? 's' : ''}`, 'success');
+                const maxConcurrent = data.max_concurrent || 3;
+                let message = `Download started for ${count} episode${count !== 1 ? 's' : ''}`;
+                
+                // Add info about parallel downloads if multiple episodes selected
+                if (count > 1 && maxConcurrent > 1) {
+                    const parallelCount = Math.min(count, maxConcurrent);
+                    message += ` (${parallelCount} parallel download${parallelCount !== 1 ? 's' : ''})`;
+                }
+                
+                showNotification(message, 'success');
                 hideDownloadModal();
                 startQueueTracking();
             } else {

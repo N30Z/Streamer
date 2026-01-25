@@ -957,8 +957,8 @@ class WebApp:
                         }
                     ), 400
 
-                # Add to download queue
-                queue_id = self.download_manager.add_download(
+                # Add to download queue (creates separate job per episode)
+                queue_ids = self.download_manager.add_download(
                     anime_title=anime_title,
                     episode_urls=episode_urls,
                     language=language,
@@ -967,7 +967,7 @@ class WebApp:
                     created_by=current_user["id"] if current_user else None,
                 )
 
-                if not queue_id:
+                if not queue_ids:
                     return jsonify(
                         {"success": False, "error": "Failed to add download to queue"}
                     ), 500
@@ -975,11 +975,12 @@ class WebApp:
                 return jsonify(
                     {
                         "success": True,
-                        "message": f"Download added to queue: {total_episodes} episode(s)",
+                        "message": f"Download added to queue: {total_episodes} episode(s) will download in parallel",
                         "episode_count": total_episodes,
                         "language": language,
                         "provider": provider,
-                        "queue_id": queue_id,
+                        "queue_ids": queue_ids,
+                        "max_concurrent": getattr(config, "DEFAULT_MAX_CONCURRENT_DOWNLOADS", 3),
                     }
                 )
 

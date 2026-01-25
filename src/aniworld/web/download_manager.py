@@ -85,38 +85,57 @@ class DownloadQueueManager:
         provider: str,
         total_episodes: int,
         created_by: int = None,
-    ) -> int:
-        """Add a download to the queue"""
+    ) -> list:
+        """Add a download to the queue
+        
+        Args:
+            anime_title: Title of the anime
+            episode_urls: List of episode URLs to download
+            language: Language for the download
+            provider: Provider to use for download
+            total_episodes: Total number of episodes
+            created_by: User ID who initiated the download
+            
+        Returns:
+            List of queue IDs for each episode download
+        """
+        queue_ids = []
+        
         with self._queue_lock:
-            queue_id = self._next_id
-            self._next_id += 1
+            # Create individual download jobs for each episode URL
+            for i, episode_url in enumerate(episode_urls, 1):
+                queue_id = self._next_id
+                self._next_id += 1
 
-            download_job = {
-                "id": queue_id,
-                "anime_title": anime_title,
-                "episode_urls": episode_urls,
-                "language": language,
-                "provider": provider,
-                "total_episodes": total_episodes,
-                "completed_episodes": 0,
-                "status": "queued",
-                "current_episode": "",
-                "progress_percentage": 0.0,
-                "current_episode_progress": 0.0,  # Progress within current episode (0-100)
-                "error_message": "",
-                "created_by": created_by,
-                "created_at": datetime.now(),
-                "started_at": None,
-                "completed_at": None,
-            }
+                download_job = {
+                    "id": queue_id,
+                    "anime_title": anime_title,
+                    "episode_urls": [episode_url],  # Single episode URL
+                    "episode_number": i,  # Track episode position
+                    "language": language,
+                    "provider": provider,
+                    "total_episodes": 1,  # Each job is one episode
+                    "completed_episodes": 0,
+                    "status": "queued",
+                    "current_episode": "",
+                    "progress_percentage": 0.0,
+                    "current_episode_progress": 0.0,
+                    "error_message": "",
+                    "created_by": created_by,
+                    "created_at": datetime.now(),
+                    "started_at": None,
+                    "completed_at": None,
+                }
 
-            self._active_downloads[queue_id] = download_job
+                self._active_downloads[queue_id] = download_job
+                queue_ids.append(queue_id)
 
         # Start processor if not running
         if not self.is_processing:
             self.start_queue_processor()
 
-        return queue_id
+        logging.info(f"Added {len(queue_ids)} episode(s) to download queue for {anime_title}")
+        return queue_ids
 
     def get_queue_status(self):
         """Get current queue status"""
@@ -210,7 +229,7 @@ class DownloadQueueManager:
                 time.sleep(5)
 
     def _process_download_job(self, job):
-        """Process a single download job"""
+        """Process a single download job (one episode)"""
         queue_id = job["id"]
 
         try:
@@ -227,12 +246,12 @@ class DownloadQueueManager:
             from .. import config
             import os
 
-            # Process episodes
+            # Process the single episode URL
             anime_list = _group_episodes_by_series(job["episode_urls"])
 
             if not anime_list:
                 self._update_download_status(
-                    queue_id, "failed", error_message="Failed to process episode URLs"
+                    queue_id, "failed", error_message="Failed to process episode URL"
                 )
                 return
 
@@ -245,23 +264,6 @@ class DownloadQueueManager:
                     episode._selected_language = job["language"]
                     episode._selected_provider = job["provider"]
 
-            # Calculate actual total episodes after processing URLs
-            actual_total_episodes = sum(len(anime.episode_list) for anime in anime_list)
-
-            # Update total episodes count if different from original
-            if actual_total_episodes != job["total_episodes"]:
-                self._update_download_status(
-                    queue_id,
-                    "downloading",  # Keep as downloading since we're about to start
-                    total_episodes=actual_total_episodes,
-                    current_episode=f"Found {actual_total_episodes} valid episode(s) to download",
-                )
-
-            # Download logic
-            successful_downloads = 0
-            failed_downloads = 0
-            current_episode_index = 0
-
             # Get download directory from arguments (which includes -o parameter)
             from ..parser import arguments
 
@@ -273,19 +275,21 @@ class DownloadQueueManager:
             if hasattr(arguments, "output_dir") and arguments.output_dir is not None:
                 download_dir = str(arguments.output_dir)
 
+            # Download the episode
+            successful = False
+            
             for anime in anime_list:
+                # Since this is a single episode job, episode_list should have exactly one element
                 for episode in anime.episode_list:
                     if self._stop_event.is_set():
                         break
 
                     episode_info = f"{anime.title} - Episode {episode.episode} (Season {episode.season})"
 
-                    # Update progress - reset episode progress to 0 when starting new episode
-                    # DON'T update completed_episodes here - it causes the progress bar to jump
+                    # Update progress
                     self._update_download_status(
                         queue_id,
                         "downloading",
-                        completed_episodes=None,  # Don't update completed count when starting new episode
                         current_episode=f"Downloading {episode_info}",
                         current_episode_progress=0.0,
                     )
@@ -310,9 +314,6 @@ class DownloadQueueManager:
                                 if self._stop_event.is_set():
                                     # Signal yt-dlp to stop by raising an exception
                                     raise KeyboardInterrupt("Download stopped by user")
-
-                                # Log the raw progress data for debugging (disabled to reduce spam)
-                                # logging.info(f"Progress data received: {progress_data}")
 
                                 if progress_data["status"] == "downloading":
                                     # Try multiple methods to extract progress percentage
@@ -380,12 +381,7 @@ class DownloadQueueManager:
                                         queue_id, percentage, status_msg
                                     )
 
-                                    # Log successful update for debugging (disabled to reduce spam)
-                                    # logging.info(f"Updated progress: {percentage:.1f}% for queue {queue_id}")
-
                                 elif progress_data["status"] == "finished":
-                                    # Episode completed - don't update progress here
-                                    # The progress will be updated correctly after file verification
                                     logging.info(
                                         f"Episode finished for queue {queue_id}"
                                     )
@@ -408,7 +404,7 @@ class DownloadQueueManager:
                             if anime_download_dir.exists():
                                 files_before = len(list(anime_download_dir.glob("*")))
 
-                            # Import and call the new download function with progress callback
+                            # Import and call the download function with progress callback
                             from ..action.download import download
 
                             download(temp_anime, web_progress_callback)
@@ -418,56 +414,44 @@ class DownloadQueueManager:
                             if anime_download_dir.exists():
                                 files_after = len(list(anime_download_dir.glob("*")))
 
-                            # Check if any new files were created and update progress immediately
+                            # Check if any new files were created
                             if files_after > files_before:
-                                successful_downloads += 1
+                                successful = True
                                 logging.info(f"Downloaded: {episode_info}")
 
-                                # Update completed episodes count ONLY after successful download
+                                # Update completed episodes count
                                 self._update_download_status(
                                     queue_id,
                                     "downloading",
-                                    completed_episodes=successful_downloads,  # Update completed count after successful download
+                                    completed_episodes=1,
                                     current_episode=f"Completed {episode_info}",
                                     current_episode_progress=100.0,
                                 )
                             else:
-                                failed_downloads += 1
                                 logging.warning(
                                     f"Failed to download: {episode_info} - No new files created"
                                 )
 
                         except Exception as download_error:
-                            # If an exception was raised during download, it failed
-                            failed_downloads += 1
                             logging.warning(
                                 f"Failed to download: {episode_info} - Error: {download_error}"
                             )
 
                     except Exception as e:
-                        failed_downloads += 1
                         logging.error(f"Error downloading {episode_info}: {e}")
 
-                    current_episode_index += 1
-
             # Final status update
-            total_attempted = successful_downloads + failed_downloads
-            if successful_downloads == 0 and failed_downloads > 0:
-                status = "failed"
-                error_msg = f"Download failed: No episodes downloaded out of {failed_downloads} attempted."
-            elif failed_downloads > 0:
-                status = "completed"  # Partial success still counts as completed
-                error_msg = f"Partially completed: {successful_downloads}/{total_attempted} episodes downloaded."
-            else:
+            if successful:
                 status = "completed"
-                error_msg = (
-                    f"Successfully downloaded {successful_downloads} episode(s)."
-                )
+                error_msg = f"Successfully downloaded episode"
+            else:
+                status = "failed"
+                error_msg = f"Failed to download episode"
 
             self._update_download_status(
                 queue_id,
                 status,
-                completed_episodes=successful_downloads,
+                completed_episodes=1 if successful else 0,
                 current_episode=error_msg,
                 error_message=error_msg if status == "failed" else None,
             )
