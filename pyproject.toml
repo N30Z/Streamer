@@ -9,9 +9,9 @@ maintainers = [
 ]
 description = "AniWorld Downloader is a command-line tool for downloading and streaming anime, series and movies, compatible with Windows, macOS, and Linux."
 keywords = [
-    "anime", 
-    "aniworld", 
-    "anime-downloader", 
+    "anime",
+    "aniworld",
+    "anime-downloader",
     "aniworld-downloader",
     "streaming",
     "download",
@@ -36,9 +36,6 @@ dependencies = [
     'windows-curses; platform_system == "Windows"',
     'winfcntl; platform_system == "Windows"'
 ]
-
-[project.optional-dependencies]
-chromecast = ['pychromecast']
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
@@ -66,6 +63,9 @@ classifiers = [
     "Topic :: Utilities",
     "Typing :: Typed"
 ]
+
+[project.optional-dependencies]
+chromecast = ['pychromecast']
 
 [project.urls]
 Homepage = "https://github.com/phoenixthrush/AniWorld-Downloader"
