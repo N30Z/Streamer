@@ -835,14 +835,12 @@ class WebApp:
                         parser.feed(response.text)
                         anime_title = parser.title or slug.replace("-", " ").title()
 
-                        # Return anime details
+                        # Return anime details in same format as search results
                         anime_result = {
                             "title": anime_title,
                             "url": url,
                             "slug": slug,
                             "site": site,
-                            "base_url": base_url,
-                            "stream_path": stream_path,
                             "description": "",
                             "cover": "",
                         }
@@ -850,28 +848,26 @@ class WebApp:
                         return jsonify(
                             {
                                 "success": True,
-                                "result": anime_result,
+                                "results": [anime_result],
                                 "source": "direct_url",
                             }
                         )
 
                     except requests.RequestException as e:
                         logging.warning(f"Failed to fetch from direct URL: {e}")
-                        # Return basic result even if fetch fails
+                        # Return basic result even if fetch fails - same format as search
                         anime_result = {
                             "title": slug.replace("-", " ").title(),
                             "url": url,
                             "slug": slug,
                             "site": site,
-                            "base_url": base_url,
-                            "stream_path": stream_path,
                             "description": "",
                             "cover": "",
                         }
                         return jsonify(
                             {
                                 "success": True,
-                                "result": anime_result,
+                                "results": [anime_result],
                                 "source": "direct_url",
                             }
                         )
