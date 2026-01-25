@@ -40,6 +40,9 @@
                 <button id="file-browser-btn" class="nav-btn file-browser-btn" title="Downloaded Files">
                     <i class="fas fa-folder-open"></i>
                 </button>
+                <button id="cast-btn" class="nav-btn cast-nav-btn" title="Cast to Chromecast">
+                    <i class="fas fa-tv"></i>
+                </button>
                 <a href="https://github.com/phoenixthrush/AniWorld-Downloader" target="_blank" class="nav-btn github-btn" title="View on GitHub">
                     <i class="fab fa-github"></i>
                 </a>
@@ -261,33 +264,68 @@
                 <button id="close-cast-controller-modal" class="close-btn">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="cast-file-info" id="cast-file-info">
-                    <i class="fas fa-film"></i>
-                    <span id="cast-file-name">No file selected</span>
+                <!-- Step 1: Device Selection -->
+                <div class="cast-step" id="cast-step-device">
+                    <div class="cast-step-header">
+                        <span class="cast-step-number">1</span>
+                        <h4>Select Cast Device</h4>
+                    </div>
+                    <div class="cast-devices-section">
+                        <div class="cast-devices-header">
+                            <span class="cast-devices-label">Available Devices</span>
+                            <button id="scan-devices-btn" class="control-btn">
+                                <i class="fas fa-search"></i> Scan
+                            </button>
+                        </div>
+                        <div class="cast-devices-loading" id="cast-devices-loading" style="display: none;">
+                            <div class="loading-spinner-small"></div>
+                            <span>Scanning for devices...</span>
+                        </div>
+                        <div class="cast-devices-list" id="cast-devices-list">
+                            <p class="cast-devices-empty">Click "Scan" to find Chromecast devices</p>
+                        </div>
+                    </div>
+                    <div class="cast-selected-device" id="cast-selected-device" style="display: none;">
+                        <div class="cast-selected-device-info">
+                            <i class="fas fa-tv"></i>
+                            <span id="cast-selected-device-name">No device selected</span>
+                        </div>
+                        <button id="change-device-btn" class="control-btn-small">Change</button>
+                    </div>
                 </div>
 
-                <div class="cast-devices-section">
-                    <div class="cast-devices-header">
-                        <h4>Available Devices</h4>
-                        <button id="scan-devices-btn" class="control-btn">
-                            <i class="fas fa-search"></i> Scan
-                        </button>
+                <!-- Step 2: Media Selection -->
+                <div class="cast-step" id="cast-step-media" style="display: none;">
+                    <div class="cast-step-header">
+                        <span class="cast-step-number">2</span>
+                        <h4>Select Media to Cast</h4>
                     </div>
-                    <div class="cast-devices-loading" id="cast-devices-loading" style="display: none;">
-                        <div class="loading-spinner-small"></div>
-                        <span>Scanning for devices...</span>
-                    </div>
-                    <div class="cast-devices-list" id="cast-devices-list">
-                        <p class="cast-devices-empty">Click "Scan" to find Chromecast devices</p>
+                    <div class="cast-media-section">
+                        <div class="cast-media-loading" id="cast-media-loading" style="display: none;">
+                            <div class="loading-spinner-small"></div>
+                            <span>Loading files...</span>
+                        </div>
+                        <div class="cast-media-list" id="cast-media-list">
+                            <!-- Media files will be populated here -->
+                        </div>
+                        <div class="cast-media-empty" id="cast-media-empty" style="display: none;">
+                            <i class="fas fa-inbox"></i>
+                            <p>No media files found</p>
+                        </div>
                     </div>
                 </div>
 
+                <!-- Playback Controls (shown when casting) -->
                 <div class="cast-controls" id="cast-controls" style="display: none;">
                     <div class="cast-now-playing">
+                        <div class="cast-now-playing-info">
+                            <i class="fas fa-film"></i>
+                            <span id="cast-now-playing-file">No file playing</span>
+                        </div>
                         <span id="cast-status">Not casting</span>
                     </div>
                     <div class="cast-progress">
-                        <div class="cast-progress-bar">
+                        <div class="cast-progress-bar" id="cast-progress-bar-clickable">
                             <div class="cast-progress-fill" id="cast-progress-fill"></div>
                         </div>
                         <div class="cast-time">
@@ -310,8 +348,9 @@
                         </button>
                     </div>
                     <div class="cast-volume">
-                        <i class="fas fa-volume-up"></i>
+                        <i class="fas fa-volume-up" id="cast-volume-icon"></i>
                         <input type="range" id="cast-volume-slider" min="0" max="100" value="100">
+                        <span id="cast-volume-value">100%</span>
                     </div>
                 </div>
             </div>
