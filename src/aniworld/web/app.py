@@ -47,6 +47,10 @@ class WebApp:
         # Download manager
         self.download_manager = get_download_manager(self.db)
 
+        # Chromecast connection cache
+        self._chromecast_cache = {}  # {uuid: {'cast': cast_obj, 'browser': browser, 'last_used': timestamp}}
+        self._chromecast_cache_lock = threading.Lock()
+
         # Create Flask app
         self.app = self._create_app()
 
@@ -143,9 +147,83 @@ class WebApp:
 
         return decorated_function
 
+    def _get_cached_chromecast(self, device_uuid, timeout=10):
+        """
+        Get a Chromecast device from cache or discover it.
+
+        Args:
+            device_uuid: The UUID of the Chromecast to find
+            timeout: Discovery timeout in seconds (only used on first connection)
+
+        Returns:
+            cast object if found, None if not found
+        """
+        import pychromecast
+        from uuid import UUID
+
+        with self._chromecast_cache_lock:
+            # Check if we have a cached connection
+            if device_uuid in self._chromecast_cache:
+                cached = self._chromecast_cache[device_uuid]
+                cast = cached['cast']
+
+                # Check if the cast is still connected
+                try:
+                    # Update last used time
+                    cached['last_used'] = time.time()
+
+                    # Try to access the socket to verify connection
+                    if cast.socket_client and cast.socket_client.is_connected:
+                        return cast
+                except Exception:
+                    pass
+
+                # Connection is stale, clean it up
+                self._cleanup_cached_chromecast(device_uuid)
+
+            # Need to discover the device
+            try:
+                chromecasts, browser = pychromecast.get_listed_chromecasts(
+                    uuids=[UUID(device_uuid)],
+                    timeout=timeout
+                )
+
+                if chromecasts:
+                    cast = chromecasts[0]
+                    # Cache the connection
+                    self._chromecast_cache[device_uuid] = {
+                        'cast': cast,
+                        'browser': browser,
+                        'last_used': time.time()
+                    }
+                    return cast
+
+                # No device found, stop the browser
+                if browser:
+                    browser.stop_discovery()
+                return None
+
+            except Exception as e:
+                logging.error(f"Failed to discover Chromecast: {e}")
+                return None
+
+    def _cleanup_cached_chromecast(self, device_uuid):
+        """Clean up a cached Chromecast connection."""
+        if device_uuid in self._chromecast_cache:
+            cached = self._chromecast_cache[device_uuid]
+            try:
+                if cached.get('browser'):
+                    cached['browser'].stop_discovery()
+                if cached.get('cast'):
+                    cached['cast'].disconnect()
+            except Exception:
+                pass
+            del self._chromecast_cache[device_uuid]
+
     def _discover_chromecast_by_uuid(self, device_uuid, timeout=10):
         """
         Discover and return a Chromecast device by UUID.
+        Uses caching for faster subsequent access.
 
         Args:
             device_uuid: The UUID of the Chromecast to find
@@ -154,22 +232,11 @@ class WebApp:
         Returns:
             tuple: (cast, browser) if found, (None, None) if not found
         """
-        import pychromecast
-        from uuid import UUID
-
-        try:
-            # Use get_listed_chromecasts with UUID for targeted discovery
-            chromecasts, browser = pychromecast.get_listed_chromecasts(
-                uuids=[UUID(device_uuid)],
-                timeout=timeout
-            )
-
-            if chromecasts:
-                return chromecasts[0], browser
-
-            return None, browser
-        except Exception:
-            return None, None
+        cast = self._get_cached_chromecast(device_uuid, timeout)
+        if cast:
+            # Return the cast and None for browser (browser is managed in cache)
+            return cast, None
+        return None, None
 
     def _setup_routes(self):
         """Setup Flask routes."""
