@@ -2598,35 +2598,237 @@ body[data-theme="dark"] .episode-progress-text {
    ======================================== */
 
 .cast-controller-modal-content {
-    max-width: 500px;
+    max-width: 550px;
     width: 95%;
 }
 
-.cast-file-info {
+/* Cast navbar button */
+.cast-nav-btn {
+    background: #9f7aea !important;
+    color: white !important;
+}
+
+.cast-nav-btn:hover {
+    background: #805ad5 !important;
+}
+
+/* Cast Step Styles */
+.cast-step {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.cast-step:last-of-type {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.cast-step-header {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 1rem;
-    background: var(--tree-bg);
-    border-radius: 8px;
-    margin-bottom: 1.5rem;
-    color: var(--text-secondary);
-    border: 1px solid var(--border-color);
+    margin-bottom: 1rem;
 }
 
-.cast-file-info i {
-    color: #4299e1;
+.cast-step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 50%;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.cast-step-header h4 {
+    color: var(--text-primary);
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+/* Selected Device Display */
+.cast-selected-device {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1rem;
+    background: rgba(159, 122, 234, 0.15);
+    border: 1px solid #9f7aea;
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.cast-selected-device-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.cast-selected-device-info i {
+    color: #9f7aea;
     font-size: 1.25rem;
 }
 
-.cast-file-info span {
+.control-btn-small {
+    background: var(--button-secondary-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.control-btn-small:hover {
+    background: var(--tree-hover);
+}
+
+/* Cast Media Section */
+.cast-media-section {
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.cast-media-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    color: var(--text-tertiary);
+}
+
+.cast-media-list {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--tree-bg);
+}
+
+.cast-media-empty {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-tertiary);
+}
+
+.cast-media-empty i {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.cast-media-item {
+    display: flex;
+    align-items: center;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    gap: 0.75rem;
+    transition: background-color 0.2s ease;
+}
+
+.cast-media-item:last-child {
+    border-bottom: none;
+}
+
+.cast-media-item:hover {
+    background: var(--tree-hover);
+}
+
+.cast-media-icon {
+    font-size: 1.25rem;
+    color: #4299e1;
+    width: 30px;
+    text-align: center;
+}
+
+.cast-media-info {
     flex: 1;
+    min-width: 0;
+}
+
+.cast-media-name {
     font-weight: 500;
-    word-break: break-word;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.9rem;
+}
+
+.cast-media-meta {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin-top: 0.25rem;
+}
+
+.cast-media-btn {
+    background: #4299e1;
+    color: white;
+    border: none;
+    padding: 0.5rem 0.875rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+
+.cast-media-btn:hover {
+    background: #3182ce;
+}
+
+.cast-media-btn.playing {
+    background: #48bb78;
+    cursor: default;
+}
+
+.cast-media-btn.playing:hover {
+    background: #48bb78;
+}
+
+/* Cast Now Playing Info */
+.cast-now-playing-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-tertiary);
+    margin-bottom: 0.5rem;
+}
+
+.cast-now-playing-info i {
+    color: #4299e1;
+}
+
+/* Cast Volume Value */
+.cast-volume-value {
+    font-size: 0.8rem;
+    min-width: 40px;
+    text-align: right;
+}
+
+/* Cast Devices Label */
+.cast-devices-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
 }
 
 .cast-devices-section {
-    margin-bottom: 1.5rem;
+    margin-bottom: 0;
 }
 
 .cast-devices-header {
@@ -2736,6 +2938,12 @@ body[data-theme="dark"] .episode-progress-text {
     margin-bottom: 1rem;
     color: var(--text-secondary);
     font-weight: 500;
+}
+
+#cast-status {
+    display: block;
+    font-size: 0.9rem;
+    color: #48bb78;
 }
 
 .cast-progress {
@@ -2920,5 +3128,23 @@ body[data-theme="dark"] .episode-progress-text {
     .cast-control-btn.cast-play-btn {
         width: 50px;
         height: 50px;
+    }
+
+    .cast-media-item {
+        flex-wrap: wrap;
+    }
+
+    .cast-media-btn {
+        width: 100%;
+        justify-content: center;
+        margin-top: 0.5rem;
+    }
+
+    .cast-step-header h4 {
+        font-size: 1rem;
+    }
+
+    .cast-media-section {
+        max-height: 220px;
     }
 }

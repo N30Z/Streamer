@@ -1270,8 +1270,6 @@ document.head.appendChild(style);
     // Cast controller elements
     const castControllerModal = document.getElementById('cast-controller-modal');
     const closeCastControllerModal = document.getElementById('close-cast-controller-modal');
-    const castFileName = document.getElementById('cast-file-name');
-    const castFileInfo = document.getElementById('cast-file-info');
     const scanDevicesBtn = document.getElementById('scan-devices-btn');
     const castDevicesLoading = document.getElementById('cast-devices-loading');
     const castDevicesList = document.getElementById('cast-devices-list');
@@ -1286,10 +1284,27 @@ document.head.appendChild(style);
     const castForwardBtn = document.getElementById('cast-forward-btn');
     const castVolumeSlider = document.getElementById('cast-volume-slider');
 
+    // New cast controller elements
+    const castNavBtn = document.getElementById('cast-btn');
+    const castStepDevice = document.getElementById('cast-step-device');
+    const castStepMedia = document.getElementById('cast-step-media');
+    const castSelectedDevice = document.getElementById('cast-selected-device');
+    const castSelectedDeviceName = document.getElementById('cast-selected-device-name');
+    const changeDeviceBtn = document.getElementById('change-device-btn');
+    const castMediaList = document.getElementById('cast-media-list');
+    const castMediaLoading = document.getElementById('cast-media-loading');
+    const castMediaEmpty = document.getElementById('cast-media-empty');
+    const castNowPlayingFile = document.getElementById('cast-now-playing-file');
+    const castProgressBarClickable = document.getElementById('cast-progress-bar-clickable');
+    const castVolumeIcon = document.getElementById('cast-volume-icon');
+    const castVolumeValue = document.getElementById('cast-volume-value');
+
     // State
     let currentCastFile = null;
     let currentCastDevice = null;
     let castStatusInterval = null;
+    let castMediaFiles = [];
+    let castDurationValue = 0;
 
     // Initialize file browser
     if (fileBrowserBtn) {
@@ -1313,6 +1328,10 @@ document.head.appendChild(style);
     }
 
     // Initialize cast controller
+    if (castNavBtn) {
+        castNavBtn.addEventListener('click', openCastController);
+    }
+
     if (closeCastControllerModal) {
         closeCastControllerModal.addEventListener('click', closeCastController);
     }
@@ -1327,6 +1346,10 @@ document.head.appendChild(style);
 
     if (scanDevicesBtn) {
         scanDevicesBtn.addEventListener('click', scanChromecastDevices);
+    }
+
+    if (changeDeviceBtn) {
+        changeDeviceBtn.addEventListener('click', changeDevice);
     }
 
     // Cast control buttons
@@ -1344,7 +1367,19 @@ document.head.appendChild(style);
     }
     if (castVolumeSlider) {
         castVolumeSlider.addEventListener('input', (e) => {
-            castControl('volume', parseInt(e.target.value));
+            const value = parseInt(e.target.value);
+            castControl('volume', value);
+            updateVolumeDisplay(value);
+        });
+    }
+    if (castProgressBarClickable) {
+        castProgressBarClickable.addEventListener('click', (e) => {
+            if (castDurationValue > 0) {
+                const rect = castProgressBarClickable.getBoundingClientRect();
+                const percentage = (e.clientX - rect.left) / rect.width;
+                const seekTime = Math.floor(percentage * castDurationValue);
+                castControl('seek', seekTime);
+            }
         });
     }
 
@@ -1417,9 +1452,6 @@ document.head.appendChild(style);
                     <button class="file-action-btn stream-btn" title="Stream in browser">
                         <i class="fas fa-play"></i> Stream
                     </button>
-                    <button class="file-action-btn cast-btn" title="Cast to Chromecast">
-                        <i class="fas fa-tv"></i> Cast
-                    </button>
                     <button class="file-action-btn delete-btn" title="Delete file">
                         <i class="fas fa-trash"></i>
                     </button>
@@ -1428,11 +1460,9 @@ document.head.appendChild(style);
 
             // Add event listeners
             const streamBtn = fileItem.querySelector('.stream-btn');
-            const castBtn = fileItem.querySelector('.cast-btn');
             const deleteBtn = fileItem.querySelector('.delete-btn');
 
             streamBtn.addEventListener('click', () => streamFile(file));
-            castBtn.addEventListener('click', () => openCastController(file));
             deleteBtn.addEventListener('click', () => deleteFile(file));
 
             fileList.appendChild(fileItem);
@@ -1483,21 +1513,39 @@ document.head.appendChild(style);
         });
     }
 
-    function openCastController(file) {
-        currentCastFile = file;
-        castFileName.textContent = file.name;
+    function openCastController() {
         castControllerModal.style.display = 'flex';
-        castControls.style.display = 'none';
+
+        // Reset to initial state
+        resetCastController();
+
+        // If we have a device already selected from a previous session, show it
+        if (currentCastDevice) {
+            showSelectedDevice();
+            loadCastMediaFiles();
+        }
+    }
+
+    function resetCastController() {
+        // Show device selection step
+        castStepDevice.style.display = 'block';
+        castSelectedDevice.style.display = 'none';
         castDevicesList.innerHTML = '<p class="cast-devices-empty">Click "Scan" to find Chromecast devices</p>';
+
+        // Hide media step if no device
+        if (!currentCastDevice) {
+            castStepMedia.style.display = 'none';
+        }
+
+        // Hide controls if not casting
+        if (!currentCastFile) {
+            castControls.style.display = 'none';
+        }
     }
 
     function closeCastController() {
         castControllerModal.style.display = 'none';
-        currentCastFile = null;
-        if (castStatusInterval) {
-            clearInterval(castStatusInterval);
-            castStatusInterval = null;
-        }
+        // Don't reset device/file - keep casting in background
     }
 
     function scanChromecastDevices() {
@@ -1540,26 +1588,119 @@ document.head.appendChild(style);
                     <div class="cast-device-name">${escapeHtmlFB(device.name)}</div>
                     <div class="cast-device-model">${escapeHtmlFB(device.model)}</div>
                 </div>
-                <button class="cast-device-select-btn">Cast</button>
+                <button class="cast-device-select-btn">Select</button>
             `;
 
             const selectBtn = deviceItem.querySelector('.cast-device-select-btn');
-            selectBtn.addEventListener('click', () => castToDevice(device));
+            selectBtn.addEventListener('click', () => selectDevice(device));
 
             castDevicesList.appendChild(deviceItem);
         });
     }
 
-    function castToDevice(device) {
-        if (!currentCastFile) {
-            showNotification('No file selected', 'error');
+    function selectDevice(device) {
+        currentCastDevice = device;
+        showSelectedDevice();
+        loadCastMediaFiles();
+    }
+
+    function showSelectedDevice() {
+        // Hide device list, show selected device
+        castDevicesList.style.display = 'none';
+        castSelectedDevice.style.display = 'flex';
+        castSelectedDeviceName.textContent = currentCastDevice.name;
+
+        // Show media selection step
+        castStepMedia.style.display = 'block';
+    }
+
+    function changeDevice() {
+        // Show device list again
+        castDevicesList.style.display = 'block';
+        castSelectedDevice.style.display = 'none';
+
+        // Hide media step
+        castStepMedia.style.display = 'none';
+
+        // Scan for devices
+        scanChromecastDevices();
+    }
+
+    function loadCastMediaFiles() {
+        castMediaLoading.style.display = 'flex';
+        castMediaList.innerHTML = '';
+        castMediaEmpty.style.display = 'none';
+
+        fetch('/api/files')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.files.length > 0) {
+                    castMediaFiles = data.files;
+                    renderCastMediaList(data.files);
+                } else {
+                    castMediaEmpty.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Failed to load media files:', error);
+                castMediaEmpty.style.display = 'block';
+            })
+            .finally(() => {
+                castMediaLoading.style.display = 'none';
+            });
+    }
+
+    function renderCastMediaList(files) {
+        castMediaList.innerHTML = '';
+
+        files.forEach(file => {
+            const mediaItem = document.createElement('div');
+            mediaItem.className = 'cast-media-item';
+
+            const extension = file.name.split('.').pop().toLowerCase();
+            let iconClass = 'fas fa-video';
+            if (['mkv', 'avi'].includes(extension)) {
+                iconClass = 'fas fa-film';
+            }
+
+            const isCurrentlyPlaying = currentCastFile && currentCastFile.path === file.path;
+
+            mediaItem.innerHTML = `
+                <div class="cast-media-icon">
+                    <i class="${iconClass}"></i>
+                </div>
+                <div class="cast-media-info">
+                    <div class="cast-media-name">${escapeHtmlFB(file.name)}</div>
+                    <div class="cast-media-meta">
+                        <span class="cast-media-size">${file.size_human}</span>
+                        ${file.parent ? `<span class="cast-media-parent">${escapeHtmlFB(file.parent)}</span>` : ''}
+                    </div>
+                </div>
+                <button class="cast-media-btn ${isCurrentlyPlaying ? 'playing' : ''}" title="${isCurrentlyPlaying ? 'Currently Playing' : 'Cast this file'}">
+                    <i class="fas ${isCurrentlyPlaying ? 'fa-broadcast-tower' : 'fa-play'}"></i>
+                    ${isCurrentlyPlaying ? 'Playing' : 'Cast'}
+                </button>
+            `;
+
+            const castBtn = mediaItem.querySelector('.cast-media-btn');
+            if (!isCurrentlyPlaying) {
+                castBtn.addEventListener('click', () => castFile(file));
+            }
+
+            castMediaList.appendChild(mediaItem);
+        });
+    }
+
+    function castFile(file) {
+        if (!currentCastDevice) {
+            showNotification('No device selected', 'error');
             return;
         }
 
-        currentCastDevice = device;
+        currentCastFile = file;
 
         // Show loading state
-        showNotification(`Casting to ${device.name}...`, 'info');
+        showNotification(`Casting "${file.name}" to ${currentCastDevice.name}...`, 'info');
 
         fetch('/api/chromecast/cast', {
             method: 'POST',
@@ -1567,16 +1708,24 @@ document.head.appendChild(style);
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                device_uuid: device.uuid,
-                file_path: currentCastFile.path
+                device_uuid: currentCastDevice.uuid,
+                file_path: file.path
             })
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showNotification(`Now casting to ${device.name}`, 'success');
+                showNotification(`Now casting to ${currentCastDevice.name}`, 'success');
+
+                // Show playback controls
                 castControls.style.display = 'block';
-                castStatus.textContent = `Casting to ${device.name}`;
+                castStatus.textContent = `Casting to ${currentCastDevice.name}`;
+                castNowPlayingFile.textContent = file.name;
+
+                // Update media list to show current playing
+                renderCastMediaList(castMediaFiles);
+
+                // Start polling for status
                 startCastStatusPolling();
             } else {
                 showNotification(data.error || 'Failed to cast', 'error');
@@ -1606,6 +1755,9 @@ document.head.appendChild(style);
                 if (data.success && data.status) {
                     const status = data.status;
 
+                    // Store duration for seek calculations
+                    castDurationValue = status.duration || 0;
+
                     // Update progress
                     if (status.duration > 0) {
                         const progress = (status.current_time / status.duration) * 100;
@@ -1624,13 +1776,31 @@ document.head.appendChild(style);
                         icon.className = 'fas fa-play';
                     }
 
-                    // Update volume
-                    castVolumeSlider.value = status.volume;
+                    // Update volume (only if not being dragged)
+                    if (document.activeElement !== castVolumeSlider) {
+                        castVolumeSlider.value = status.volume;
+                        updateVolumeDisplay(status.volume);
+                    }
                 }
             })
             .catch(error => {
                 console.error('Failed to get cast status:', error);
             });
+    }
+
+    function updateVolumeDisplay(value) {
+        if (castVolumeValue) {
+            castVolumeValue.textContent = `${value}%`;
+        }
+        if (castVolumeIcon) {
+            if (value === 0) {
+                castVolumeIcon.className = 'fas fa-volume-mute';
+            } else if (value < 50) {
+                castVolumeIcon.className = 'fas fa-volume-down';
+            } else {
+                castVolumeIcon.className = 'fas fa-volume-up';
+            }
+        }
     }
 
     function toggleCastPlayPause() {
@@ -1645,13 +1815,28 @@ document.head.appendChild(style);
         if (!currentCastDevice) return;
 
         castControl('stop');
+
+        // Reset UI
         castControls.style.display = 'none';
         castStatus.textContent = 'Not casting';
+        castProgressFill.style.width = '0%';
+        castCurrentTime.textContent = '0:00';
+        castDuration.textContent = '0:00';
+
+        currentCastFile = null;
+        castDurationValue = 0;
 
         if (castStatusInterval) {
             clearInterval(castStatusInterval);
             castStatusInterval = null;
         }
+
+        // Update media list to remove "playing" status
+        if (castMediaFiles.length > 0) {
+            renderCastMediaList(castMediaFiles);
+        }
+
+        showNotification('Stopped casting', 'info');
     }
 
     function castControl(action, value = null) {
