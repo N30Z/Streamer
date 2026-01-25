@@ -1323,7 +1323,7 @@ class WebApp:
 
                 # Sort folders alphabetically, files by modification time
                 folders.sort(key=lambda x: x["name"].lower())
-                files.sort(key=lambda x: x["modified"], reverse=True)
+                files.sort(key=lambda x: x["name"].lower())
 
                 # Calculate parent path for navigation
                 parent_path = ""
