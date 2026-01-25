@@ -399,20 +399,21 @@ class DownloadQueueManager:
                                 anime.title
                             )
 
-                            # Count files before download
+                            # Count video files before download (recursively for season subdirs)
+                            video_extensions = {'.mp4', '.mkv', '.avi', '.webm', '.mov', '.m4v', '.flv', '.wmv'}
                             files_before = 0
                             if anime_download_dir.exists():
-                                files_before = len(list(anime_download_dir.glob("*")))
+                                files_before = len([f for f in anime_download_dir.rglob("*") if f.is_file() and f.suffix.lower() in video_extensions])
 
                             # Import and call the download function with progress callback
                             from ..action.download import download
 
                             download(temp_anime, web_progress_callback)
 
-                            # Count files after download
+                            # Count video files after download (recursively for season subdirs)
                             files_after = 0
                             if anime_download_dir.exists():
-                                files_after = len(list(anime_download_dir.glob("*")))
+                                files_after = len([f for f in anime_download_dir.rglob("*") if f.is_file() and f.suffix.lower() in video_extensions])
 
                             # Check if any new files were created
                             if files_after > files_before:
