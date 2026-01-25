@@ -143,6 +143,46 @@ class WebApp:
 
         return decorated_function
 
+    def _discover_chromecast_by_uuid(self, device_uuid, timeout=5):
+        """
+        Discover and return a Chromecast device by UUID.
+
+        Args:
+            device_uuid: The UUID of the Chromecast to find
+            timeout: Discovery timeout in seconds
+
+        Returns:
+            tuple: (cast, browser) if found, (None, None) if not found
+        """
+        import pychromecast
+        from pychromecast.discovery import CastBrowser, SimpleCastListener
+        import time
+        import threading
+
+        found_cast = None
+        found_event = threading.Event()
+        browser = None
+
+        class DeviceListener(SimpleCastListener):
+            def add_cast(self, uuid, service):
+                nonlocal found_cast, browser
+                if str(uuid) == device_uuid and service.host:
+                    # Create Chromecast from the discovered service
+                    found_cast = pychromecast.get_chromecast_from_cast_info(
+                        service, browser.zc
+                    )
+                    found_event.set()
+
+        listener = DeviceListener()
+        browser = CastBrowser(listener)
+        browser.start_discovery()
+
+        # Wait for the specific device or timeout
+        found_event.wait(timeout=timeout)
+        browser.stop_discovery()
+
+        return found_cast, browser
+
     def _setup_routes(self):
         """Setup Flask routes."""
 
@@ -1197,6 +1237,7 @@ class WebApp:
             try:
                 try:
                     import pychromecast
+                    from pychromecast.discovery import CastBrowser, SimpleCastListener
                 except ImportError:
                     return jsonify({
                         "success": False,
@@ -1204,19 +1245,38 @@ class WebApp:
                         "devices": []
                     })
 
-                # Discover Chromecasts with timeout
-                chromecasts, browser = pychromecast.get_chromecasts(timeout=5)
-                browser.stop_discovery()
+                # Use discovery listener to collect fully-resolved devices
+                discovered_devices = {}
 
+                class DeviceListener(SimpleCastListener):
+                    def add_cast(self, uuid, service):
+                        discovered_devices[uuid] = service
+
+                    def update_cast(self, uuid, service):
+                        discovered_devices[uuid] = service
+
+                listener = DeviceListener()
+                browser = CastBrowser(listener)
+                browser.start_discovery()
+
+                # Wait for discovery to find devices
+                import time
+                time.sleep(5)
+
+                # Collect device info before stopping
                 devices = []
-                for cc in chromecasts:
-                    devices.append({
-                        "name": cc.name,
-                        "model": cc.model_name,
-                        "uuid": str(cc.uuid),
-                        "host": cc.cast_info.host,
-                        "port": cc.cast_info.port
-                    })
+                for uuid, service in discovered_devices.items():
+                    # Only include devices with resolved host
+                    if service.host:
+                        devices.append({
+                            "name": service.friendly_name,
+                            "model": service.model_name,
+                            "uuid": str(uuid),
+                            "host": service.host,
+                            "port": service.port
+                        })
+
+                browser.stop_discovery()
 
                 return jsonify({
                     "success": True,
@@ -1273,14 +1333,7 @@ class WebApp:
                     }), 404
 
                 # Find the Chromecast
-                chromecasts, browser = pychromecast.get_chromecasts(timeout=5)
-                browser.stop_discovery()
-
-                cast = None
-                for cc in chromecasts:
-                    if str(cc.uuid) == device_uuid:
-                        cast = cc
-                        break
+                cast, _ = self._discover_chromecast_by_uuid(device_uuid)
 
                 if not cast:
                     return jsonify({
@@ -1358,14 +1411,7 @@ class WebApp:
                     }), 400
 
                 # Find the Chromecast
-                chromecasts, browser = pychromecast.get_chromecasts(timeout=5)
-                browser.stop_discovery()
-
-                cast = None
-                for cc in chromecasts:
-                    if str(cc.uuid) == device_uuid:
-                        cast = cc
-                        break
+                cast, _ = self._discover_chromecast_by_uuid(device_uuid)
 
                 if not cast:
                     return jsonify({
@@ -1437,14 +1483,7 @@ class WebApp:
                     }), 400
 
                 # Find the Chromecast
-                chromecasts, browser = pychromecast.get_chromecasts(timeout=5)
-                browser.stop_discovery()
-
-                cast = None
-                for cc in chromecasts:
-                    if str(cc.uuid) == device_uuid:
-                        cast = cc
-                        break
+                cast, _ = self._discover_chromecast_by_uuid(device_uuid)
 
                 if not cast:
                     return jsonify({
