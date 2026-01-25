@@ -36,6 +36,9 @@ dependencies = [
     'windows-curses; platform_system == "Windows"',
     'winfcntl; platform_system == "Windows"'
 ]
+
+[project.optional-dependencies]
+chromecast = ['pychromecast']
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",

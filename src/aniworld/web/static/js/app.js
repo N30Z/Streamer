@@ -1251,3 +1251,479 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// ========================================
+// File Browser Functionality
+// ========================================
+
+(function() {
+    // File browser elements
+    const fileBrowserBtn = document.getElementById('file-browser-btn');
+    const fileBrowserModal = document.getElementById('file-browser-modal');
+    const closeFileBrowserModal = document.getElementById('close-file-browser-modal');
+    const refreshFilesBtn = document.getElementById('refresh-files-btn');
+    const currentPathEl = document.getElementById('current-path');
+    const fileBrowserLoading = document.getElementById('file-browser-loading');
+    const fileList = document.getElementById('file-list');
+    const fileEmpty = document.getElementById('file-empty');
+
+    // Cast controller elements
+    const castControllerModal = document.getElementById('cast-controller-modal');
+    const closeCastControllerModal = document.getElementById('close-cast-controller-modal');
+    const castFileName = document.getElementById('cast-file-name');
+    const castFileInfo = document.getElementById('cast-file-info');
+    const scanDevicesBtn = document.getElementById('scan-devices-btn');
+    const castDevicesLoading = document.getElementById('cast-devices-loading');
+    const castDevicesList = document.getElementById('cast-devices-list');
+    const castControls = document.getElementById('cast-controls');
+    const castStatus = document.getElementById('cast-status');
+    const castProgressFill = document.getElementById('cast-progress-fill');
+    const castCurrentTime = document.getElementById('cast-current-time');
+    const castDuration = document.getElementById('cast-duration');
+    const castPlayPauseBtn = document.getElementById('cast-play-pause-btn');
+    const castStopBtn = document.getElementById('cast-stop-btn');
+    const castRewindBtn = document.getElementById('cast-rewind-btn');
+    const castForwardBtn = document.getElementById('cast-forward-btn');
+    const castVolumeSlider = document.getElementById('cast-volume-slider');
+
+    // State
+    let currentCastFile = null;
+    let currentCastDevice = null;
+    let castStatusInterval = null;
+
+    // Initialize file browser
+    if (fileBrowserBtn) {
+        fileBrowserBtn.addEventListener('click', openFileBrowser);
+    }
+
+    if (closeFileBrowserModal) {
+        closeFileBrowserModal.addEventListener('click', closeFileBrowserModalFn);
+    }
+
+    if (refreshFilesBtn) {
+        refreshFilesBtn.addEventListener('click', loadFiles);
+    }
+
+    if (fileBrowserModal) {
+        fileBrowserModal.addEventListener('click', function(e) {
+            if (e.target === fileBrowserModal) {
+                closeFileBrowserModalFn();
+            }
+        });
+    }
+
+    // Initialize cast controller
+    if (closeCastControllerModal) {
+        closeCastControllerModal.addEventListener('click', closeCastController);
+    }
+
+    if (castControllerModal) {
+        castControllerModal.addEventListener('click', function(e) {
+            if (e.target === castControllerModal) {
+                closeCastController();
+            }
+        });
+    }
+
+    if (scanDevicesBtn) {
+        scanDevicesBtn.addEventListener('click', scanChromecastDevices);
+    }
+
+    // Cast control buttons
+    if (castPlayPauseBtn) {
+        castPlayPauseBtn.addEventListener('click', toggleCastPlayPause);
+    }
+    if (castStopBtn) {
+        castStopBtn.addEventListener('click', stopCasting);
+    }
+    if (castRewindBtn) {
+        castRewindBtn.addEventListener('click', () => castControl('rewind'));
+    }
+    if (castForwardBtn) {
+        castForwardBtn.addEventListener('click', () => castControl('forward'));
+    }
+    if (castVolumeSlider) {
+        castVolumeSlider.addEventListener('input', (e) => {
+            castControl('volume', parseInt(e.target.value));
+        });
+    }
+
+    function openFileBrowser() {
+        fileBrowserModal.style.display = 'flex';
+        loadFiles();
+    }
+
+    function closeFileBrowserModalFn() {
+        fileBrowserModal.style.display = 'none';
+    }
+
+    function loadFiles() {
+        fileBrowserLoading.style.display = 'flex';
+        fileList.style.display = 'none';
+        fileEmpty.style.display = 'none';
+
+        fetch('/api/files')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentPathEl.textContent = data.path;
+                    renderFileList(data.files);
+                } else {
+                    showNotification(data.error || 'Failed to load files', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Failed to load files:', error);
+                showNotification('Failed to load files', 'error');
+            })
+            .finally(() => {
+                fileBrowserLoading.style.display = 'none';
+            });
+    }
+
+    function renderFileList(files) {
+        if (!files || files.length === 0) {
+            fileEmpty.style.display = 'block';
+            fileList.style.display = 'none';
+            return;
+        }
+
+        fileList.innerHTML = '';
+        fileList.style.display = 'block';
+
+        files.forEach(file => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+
+            const extension = file.name.split('.').pop().toLowerCase();
+            let iconClass = 'fas fa-video';
+            if (['mkv', 'avi'].includes(extension)) {
+                iconClass = 'fas fa-film';
+            }
+
+            fileItem.innerHTML = `
+                <div class="file-icon">
+                    <i class="${iconClass}"></i>
+                </div>
+                <div class="file-info">
+                    <div class="file-name">${escapeHtmlFB(file.name)}</div>
+                    <div class="file-meta">
+                        <span class="file-size">${file.size_human}</span>
+                        <span class="file-date">${file.modified_human}</span>
+                        ${file.parent ? `<span class="file-parent">${escapeHtmlFB(file.parent)}</span>` : ''}
+                    </div>
+                </div>
+                <div class="file-actions">
+                    <button class="file-action-btn stream-btn" title="Stream in browser">
+                        <i class="fas fa-play"></i> Stream
+                    </button>
+                    <button class="file-action-btn cast-btn" title="Cast to Chromecast">
+                        <i class="fas fa-tv"></i> Cast
+                    </button>
+                    <button class="file-action-btn delete-btn" title="Delete file">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+
+            // Add event listeners
+            const streamBtn = fileItem.querySelector('.stream-btn');
+            const castBtn = fileItem.querySelector('.cast-btn');
+            const deleteBtn = fileItem.querySelector('.delete-btn');
+
+            streamBtn.addEventListener('click', () => streamFile(file));
+            castBtn.addEventListener('click', () => openCastController(file));
+            deleteBtn.addEventListener('click', () => deleteFile(file));
+
+            fileList.appendChild(fileItem);
+        });
+    }
+
+    function streamFile(file) {
+        // Open video in new tab or modal
+        const streamUrl = `/api/files/stream/${encodeURIComponent(file.path)}`;
+
+        // Create a video player modal
+        const videoModal = document.createElement('div');
+        videoModal.className = 'modal-overlay';
+        videoModal.id = 'video-player-modal';
+        videoModal.innerHTML = `
+            <div class="modal-content video-player-modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-play-circle"></i> ${escapeHtmlFB(file.name)}</h3>
+                    <button class="close-btn" id="close-video-player">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="video-player-container">
+                        <video controls autoplay>
+                            <source src="${streamUrl}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(videoModal);
+        videoModal.style.display = 'flex';
+
+        const closeBtn = videoModal.querySelector('#close-video-player');
+        closeBtn.addEventListener('click', () => {
+            const video = videoModal.querySelector('video');
+            video.pause();
+            videoModal.remove();
+        });
+
+        videoModal.addEventListener('click', (e) => {
+            if (e.target === videoModal) {
+                const video = videoModal.querySelector('video');
+                video.pause();
+                videoModal.remove();
+            }
+        });
+    }
+
+    function openCastController(file) {
+        currentCastFile = file;
+        castFileName.textContent = file.name;
+        castControllerModal.style.display = 'flex';
+        castControls.style.display = 'none';
+        castDevicesList.innerHTML = '<p class="cast-devices-empty">Click "Scan" to find Chromecast devices</p>';
+    }
+
+    function closeCastController() {
+        castControllerModal.style.display = 'none';
+        currentCastFile = null;
+        if (castStatusInterval) {
+            clearInterval(castStatusInterval);
+            castStatusInterval = null;
+        }
+    }
+
+    function scanChromecastDevices() {
+        castDevicesLoading.style.display = 'flex';
+        castDevicesList.innerHTML = '';
+        scanDevicesBtn.disabled = true;
+
+        fetch('/api/chromecast/discover')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.devices.length > 0) {
+                    renderDeviceList(data.devices);
+                } else if (data.error) {
+                    castDevicesList.innerHTML = `<p class="cast-devices-empty">${escapeHtmlFB(data.error)}</p>`;
+                } else {
+                    castDevicesList.innerHTML = '<p class="cast-devices-empty">No Chromecast devices found</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Failed to scan devices:', error);
+                castDevicesList.innerHTML = '<p class="cast-devices-empty">Failed to scan for devices</p>';
+            })
+            .finally(() => {
+                castDevicesLoading.style.display = 'none';
+                scanDevicesBtn.disabled = false;
+            });
+    }
+
+    function renderDeviceList(devices) {
+        castDevicesList.innerHTML = '';
+
+        devices.forEach(device => {
+            const deviceItem = document.createElement('div');
+            deviceItem.className = 'cast-device-item';
+            deviceItem.innerHTML = `
+                <div class="cast-device-icon">
+                    <i class="fas fa-tv"></i>
+                </div>
+                <div class="cast-device-info">
+                    <div class="cast-device-name">${escapeHtmlFB(device.name)}</div>
+                    <div class="cast-device-model">${escapeHtmlFB(device.model)}</div>
+                </div>
+                <button class="cast-device-select-btn">Cast</button>
+            `;
+
+            const selectBtn = deviceItem.querySelector('.cast-device-select-btn');
+            selectBtn.addEventListener('click', () => castToDevice(device));
+
+            castDevicesList.appendChild(deviceItem);
+        });
+    }
+
+    function castToDevice(device) {
+        if (!currentCastFile) {
+            showNotification('No file selected', 'error');
+            return;
+        }
+
+        currentCastDevice = device;
+
+        // Show loading state
+        showNotification(`Casting to ${device.name}...`, 'info');
+
+        fetch('/api/chromecast/cast', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                device_uuid: device.uuid,
+                file_path: currentCastFile.path
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(`Now casting to ${device.name}`, 'success');
+                castControls.style.display = 'block';
+                castStatus.textContent = `Casting to ${device.name}`;
+                startCastStatusPolling();
+            } else {
+                showNotification(data.error || 'Failed to cast', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Cast error:', error);
+            showNotification('Failed to cast', 'error');
+        });
+    }
+
+    function startCastStatusPolling() {
+        if (castStatusInterval) {
+            clearInterval(castStatusInterval);
+        }
+
+        castStatusInterval = setInterval(updateCastStatus, 1000);
+        updateCastStatus();
+    }
+
+    function updateCastStatus() {
+        if (!currentCastDevice) return;
+
+        fetch(`/api/chromecast/status?device_uuid=${currentCastDevice.uuid}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.status) {
+                    const status = data.status;
+
+                    // Update progress
+                    if (status.duration > 0) {
+                        const progress = (status.current_time / status.duration) * 100;
+                        castProgressFill.style.width = `${progress}%`;
+                    }
+
+                    // Update time display
+                    castCurrentTime.textContent = formatTime(status.current_time);
+                    castDuration.textContent = formatTime(status.duration);
+
+                    // Update play/pause button
+                    const icon = castPlayPauseBtn.querySelector('i');
+                    if (status.is_playing) {
+                        icon.className = 'fas fa-pause';
+                    } else {
+                        icon.className = 'fas fa-play';
+                    }
+
+                    // Update volume
+                    castVolumeSlider.value = status.volume;
+                }
+            })
+            .catch(error => {
+                console.error('Failed to get cast status:', error);
+            });
+    }
+
+    function toggleCastPlayPause() {
+        if (!currentCastDevice) return;
+
+        const icon = castPlayPauseBtn.querySelector('i');
+        const action = icon.className.includes('fa-play') ? 'play' : 'pause';
+        castControl(action);
+    }
+
+    function stopCasting() {
+        if (!currentCastDevice) return;
+
+        castControl('stop');
+        castControls.style.display = 'none';
+        castStatus.textContent = 'Not casting';
+
+        if (castStatusInterval) {
+            clearInterval(castStatusInterval);
+            castStatusInterval = null;
+        }
+    }
+
+    function castControl(action, value = null) {
+        if (!currentCastDevice) return;
+
+        const body = {
+            device_uuid: currentCastDevice.uuid,
+            action: action
+        };
+
+        if (value !== null) {
+            body.value = value;
+        }
+
+        fetch('/api/chromecast/control', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                console.error('Cast control error:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Cast control error:', error);
+        });
+    }
+
+    function deleteFile(file) {
+        if (!confirm(`Are you sure you want to delete "${file.name}"?`)) {
+            return;
+        }
+
+        fetch('/api/files/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                path: file.path
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('File deleted successfully', 'success');
+                loadFiles(); // Refresh the file list
+            } else {
+                showNotification(data.error || 'Failed to delete file', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Delete error:', error);
+            showNotification('Failed to delete file', 'error');
+        });
+    }
+
+    function formatTime(seconds) {
+        if (!seconds || isNaN(seconds)) return '0:00';
+
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function escapeHtmlFB(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+})();

@@ -7,9 +7,12 @@ import os
 import time
 import threading
 import webbrowser
+import subprocess
+import mimetypes
+from pathlib import Path
 from datetime import datetime
 from functools import wraps
-from flask import Flask, render_template, jsonify, request, session, redirect, url_for
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for, Response, send_file
 
 from .. import config
 from .database import UserDatabase
@@ -917,6 +920,576 @@ class WebApp:
                         "error": f"Failed to fetch popular/new anime: {str(e)}",
                     }
                 ), 500
+
+        @self.app.route("/api/files")
+        @self._require_api_auth
+        def api_list_files():
+            """List downloaded files endpoint."""
+            try:
+                # Get download directory
+                download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+                if (
+                    self.arguments
+                    and hasattr(self.arguments, "output_dir")
+                    and self.arguments.output_dir is not None
+                ):
+                    download_path = str(self.arguments.output_dir)
+
+                download_dir = Path(download_path)
+
+                if not download_dir.exists():
+                    return jsonify({
+                        "success": True,
+                        "path": download_path,
+                        "files": []
+                    })
+
+                # Get all video files recursively
+                video_extensions = {'.mp4', '.mkv', '.avi', '.webm', '.mov', '.m4v', '.flv', '.wmv'}
+                files = []
+
+                for file_path in download_dir.rglob('*'):
+                    if file_path.is_file() and file_path.suffix.lower() in video_extensions:
+                        stat = file_path.stat()
+                        relative_path = file_path.relative_to(download_dir)
+                        files.append({
+                            "name": file_path.name,
+                            "path": str(relative_path),
+                            "full_path": str(file_path),
+                            "size": stat.st_size,
+                            "size_human": self._format_file_size(stat.st_size),
+                            "modified": stat.st_mtime,
+                            "modified_human": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                            "parent": str(relative_path.parent) if str(relative_path.parent) != "." else ""
+                        })
+
+                # Sort by modification time (newest first)
+                files.sort(key=lambda x: x["modified"], reverse=True)
+
+                return jsonify({
+                    "success": True,
+                    "path": download_path,
+                    "files": files
+                })
+
+            except Exception as e:
+                logging.error(f"Failed to list files: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to list files: {str(e)}"
+                }), 500
+
+        @self.app.route("/api/files/delete", methods=["POST"])
+        @self._require_api_auth
+        def api_delete_file():
+            """Delete a file endpoint."""
+            try:
+                data = request.get_json()
+                file_path = data.get("path")
+
+                if not file_path:
+                    return jsonify({
+                        "success": False,
+                        "error": "File path is required"
+                    }), 400
+
+                # Get download directory
+                download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+                if (
+                    self.arguments
+                    and hasattr(self.arguments, "output_dir")
+                    and self.arguments.output_dir is not None
+                ):
+                    download_path = str(self.arguments.output_dir)
+
+                download_dir = Path(download_path)
+                full_path = download_dir / file_path
+
+                # Security check: ensure file is within download directory
+                try:
+                    full_path.resolve().relative_to(download_dir.resolve())
+                except ValueError:
+                    return jsonify({
+                        "success": False,
+                        "error": "Invalid file path"
+                    }), 403
+
+                if not full_path.exists():
+                    return jsonify({
+                        "success": False,
+                        "error": "File not found"
+                    }), 404
+
+                # Delete the file
+                full_path.unlink()
+
+                return jsonify({
+                    "success": True,
+                    "message": "File deleted successfully"
+                })
+
+            except Exception as e:
+                logging.error(f"Failed to delete file: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to delete file: {str(e)}"
+                }), 500
+
+        @self.app.route("/api/files/stream/<path:file_path>")
+        @self._require_api_auth
+        def api_stream_file(file_path):
+            """Stream a video file endpoint."""
+            try:
+                # Get download directory
+                download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+                if (
+                    self.arguments
+                    and hasattr(self.arguments, "output_dir")
+                    and self.arguments.output_dir is not None
+                ):
+                    download_path = str(self.arguments.output_dir)
+
+                download_dir = Path(download_path)
+                full_path = download_dir / file_path
+
+                # Security check: ensure file is within download directory
+                try:
+                    full_path.resolve().relative_to(download_dir.resolve())
+                except ValueError:
+                    return jsonify({
+                        "success": False,
+                        "error": "Invalid file path"
+                    }), 403
+
+                if not full_path.exists():
+                    return jsonify({
+                        "success": False,
+                        "error": "File not found"
+                    }), 404
+
+                # Get MIME type
+                mime_type, _ = mimetypes.guess_type(str(full_path))
+                if not mime_type:
+                    mime_type = "video/mp4"
+
+                # Handle range requests for video seeking
+                file_size = full_path.stat().st_size
+                range_header = request.headers.get('Range', None)
+
+                if range_header:
+                    byte_start, byte_end = 0, None
+                    match = range_header.replace('bytes=', '').split('-')
+                    byte_start = int(match[0])
+                    if len(match) > 1 and match[1]:
+                        byte_end = int(match[1])
+                    else:
+                        byte_end = file_size - 1
+
+                    length = byte_end - byte_start + 1
+
+                    def generate():
+                        with open(full_path, 'rb') as f:
+                            f.seek(byte_start)
+                            remaining = length
+                            while remaining > 0:
+                                chunk_size = min(8192, remaining)
+                                data = f.read(chunk_size)
+                                if not data:
+                                    break
+                                remaining -= len(data)
+                                yield data
+
+                    response = Response(
+                        generate(),
+                        status=206,
+                        mimetype=mime_type,
+                        direct_passthrough=True
+                    )
+                    response.headers.add('Content-Range', f'bytes {byte_start}-{byte_end}/{file_size}')
+                    response.headers.add('Accept-Ranges', 'bytes')
+                    response.headers.add('Content-Length', str(length))
+                    return response
+                else:
+                    return send_file(
+                        full_path,
+                        mimetype=mime_type,
+                        as_attachment=False
+                    )
+
+            except Exception as e:
+                logging.error(f"Failed to stream file: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to stream file: {str(e)}"
+                }), 500
+
+        @self.app.route("/api/files/play", methods=["POST"])
+        @self._require_api_auth
+        def api_play_file():
+            """Play a video file in the local video player (MPV)."""
+            try:
+                data = request.get_json()
+                file_path = data.get("path")
+
+                if not file_path:
+                    return jsonify({
+                        "success": False,
+                        "error": "File path is required"
+                    }), 400
+
+                # Get download directory
+                download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+                if (
+                    self.arguments
+                    and hasattr(self.arguments, "output_dir")
+                    and self.arguments.output_dir is not None
+                ):
+                    download_path = str(self.arguments.output_dir)
+
+                download_dir = Path(download_path)
+                full_path = download_dir / file_path
+
+                # Security check
+                try:
+                    full_path.resolve().relative_to(download_dir.resolve())
+                except ValueError:
+                    return jsonify({
+                        "success": False,
+                        "error": "Invalid file path"
+                    }), 403
+
+                if not full_path.exists():
+                    return jsonify({
+                        "success": False,
+                        "error": "File not found"
+                    }), 404
+
+                # Try to play with MPV
+                try:
+                    subprocess.Popen(
+                        ["mpv", str(full_path)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    return jsonify({
+                        "success": True,
+                        "message": "Playing in MPV"
+                    })
+                except FileNotFoundError:
+                    # MPV not found, return stream URL instead
+                    return jsonify({
+                        "success": True,
+                        "stream_url": f"/api/files/stream/{file_path}",
+                        "message": "MPV not found, use stream URL"
+                    })
+
+            except Exception as e:
+                logging.error(f"Failed to play file: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to play file: {str(e)}"
+                }), 500
+
+        @self.app.route("/api/chromecast/discover")
+        @self._require_api_auth
+        def api_chromecast_discover():
+            """Discover Chromecast devices on the network."""
+            try:
+                try:
+                    import pychromecast
+                except ImportError:
+                    return jsonify({
+                        "success": False,
+                        "error": "pychromecast not installed. Install with: pip install pychromecast",
+                        "devices": []
+                    })
+
+                # Discover Chromecasts with timeout
+                chromecasts, browser = pychromecast.get_chromecasts(timeout=5)
+                browser.stop_discovery()
+
+                devices = []
+                for cc in chromecasts:
+                    devices.append({
+                        "name": cc.name,
+                        "model": cc.model_name,
+                        "uuid": str(cc.uuid),
+                        "host": cc.host,
+                        "port": cc.port
+                    })
+
+                return jsonify({
+                    "success": True,
+                    "devices": devices
+                })
+
+            except Exception as e:
+                logging.error(f"Failed to discover Chromecasts: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to discover devices: {str(e)}",
+                    "devices": []
+                })
+
+        @self.app.route("/api/chromecast/cast", methods=["POST"])
+        @self._require_api_auth
+        def api_chromecast_cast():
+            """Cast a video to a Chromecast device."""
+            try:
+                try:
+                    import pychromecast
+                except ImportError:
+                    return jsonify({
+                        "success": False,
+                        "error": "pychromecast not installed"
+                    })
+
+                data = request.get_json()
+                device_uuid = data.get("device_uuid")
+                file_path = data.get("file_path")
+
+                if not device_uuid or not file_path:
+                    return jsonify({
+                        "success": False,
+                        "error": "Device UUID and file path are required"
+                    }), 400
+
+                # Get download directory and construct full path
+                download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+                if (
+                    self.arguments
+                    and hasattr(self.arguments, "output_dir")
+                    and self.arguments.output_dir is not None
+                ):
+                    download_path = str(self.arguments.output_dir)
+
+                download_dir = Path(download_path)
+                full_path = download_dir / file_path
+
+                if not full_path.exists():
+                    return jsonify({
+                        "success": False,
+                        "error": "File not found"
+                    }), 404
+
+                # Find the Chromecast
+                chromecasts, browser = pychromecast.get_chromecasts(timeout=5)
+                browser.stop_discovery()
+
+                cast = None
+                for cc in chromecasts:
+                    if str(cc.uuid) == device_uuid:
+                        cast = cc
+                        break
+
+                if not cast:
+                    return jsonify({
+                        "success": False,
+                        "error": "Chromecast device not found"
+                    }), 404
+
+                # Wait for cast device to be ready
+                cast.wait()
+
+                # Get the stream URL
+                # We need to provide an accessible URL to the Chromecast
+                # The file will be served from our Flask server
+                host_ip = request.host.split(':')[0]
+                if host_ip == 'localhost' or host_ip == '127.0.0.1':
+                    # Try to get the actual network IP
+                    import socket
+                    try:
+                        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                        s.connect(("8.8.8.8", 80))
+                        host_ip = s.getsockname()[0]
+                        s.close()
+                    except Exception:
+                        pass
+
+                port = request.host.split(':')[1] if ':' in request.host else '5000'
+                stream_url = f"http://{host_ip}:{port}/api/files/stream/{file_path}"
+
+                # Get MIME type
+                mime_type, _ = mimetypes.guess_type(str(full_path))
+                if not mime_type:
+                    mime_type = "video/mp4"
+
+                # Cast the video
+                mc = cast.media_controller
+                mc.play_media(stream_url, mime_type)
+                mc.block_until_active()
+
+                return jsonify({
+                    "success": True,
+                    "message": f"Casting to {cast.name}",
+                    "device_name": cast.name,
+                    "stream_url": stream_url
+                })
+
+            except Exception as e:
+                logging.error(f"Failed to cast: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to cast: {str(e)}"
+                }), 500
+
+        @self.app.route("/api/chromecast/control", methods=["POST"])
+        @self._require_api_auth
+        def api_chromecast_control():
+            """Control Chromecast playback."""
+            try:
+                try:
+                    import pychromecast
+                except ImportError:
+                    return jsonify({
+                        "success": False,
+                        "error": "pychromecast not installed"
+                    })
+
+                data = request.get_json()
+                device_uuid = data.get("device_uuid")
+                action = data.get("action")  # play, pause, stop, seek, volume
+                value = data.get("value")  # For seek (seconds) or volume (0-100)
+
+                if not device_uuid or not action:
+                    return jsonify({
+                        "success": False,
+                        "error": "Device UUID and action are required"
+                    }), 400
+
+                # Find the Chromecast
+                chromecasts, browser = pychromecast.get_chromecasts(timeout=5)
+                browser.stop_discovery()
+
+                cast = None
+                for cc in chromecasts:
+                    if str(cc.uuid) == device_uuid:
+                        cast = cc
+                        break
+
+                if not cast:
+                    return jsonify({
+                        "success": False,
+                        "error": "Chromecast device not found"
+                    }), 404
+
+                cast.wait()
+                mc = cast.media_controller
+
+                if action == "play":
+                    mc.play()
+                elif action == "pause":
+                    mc.pause()
+                elif action == "stop":
+                    mc.stop()
+                elif action == "seek":
+                    if value is not None:
+                        mc.seek(float(value))
+                elif action == "volume":
+                    if value is not None:
+                        cast.set_volume(float(value) / 100.0)
+                elif action == "rewind":
+                    # Rewind 10 seconds
+                    if mc.status and mc.status.current_time:
+                        new_time = max(0, mc.status.current_time - 10)
+                        mc.seek(new_time)
+                elif action == "forward":
+                    # Forward 10 seconds
+                    if mc.status and mc.status.current_time:
+                        mc.seek(mc.status.current_time + 10)
+                else:
+                    return jsonify({
+                        "success": False,
+                        "error": f"Unknown action: {action}"
+                    }), 400
+
+                return jsonify({
+                    "success": True,
+                    "message": f"Action {action} executed"
+                })
+
+            except Exception as e:
+                logging.error(f"Chromecast control error: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": f"Control failed: {str(e)}"
+                }), 500
+
+        @self.app.route("/api/chromecast/status")
+        @self._require_api_auth
+        def api_chromecast_status():
+            """Get Chromecast playback status."""
+            try:
+                try:
+                    import pychromecast
+                except ImportError:
+                    return jsonify({
+                        "success": False,
+                        "error": "pychromecast not installed"
+                    })
+
+                device_uuid = request.args.get("device_uuid")
+
+                if not device_uuid:
+                    return jsonify({
+                        "success": False,
+                        "error": "Device UUID is required"
+                    }), 400
+
+                # Find the Chromecast
+                chromecasts, browser = pychromecast.get_chromecasts(timeout=5)
+                browser.stop_discovery()
+
+                cast = None
+                for cc in chromecasts:
+                    if str(cc.uuid) == device_uuid:
+                        cast = cc
+                        break
+
+                if not cast:
+                    return jsonify({
+                        "success": False,
+                        "error": "Chromecast device not found"
+                    }), 404
+
+                cast.wait()
+                mc = cast.media_controller
+
+                status = {
+                    "is_playing": False,
+                    "is_paused": False,
+                    "current_time": 0,
+                    "duration": 0,
+                    "volume": cast.status.volume_level * 100 if cast.status else 100,
+                    "title": ""
+                }
+
+                if mc.status:
+                    status["is_playing"] = mc.status.player_is_playing
+                    status["is_paused"] = mc.status.player_is_paused
+                    status["current_time"] = mc.status.current_time or 0
+                    status["duration"] = mc.status.duration or 0
+                    status["title"] = mc.status.title or ""
+
+                return jsonify({
+                    "success": True,
+                    "status": status
+                })
+
+            except Exception as e:
+                logging.error(f"Failed to get Chromecast status: {e}")
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to get status: {str(e)}"
+                })
+
+    def _format_file_size(self, size_bytes: int) -> str:
+        """Format file size in human readable format."""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} PB"
 
     def _format_uptime(self, seconds: int) -> str:
         """Format uptime in human readable format."""
