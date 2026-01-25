@@ -37,6 +37,9 @@
                 <span class="version" id="version-display">Loading...</span>
             </div>
             <div class="nav-actions">
+                <button id="file-browser-btn" class="nav-btn file-browser-btn" title="Downloaded Files">
+                    <i class="fas fa-folder-open"></i>
+                </button>
                 <a href="https://github.com/phoenixthrush/AniWorld-Downloader" target="_blank" class="nav-btn github-btn" title="View on GitHub">
                     <i class="fab fa-github"></i>
                 </a>
@@ -215,6 +218,101 @@
                 <div class="modal-actions">
                     <button id="cancel-download" class="secondary-btn">Cancel</button>
                     <button id="confirm-download" class="primary-btn">Start Download</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Browser Modal -->
+    <div id="file-browser-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content file-browser-modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-folder-open"></i> Downloaded Files</h3>
+                <button id="close-file-browser-modal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="file-browser-path">
+                    <i class="fas fa-folder"></i>
+                    <span id="current-path">Loading...</span>
+                    <button id="refresh-files-btn" class="control-btn" title="Refresh">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="file-browser-loading" id="file-browser-loading">
+                    <div class="loading-spinner-small"></div>
+                    <span>Loading files...</span>
+                </div>
+                <div class="file-list" id="file-list" style="display: none;">
+                    <!-- Files will be populated here -->
+                </div>
+                <div class="file-empty" id="file-empty" style="display: none;">
+                    <i class="fas fa-inbox"></i>
+                    <p>No downloaded files found</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cast Controller Modal -->
+    <div id="cast-controller-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content cast-controller-modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-tv"></i> Chromecast Controller</h3>
+                <button id="close-cast-controller-modal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="cast-file-info" id="cast-file-info">
+                    <i class="fas fa-film"></i>
+                    <span id="cast-file-name">No file selected</span>
+                </div>
+
+                <div class="cast-devices-section">
+                    <div class="cast-devices-header">
+                        <h4>Available Devices</h4>
+                        <button id="scan-devices-btn" class="control-btn">
+                            <i class="fas fa-search"></i> Scan
+                        </button>
+                    </div>
+                    <div class="cast-devices-loading" id="cast-devices-loading" style="display: none;">
+                        <div class="loading-spinner-small"></div>
+                        <span>Scanning for devices...</span>
+                    </div>
+                    <div class="cast-devices-list" id="cast-devices-list">
+                        <p class="cast-devices-empty">Click "Scan" to find Chromecast devices</p>
+                    </div>
+                </div>
+
+                <div class="cast-controls" id="cast-controls" style="display: none;">
+                    <div class="cast-now-playing">
+                        <span id="cast-status">Not casting</span>
+                    </div>
+                    <div class="cast-progress">
+                        <div class="cast-progress-bar">
+                            <div class="cast-progress-fill" id="cast-progress-fill"></div>
+                        </div>
+                        <div class="cast-time">
+                            <span id="cast-current-time">0:00</span>
+                            <span id="cast-duration">0:00</span>
+                        </div>
+                    </div>
+                    <div class="cast-buttons">
+                        <button id="cast-rewind-btn" class="cast-control-btn" title="Rewind 10s">
+                            <i class="fas fa-backward"></i>
+                        </button>
+                        <button id="cast-play-pause-btn" class="cast-control-btn cast-play-btn" title="Play/Pause">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button id="cast-forward-btn" class="cast-control-btn" title="Forward 10s">
+                            <i class="fas fa-forward"></i>
+                        </button>
+                        <button id="cast-stop-btn" class="cast-control-btn cast-stop-btn" title="Stop">
+                            <i class="fas fa-stop"></i>
+                        </button>
+                    </div>
+                    <div class="cast-volume">
+                        <i class="fas fa-volume-up"></i>
+                        <input type="range" id="cast-volume-slider" min="0" max="100" value="100">
+                    </div>
                 </div>
             </div>
         </div>
