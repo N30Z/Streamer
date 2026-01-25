@@ -62,8 +62,8 @@ def _get_season_folder(episode) -> str:
 def _get_output_filename(anime: Anime, episode, sanitized_title: str) -> str:
     """Generate output filename based on episode type."""
     if episode.season == 0:
-        return f"Movie {episode.episode:03} - ({anime.language}).mp4"
-    return f"Episode {episode.episode:03} - ({anime.language}).mp4"
+        return f"Movie {episode.episode:03}.mp4"
+    return f"Episode {episode.episode:03}.mp4"
 
 
 def _build_ytdl_options(
