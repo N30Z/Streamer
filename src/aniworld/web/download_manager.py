@@ -1,6 +1,7 @@
 """
 Download Queue Manager for AniWorld Downloader
 Handles global download queue processing and status tracking
+Supports parallel downloads with configurable concurrent worker threads
 """
 
 import threading
@@ -8,18 +9,27 @@ import time
 import logging
 from typing import Optional
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 from .database import UserDatabase
 
 
 class DownloadQueueManager:
-    """Manages the global download queue processing with in-memory storage"""
+    """Manages the global download queue processing with in-memory storage
+    
+    Supports parallel downloads using a thread pool executor. The number of
+    concurrent downloads is configurable via max_concurrent_downloads parameter.
+    """
 
-    def __init__(self, database: Optional[UserDatabase] = None):
+    def __init__(self, database: Optional[UserDatabase] = None, max_concurrent_downloads: int = 3):
         self.db = database  # Only used for user auth, not download storage
         self.is_processing = False
-        self.current_download_id = None
         self.worker_thread = None
         self._stop_event = threading.Event()
+        
+        # Parallel download configuration
+        self.max_concurrent_downloads = max_concurrent_downloads
+        self.thread_pool = None
+        self.active_workers = set()  # Track active worker jobs
 
         # In-memory download queue storage
         self._next_id = 1
@@ -29,23 +39,42 @@ class DownloadQueueManager:
         self._max_completed_history = 10
 
     def start_queue_processor(self):
-        """Start the background queue processor"""
+        """Start the background queue processor with thread pool"""
         if not self.is_processing:
             self.is_processing = True
             self._stop_event.clear()
+            # Create thread pool for parallel downloads
+            self.thread_pool = ThreadPoolExecutor(max_workers=self.max_concurrent_downloads)
             self.worker_thread = threading.Thread(
                 target=self._process_queue, daemon=True
             )
             self.worker_thread.start()
-            logging.info("Download queue processor started")
+            logging.info(f"Download queue processor started with {self.max_concurrent_downloads} concurrent workers")
 
     def stop_queue_processor(self):
-        """Stop the background queue processor"""
+        """Stop the background queue processor and thread pool"""
         if self.is_processing:
             self.is_processing = False
             self._stop_event.set()
+            
+            # Wait for all active workers to complete
+            if self.active_workers:
+                logging.info(f"Waiting for {len(self.active_workers)} active downloads to complete...")
+                # Give workers time to finish gracefully
+                timeout = 30
+                start_time = time.time()
+                while self.active_workers and time.time() - start_time < timeout:
+                    time.sleep(0.5)
+            
+            # Shutdown thread pool
+            if self.thread_pool:
+                self.thread_pool.shutdown(wait=True)
+                self.thread_pool = None
+            
+            # Wait for main worker thread
             if self.worker_thread:
                 self.worker_thread.join(timeout=5)
+            
             logging.info("Download queue processor stopped")
 
     def add_download(
@@ -139,18 +168,41 @@ class DownloadQueueManager:
             return {"active": active_downloads, "completed": completed_downloads}
 
     def _process_queue(self):
-        """Background worker that processes the download queue"""
+        """Background worker that processes the download queue with parallel execution"""
         while self.is_processing and not self._stop_event.is_set():
             try:
-                # Get next job
-                job = self._get_next_queued_download()
-
-                if job:
-                    self.current_download_id = job["id"]
-                    self._process_download_job(job)
-                    self.current_download_id = None
+                # Get next queued download jobs (up to max_concurrent_downloads)
+                jobs_to_start = []
+                
+                with self._queue_lock:
+                    # Check how many slots are available
+                    available_slots = self.max_concurrent_downloads - len(self.active_workers)
+                    
+                    if available_slots > 0:
+                        # Get next queued jobs
+                        for download in self._active_downloads.values():
+                            if download["status"] == "queued" and len(jobs_to_start) < available_slots:
+                                jobs_to_start.append(download)
+                
+                # Submit jobs to thread pool
+                if jobs_to_start:
+                    for job in jobs_to_start:
+                        # Mark as downloading
+                        self._update_download_status(
+                            job["id"], "downloading", current_episode="Starting download..."
+                        )
+                        # Submit to thread pool
+                        worker_future = self.thread_pool.submit(self._process_download_job, job)
+                        self.active_workers.add(job["id"])
+                        
+                        # Add callback to remove from active workers when done
+                        worker_future.add_done_callback(
+                            lambda f, job_id=job["id"]: self.active_workers.discard(job_id)
+                        )
+                    
+                    logging.info(f"Started {len(jobs_to_start)} parallel download(s)")
                 else:
-                    # No jobs, wait a bit
+                    # No jobs available or workers at max capacity, wait a bit
                     time.sleep(2)
 
             except Exception as e:
@@ -426,13 +478,6 @@ class DownloadQueueManager:
                 queue_id, "failed", error_message=f"Download failed: {str(e)}"
             )
 
-    def _get_next_queued_download(self):
-        """Get the next download job in the queue"""
-        with self._queue_lock:
-            for download in self._active_downloads.values():
-                if download["status"] == "queued":
-                    return download
-            return None
 
     def update_episode_progress(
         self, queue_id: int, episode_progress: float, current_episode_desc: str = None
@@ -577,9 +622,18 @@ _download_manager = None
 
 def get_download_manager(
     database: Optional[UserDatabase] = None,
+    max_concurrent_downloads: int = 3,
 ) -> DownloadQueueManager:
-    """Get or create the global download manager instance"""
+    """Get or create the global download manager instance
+    
+    Args:
+        database: Optional UserDatabase instance for user authentication
+        max_concurrent_downloads: Number of concurrent downloads (default: 3)
+    
+    Returns:
+        DownloadQueueManager instance
+    """
     global _download_manager
     if _download_manager is None:
-        _download_manager = DownloadQueueManager(database)
+        _download_manager = DownloadQueueManager(database, max_concurrent_downloads)
     return _download_manager

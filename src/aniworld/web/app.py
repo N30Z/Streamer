@@ -44,8 +44,9 @@ class WebApp:
         )
         self.db = UserDatabase() if self.auth_enabled else None
 
-        # Download manager
-        self.download_manager = get_download_manager(self.db)
+        # Download manager with configurable concurrent downloads
+        max_concurrent = getattr(config, "DEFAULT_MAX_CONCURRENT_DOWNLOADS", 3)
+        self.download_manager = get_download_manager(self.db, max_concurrent)
 
         # Chromecast connection cache
         self._chromecast_cache = {}  # {uuid: {'cast': cast_obj, 'browser': browser, 'last_used': timestamp}}

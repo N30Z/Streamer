@@ -253,6 +253,8 @@ DEFAULT_ONLY_DIRECT_LINK = False
 DEFAULT_PROVIDER_DOWNLOAD = "VOE"
 DEFAULT_PROVIDER_WATCH = "Filemoon"
 DEFAULT_TERMINAL_SIZE = (90, 30)
+# Number of concurrent parallel downloads in web interface (default: 3)
+DEFAULT_MAX_CONCURRENT_DOWNLOADS = 5
 
 # https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
 INVALID_PATH_CHARS = ("<", ">", ":", '"', "/", "\\", "|", "?", "*", "&")
