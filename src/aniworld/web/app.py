@@ -143,7 +143,7 @@ class WebApp:
 
         return decorated_function
 
-    def _discover_chromecast_by_uuid(self, device_uuid, timeout=5):
+    def _discover_chromecast_by_uuid(self, device_uuid, timeout=10):
         """
         Discover and return a Chromecast device by UUID.
 
@@ -155,32 +155,21 @@ class WebApp:
             tuple: (cast, browser) if found, (None, None) if not found
         """
         import pychromecast
-        import zeroconf
-        import threading
+        from uuid import UUID
 
-        found_cast = None
-        found_event = threading.Event()
-        zconf = zeroconf.Zeroconf()
+        try:
+            # Use get_listed_chromecasts with UUID for targeted discovery
+            chromecasts, browser = pychromecast.get_listed_chromecasts(
+                uuids=[UUID(device_uuid)],
+                timeout=timeout
+            )
 
-        def callback(uuid, service):
-            nonlocal found_cast
-            if str(uuid) == device_uuid:
-                service_info = browser.devices.get(uuid)
-                if service_info and service_info.host:
-                    found_cast = pychromecast.get_chromecast_from_cast_info(
-                        service_info, zconf
-                    )
-                    found_event.set()
+            if chromecasts:
+                return chromecasts[0], browser
 
-        listener = pychromecast.SimpleCastListener(callback)
-        browser = pychromecast.CastBrowser(listener, zconf)
-        browser.start_discovery()
-
-        # Wait for the specific device or timeout
-        found_event.wait(timeout=timeout)
-        pychromecast.discovery.stop_discovery(browser)
-
-        return found_cast, browser
+            return None, browser
+        except Exception:
+            return None, None
 
     def _setup_routes(self):
         """Setup Flask routes."""
@@ -1236,7 +1225,6 @@ class WebApp:
             try:
                 try:
                     import pychromecast
-                    import zeroconf
                 except ImportError:
                     return jsonify({
                         "success": False,
@@ -1244,31 +1232,25 @@ class WebApp:
                         "devices": []
                     })
 
-                # Create zeroconf instance for discovery
-                zconf = zeroconf.Zeroconf()
+                # Use get_chromecasts which handles zeroconf lifecycle properly
+                chromecasts, browser = pychromecast.get_chromecasts(timeout=10)
 
-                # Use SimpleCastListener with callback to track discovered devices
-                listener = pychromecast.SimpleCastListener(lambda uuid, service: None)
-                browser = pychromecast.CastBrowser(listener, zconf)
-                browser.start_discovery()
-
-                # Wait for discovery to find devices
-                time.sleep(5)
-
-                # Collect device info from browser.devices before stopping
+                # Collect device info from discovered chromecasts
                 devices = []
-                for uuid, service in browser.devices.items():
-                    # Only include devices with resolved host
-                    if service.host:
+                for cc in chromecasts:
+                    # Access host/port from cast_info
+                    cast_info = cc.cast_info
+                    if cast_info and cast_info.host:
                         devices.append({
-                            "name": service.friendly_name,
-                            "model": service.model_name,
-                            "uuid": str(uuid),
-                            "host": service.host,
-                            "port": service.port
+                            "name": cc.name,
+                            "model": cc.model_name,
+                            "uuid": str(cc.uuid),
+                            "host": cast_info.host,
+                            "port": cast_info.port
                         })
 
-                pychromecast.discovery.stop_discovery(browser)
+                # Stop discovery (keeps zeroconf alive for existing connections)
+                browser.stop_discovery()
 
                 return jsonify({
                     "success": True,
