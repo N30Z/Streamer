@@ -1262,9 +1262,11 @@ class WebApp:
                     download_path = str(self.arguments.output_dir)
 
                 download_dir = Path(download_path)
+                logging.debug(f"/api/files: Download directory: {download_dir}")
 
                 # Get the relative subpath from query parameter
                 subpath = request.args.get("path", "")
+                logging.debug(f"/api/files: Requested subpath: '{subpath}'")
 
                 # Calculate current directory
                 if subpath:
@@ -1272,16 +1274,20 @@ class WebApp:
                 else:
                     current_dir = download_dir
 
+                logging.debug(f"/api/files: Current directory: {current_dir}")
+
                 # Security check: ensure current_dir is within download_dir
                 try:
                     current_dir.resolve().relative_to(download_dir.resolve())
                 except ValueError:
+                    logging.warning(f"/api/files: Security check failed for path: {current_dir}")
                     return jsonify({
                         "success": False,
                         "error": "Invalid path"
                     }), 403
 
                 if not current_dir.exists():
+                    logging.warning(f"/api/files: Directory does not exist: {current_dir}")
                     return jsonify({
                         "success": True,
                         "path": download_path,
@@ -1295,31 +1301,45 @@ class WebApp:
                 files = []
 
                 # List immediate children (folders and video files)
-                for item in current_dir.iterdir():
-                    if item.is_dir():
-                        # Count video files in this folder (recursively)
-                        video_count = sum(1 for _ in item.rglob('*') if _.is_file() and _.suffix.lower() in video_extensions)
-                        if video_count > 0:  # Only show folders with videos
-                            relative_path = item.relative_to(download_dir)
-                            folders.append({
-                                "name": item.name,
-                                "path": str(relative_path),
-                                "type": "folder",
-                                "video_count": video_count
-                            })
-                    elif item.is_file() and item.suffix.lower() in video_extensions:
-                        stat = item.stat()
-                        relative_path = item.relative_to(download_dir)
-                        files.append({
-                            "name": item.name,
-                            "path": str(relative_path),
-                            "full_path": str(item),
-                            "type": "file",
-                            "size": stat.st_size,
-                            "size_human": self._format_file_size(stat.st_size),
-                            "modified": stat.st_mtime,
-                            "modified_human": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
-                        })
+                logging.debug(f"/api/files: Scanning directory: {current_dir}")
+                items_found = list(current_dir.iterdir())
+                logging.debug(f"/api/files: Found {len(items_found)} items in directory")
+
+                for item in items_found:
+                    try:
+                        if item.is_dir():
+                            # Count video files in this folder (recursively)
+                            video_count = self._count_video_files_recursive(item, video_extensions)
+                            logging.debug(f"/api/files: Folder '{item.name}' has {video_count} videos")
+
+                            if video_count > 0:  # Only show folders with videos
+                                relative_path = item.relative_to(download_dir)
+                                folders.append({
+                                    "name": item.name,
+                                    "path": str(relative_path),
+                                    "type": "folder",
+                                    "video_count": video_count
+                                })
+                        elif item.is_file() and item.suffix.lower() in video_extensions:
+                            try:
+                                stat = item.stat()
+                                relative_path = item.relative_to(download_dir)
+                                files.append({
+                                    "name": item.name,
+                                    "path": str(relative_path),
+                                    "full_path": str(item),
+                                    "type": "file",
+                                    "size": stat.st_size,
+                                    "size_human": self._format_file_size(stat.st_size),
+                                    "modified": stat.st_mtime,
+                                    "modified_human": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                                })
+                            except Exception as file_error:
+                                logging.warning(f"/api/files: Error processing file '{item.name}': {file_error}")
+                    except Exception as item_error:
+                        logging.warning(f"/api/files: Error processing item '{item}': {item_error}")
+
+                logging.info(f"/api/files: Found {len(folders)} folders and {len(files)} files in '{subpath or 'root'}'")
 
                 # Sort folders alphabetically, files by modification time
                 folders.sort(key=lambda x: x["name"].lower())
@@ -1341,7 +1361,7 @@ class WebApp:
                 })
 
             except Exception as e:
-                logging.error(f"Failed to list files: {e}")
+                logging.error(f"Failed to list files: {e}", exc_info=True)
                 return jsonify({
                     "success": False,
                     "error": f"Failed to list files: {str(e)}"
@@ -1988,6 +2008,30 @@ class WebApp:
                     "success": False,
                     "error": f"Failed to get status: {str(e)}"
                 })
+
+    def _count_video_files_recursive(self, directory: Path, video_extensions: set) -> int:
+        """
+        Safely count video files in a directory recursively.
+        
+        Args:
+            directory: The directory to scan
+            video_extensions: Set of video file extensions to look for
+            
+        Returns:
+            The count of video files found
+        """
+        count = 0
+        try:
+            for path in directory.rglob('*'):
+                try:
+                    if path.is_file() and path.suffix.lower() in video_extensions:
+                        count += 1
+                except (OSError, PermissionError):
+                    # Skip files we can't access
+                    pass
+        except (OSError, PermissionError) as e:
+            logging.warning(f"Error scanning directory {directory}: {e}")
+        return count
 
     def _format_file_size(self, size_bytes: int) -> str:
         """Format file size in human readable format."""
