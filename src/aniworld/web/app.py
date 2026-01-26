@@ -1265,8 +1265,19 @@ class WebApp:
                 logging.debug(f"/api/files: Download directory: {download_dir}")
 
                 # Get the relative subpath from query parameter
-                subpath = request.args.get("path", "")
+                subpath = request.args.get("path", "").strip()
                 logging.debug(f"/api/files: Requested subpath: '{subpath}'")
+
+                # Normalize subpath: handle cases where user passes the download directory name itself
+                # For example, if download_dir is "/home/captain/Downloads" and subpath is "Downloads",
+                # normalize it to empty string to refer to the root
+                if subpath:
+                    # Check if subpath is just the last component of download_dir
+                    if subpath == download_dir.name:
+                        logging.debug(f"/api/files: Normalized path from '{subpath}' to root (matched download dir name)")
+                        subpath = ""
+                    # Also handle forward slash normalization (convert backslashes to forward slashes)
+                    subpath = subpath.replace("\\", "/")
 
                 # Calculate current directory
                 if subpath:
@@ -1274,7 +1285,7 @@ class WebApp:
                 else:
                     current_dir = download_dir
 
-                logging.debug(f"/api/files: Current directory: {current_dir}")
+                logging.debug(f"/api/files: Current directory: {current_dir} (subpath: '{subpath}')")
 
                 # Security check: ensure current_dir is within download_dir
                 try:
