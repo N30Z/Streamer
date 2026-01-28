@@ -1,5 +1,5 @@
 # AniWorld Downloader - Requirements
-# Install with: pip install -r requirements.txt
+# Install with: python3 -m pip install -r .\requirements.txt
  
 # Core dependencies
 requests
