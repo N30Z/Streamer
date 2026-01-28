@@ -952,7 +952,7 @@ class Episode:
             raise ValueError("No embedded link available for direct link extraction")
 
         try:
-            module = importlib.import_module("aniworld.extractors")
+            module = importlib.import_module(".extractors", __package__)
             func_name = f"get_direct_link_from_{provider.lower()}"
 
             if not hasattr(module, func_name):
@@ -1149,7 +1149,7 @@ class Episode:
             raise ValueError("No embedded link available for preview image extraction")
 
         try:
-            module = importlib.import_module("aniworld.extractors")
+            module = importlib.import_module(".extractors", __package__)
             func_name = f"get_preview_image_link_from_{provider.lower()}"
 
             if not hasattr(module, func_name):
