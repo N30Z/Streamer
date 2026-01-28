@@ -13,6 +13,7 @@ windows-curses
 winfcntl
 jsbeautifier
 flask
+ffmpeg
  
 # Windows-specific dependencies (installed automatically on Windows)
 # py-cpuinfo
