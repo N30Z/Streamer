@@ -208,6 +208,10 @@ Additionally, make sure **[Git](https://git-scm.com/downloads)** is installed if
 
 **Note**: If you are using an ARM-based system, you might face issues with the curses module. Use the amd64 [Python version](https://www.python.org/downloads/) instead of the ARM version. For more details, refer to [GitHub Issue #14](https://github.com/phoenixthrush/AniWorld-Downloader/issues/14).
 
+### Windows Users
+
+For detailed Windows installation instructions, including troubleshooting and configuration, see the **[Windows Installation Guide](Windows.md)**.
+
 ### Install Latest Stable Release (Recommended)
 
 To install the latest stable version directly from PyPI, use the following command:

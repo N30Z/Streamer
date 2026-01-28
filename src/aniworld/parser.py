@@ -562,7 +562,9 @@ def _handle_debug_mode() -> None:
             subprocess.run(windows_open_debug_log, shell=True, check=True)
 
         elif system == "Linux":
-            _open_terminal_with_command("tail -f -n +1 /tmp/aniworld.log")
+            import tempfile
+            log_path = os.path.join(tempfile.gettempdir(), "aniworld.log")
+            _open_terminal_with_command(f"tail -f -n +1 {log_path}")
 
     except subprocess.CalledProcessError as err:
         logging.error("Failed to start tailing the log file: %s", err)
