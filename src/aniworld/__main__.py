@@ -16,8 +16,17 @@ def set_terminal_title() -> None:
     if not IS_NEWEST_VERSION:
         title += " (Update Available)"
 
-    # ANSI escape sequence to set terminal title
-    print(f"\033]0;{title}\007", end="", flush=True)
+    if sys.platform == "win32":
+        # Use Windows API for setting console title
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleTitleW(title)
+        except (AttributeError, OSError):
+            # Fallback to ANSI escape sequence (works in Windows Terminal)
+            print(f"\033]0;{title}\007", end="", flush=True)
+    else:
+        # ANSI escape sequence for Unix-like systems
+        print(f"\033]0;{title}\007", end="", flush=True)
 
 
 def main() -> NoReturn:
