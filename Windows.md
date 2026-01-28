@@ -40,7 +40,7 @@ If you want to install the development version or contribute:
 
 ## Installation Methods
 
-### Method 1: pip Install (Recommended)
+### Method 1: pip Install 
 
 Open Command Prompt or PowerShell as Administrator and run:
 
@@ -62,7 +62,7 @@ If you don't want to install Python:
 2. Download the Windows executable (`.exe` file)
 3. Run the executable directly - no installation required
 
-### Method 3: Development Installation
+### Method 3: Development Installation (Currently Recommended)
 
 For developers or those who want the latest features:
 
@@ -73,8 +73,8 @@ git clone https://github.com/phoenixthrush/AniWorld-Downloader.git aniworld
 # Navigate to the directory
 cd aniworld
 
-# Install in editable mode
-pip install -e .
+# Just Run
+python3 -m src.aniworld --web-ui
 ```
 
 To update:
