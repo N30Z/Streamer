@@ -588,6 +588,50 @@ class WebApp:
                 logging.error(f"Error resetting preferences: {e}")
                 return jsonify({"success": False, "error": str(e)}), 500
 
+        @self.app.route("/api/browse-folder", methods=["POST"])
+        def api_browse_folder():
+            """Open native folder picker dialog and return selected path."""
+            try:
+                import tkinter as tk
+                from tkinter import filedialog
+
+                # Get initial directory from request or use current preference
+                data = request.get_json() or {}
+                initial_dir = data.get("initial_dir", "")
+
+                if not initial_dir or not Path(initial_dir).exists():
+                    # Use current preference or default
+                    prefs = self._load_preferences()
+                    initial_dir = prefs.get("download_directory", str(Path.home() / "Downloads"))
+
+                # Create hidden root window
+                root = tk.Tk()
+                root.withdraw()  # Hide the root window
+                root.attributes("-topmost", True)  # Bring dialog to front
+
+                # Open folder picker dialog
+                selected_folder = filedialog.askdirectory(
+                    initialdir=initial_dir,
+                    title="Select Download Directory"
+                )
+
+                root.destroy()  # Clean up
+
+                if selected_folder:
+                    return jsonify({"success": True, "path": selected_folder})
+                else:
+                    return jsonify({"success": False, "error": "No folder selected"})
+
+            except ImportError:
+                logging.error("tkinter not available for folder picker")
+                return jsonify({
+                    "success": False,
+                    "error": "Folder picker not available. Please enter the path manually."
+                }), 500
+            except Exception as e:
+                logging.error(f"Error opening folder picker: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
+
         # User management API routes
         @self.app.route("/api/users", methods=["GET"])
         @self._require_admin

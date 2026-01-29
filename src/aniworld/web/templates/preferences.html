@@ -465,11 +465,39 @@
 
             // Browse directory button
             const browseBtn = document.getElementById('browse-directory-btn');
-            if (browseBtn) {
-                browseBtn.addEventListener('click', function() {
-                    // Note: Browser file system access is limited
-                    // This would need a backend implementation for full directory picker
-                    showMessage('Directory picker requires selecting via the input field. Enter the full path to your desired download directory.', 'info');
+            const downloadDirInput = document.getElementById('download-directory');
+            if (browseBtn && downloadDirInput) {
+                browseBtn.addEventListener('click', async function() {
+                    try {
+                        // Disable button while dialog is open
+                        browseBtn.disabled = true;
+                        browseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Opening...';
+
+                        const response = await fetch('/api/browse-folder', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                initial_dir: downloadDirInput.value
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success && data.path) {
+                            downloadDirInput.value = data.path;
+                            showMessage('Folder selected: ' + data.path, 'success');
+                        } else if (data.error && data.error !== 'No folder selected') {
+                            showMessage(data.error, 'error');
+                        }
+                    } catch (error) {
+                        showMessage('Failed to open folder picker: ' + error.message, 'error');
+                    } finally {
+                        // Re-enable button
+                        browseBtn.disabled = false;
+                        browseBtn.innerHTML = '<i class="fas fa-folder-open"></i> Browse';
+                    }
                 });
             }
 
