@@ -55,6 +55,9 @@ class WebApp:
         # Create Flask app
         self.app = self._create_app()
 
+        # Apply saved preferences at startup
+        self._apply_saved_preferences()
+
         # Scan for manually placed files at startup
         self._scan_media_library()
 
@@ -77,6 +80,28 @@ class WebApp:
         app.config["JSON_SORT_KEYS"] = False
 
         return app
+
+    def _apply_saved_preferences(self):
+        """Apply saved preferences at startup."""
+        try:
+            prefs = self._load_preferences()
+
+            # Apply download directory to runtime arguments
+            if prefs.get("download_directory"):
+                from ..parser import arguments
+                # Only apply if not overridden by command-line argument
+                if not self.arguments or not getattr(self.arguments, "output_dir", None) or \
+                   str(getattr(self.arguments, "output_dir", "")) == str(config.DEFAULT_DOWNLOAD_PATH):
+                    arguments.output_dir = prefs["download_directory"]
+                    logging.info(f"Applied saved download directory: {prefs['download_directory']}")
+
+            # Apply max concurrent downloads
+            if prefs.get("max_concurrent_downloads"):
+                self.download_manager.max_concurrent_downloads = prefs["max_concurrent_downloads"]
+                logging.info(f"Applied saved max concurrent downloads: {prefs['max_concurrent_downloads']}")
+
+        except Exception as e:
+            logging.warning(f"Could not apply saved preferences: {e}")
 
     def _get_preferences_file(self) -> Path:
         """Get the path to the preferences file."""
@@ -149,6 +174,12 @@ class WebApp:
         # Update runtime config if applicable
         if "max_concurrent_downloads" in data:
             self.download_manager.max_concurrent_downloads = data["max_concurrent_downloads"]
+
+        # Update download directory in runtime arguments
+        if "download_directory" in data:
+            from ..parser import arguments
+            arguments.output_dir = data["download_directory"]
+            logging.info(f"Updated runtime output_dir to: {data['download_directory']}")
 
         logging.info(f"Preferences saved: {data}")
 

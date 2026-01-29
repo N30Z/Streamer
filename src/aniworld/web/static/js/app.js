@@ -63,6 +63,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize theme (default is dark mode)
     initializeTheme();
 
+    // Initialize accent color from saved preferences
+    initializeAccentColor();
+
     // Direct input functionality
     const directInput = document.getElementById('direct-input');
     const directBtn = document.getElementById('direct-btn');
@@ -1123,6 +1126,28 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if user has a saved theme preference, default to dark mode
         const savedTheme = localStorage.getItem('theme') || 'dark';
         setTheme(savedTheme);
+    }
+
+    // Accent color functions
+    function initializeAccentColor() {
+        const savedColor = localStorage.getItem('accentColor') || 'purple';
+        applyAccentColor(savedColor);
+    }
+
+    function applyAccentColor(color) {
+        const colors = {
+            purple: { primary: '#667eea', secondary: '#764ba2' },
+            blue: { primary: '#3b82f6', secondary: '#1d4ed8' },
+            green: { primary: '#10b981', secondary: '#059669' },
+            orange: { primary: '#f59e0b', secondary: '#d97706' },
+            red: { primary: '#ef4444', secondary: '#dc2626' },
+            pink: { primary: '#ec4899', secondary: '#db2777' },
+            cyan: { primary: '#06b6d4', secondary: '#0891b2' }
+        };
+
+        const selected = colors[color] || colors.purple;
+        document.documentElement.style.setProperty('--accent-primary', selected.primary);
+        document.documentElement.style.setProperty('--accent-secondary', selected.secondary);
     }
 
     function toggleTheme() {
