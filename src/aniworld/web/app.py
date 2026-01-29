@@ -55,6 +55,9 @@ class WebApp:
         # Create Flask app
         self.app = self._create_app()
 
+        # Apply saved preferences at startup
+        self._apply_saved_preferences()
+
         # Scan for manually placed files at startup
         self._scan_media_library()
 
@@ -77,6 +80,115 @@ class WebApp:
         app.config["JSON_SORT_KEYS"] = False
 
         return app
+
+    def _apply_saved_preferences(self):
+        """Apply saved preferences at startup."""
+        try:
+            prefs = self._load_preferences()
+
+            # Apply download directory to runtime arguments
+            if prefs.get("download_directory"):
+                from ..parser import arguments
+                # Only apply if not overridden by command-line argument
+                if not self.arguments or not getattr(self.arguments, "output_dir", None) or \
+                   str(getattr(self.arguments, "output_dir", "")) == str(config.DEFAULT_DOWNLOAD_PATH):
+                    arguments.output_dir = prefs["download_directory"]
+                    logging.info(f"Applied saved download directory: {prefs['download_directory']}")
+
+            # Apply max concurrent downloads
+            if prefs.get("max_concurrent_downloads"):
+                self.download_manager.max_concurrent_downloads = prefs["max_concurrent_downloads"]
+                logging.info(f"Applied saved max concurrent downloads: {prefs['max_concurrent_downloads']}")
+
+        except Exception as e:
+            logging.warning(f"Could not apply saved preferences: {e}")
+
+    def _get_preferences_file(self) -> Path:
+        """Get the path to the preferences file."""
+        # Store preferences in the same directory as the database
+        if os.name == "nt":  # Windows
+            prefs_dir = Path(os.getenv("APPDATA", "")) / "aniworld"
+        else:  # Linux/Mac
+            prefs_dir = Path.home() / ".local" / "share" / "aniworld"
+
+        prefs_dir.mkdir(parents=True, exist_ok=True)
+        return prefs_dir / "preferences.json"
+
+    def _load_preferences(self) -> dict:
+        """Load preferences from file or return defaults."""
+        import json
+
+        defaults = {
+            "max_concurrent_downloads": getattr(config, "DEFAULT_MAX_CONCURRENT_DOWNLOADS", 5),
+            "download_directory": str(getattr(config, "DEFAULT_DOWNLOAD_PATH", Path.home() / "Downloads")),
+            "default_language": getattr(config, "DEFAULT_LANGUAGE", "German Sub"),
+            "default_provider": getattr(config, "DEFAULT_PROVIDER_DOWNLOAD", "VOE"),
+            "default_action": getattr(config, "DEFAULT_ACTION", "Download"),
+            "watch_provider": getattr(config, "DEFAULT_PROVIDER_WATCH", "Filemoon"),
+            "accent_color": "purple",
+            "animations_enabled": True,
+        }
+
+        # Override download_directory if set via command line
+        if self.arguments and hasattr(self.arguments, "output_dir") and self.arguments.output_dir:
+            defaults["download_directory"] = str(self.arguments.output_dir)
+
+        prefs_file = self._get_preferences_file()
+        if prefs_file.exists():
+            try:
+                with open(prefs_file, "r") as f:
+                    saved_prefs = json.load(f)
+                    # Merge saved preferences with defaults
+                    defaults.update(saved_prefs)
+            except Exception as e:
+                logging.error(f"Error loading preferences: {e}")
+
+        return defaults
+
+    def _save_preferences(self, data: dict):
+        """Save preferences to file."""
+        import json
+
+        # Validate inputs
+        if "max_concurrent_downloads" in data:
+            val = int(data["max_concurrent_downloads"])
+            if val < 1 or val > 10:
+                raise ValueError("Parallel downloads must be between 1 and 10")
+            data["max_concurrent_downloads"] = val
+
+        if "download_directory" in data:
+            download_dir = Path(data["download_directory"])
+            # Create directory if it doesn't exist
+            download_dir.mkdir(parents=True, exist_ok=True)
+            data["download_directory"] = str(download_dir)
+
+        # Load existing preferences and merge
+        current_prefs = self._load_preferences()
+        current_prefs.update(data)
+
+        # Save to file
+        prefs_file = self._get_preferences_file()
+        with open(prefs_file, "w") as f:
+            json.dump(current_prefs, f, indent=2)
+
+        # Update runtime config if applicable
+        if "max_concurrent_downloads" in data:
+            self.download_manager.max_concurrent_downloads = data["max_concurrent_downloads"]
+
+        # Update download directory in runtime arguments
+        if "download_directory" in data:
+            from ..parser import arguments
+            arguments.output_dir = data["download_directory"]
+            logging.info(f"Updated runtime output_dir to: {data['download_directory']}")
+
+        logging.info(f"Preferences saved: {data}")
+
+    def _reset_preferences(self):
+        """Reset preferences to defaults."""
+        prefs_file = self._get_preferences_file()
+        if prefs_file.exists():
+            prefs_file.unlink()
+        logging.info("Preferences reset to defaults")
 
     def _scan_media_library(self):
         """Scan the download directory for manually placed files at startup."""
@@ -451,6 +563,105 @@ class WebApp:
             users = self.db.get_all_users() if user and user["is_admin"] else []
 
             return render_template("settings.html", user=user, users=users)
+
+        @self.app.route("/preferences")
+        def preferences():
+            """Preferences page route."""
+            # Get current user if auth is enabled
+            user = None
+            if self.auth_enabled and self.db:
+                session_token = request.cookies.get("session_token")
+                user = self.db.get_user_by_session(session_token)
+
+            # Load current preferences
+            preferences_data = self._load_preferences()
+
+            # Get list of providers
+            providers = list(config.SUPPORTED_PROVIDERS)
+
+            return render_template(
+                "preferences.html",
+                auth_enabled=self.auth_enabled,
+                user=user,
+                preferences=preferences_data,
+                providers=providers
+            )
+
+        @self.app.route("/api/preferences", methods=["GET"])
+        def api_get_preferences():
+            """Get current preferences."""
+            preferences_data = self._load_preferences()
+            return jsonify({"success": True, "preferences": preferences_data})
+
+        @self.app.route("/api/preferences", methods=["POST"])
+        def api_save_preferences():
+            """Save preferences."""
+            try:
+                data = request.get_json()
+                if not data:
+                    return jsonify({"success": False, "error": "No data provided"}), 400
+
+                # Validate and save preferences
+                self._save_preferences(data)
+
+                return jsonify({"success": True, "message": "Preferences saved successfully"})
+            except Exception as e:
+                logging.error(f"Error saving preferences: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/preferences/reset", methods=["POST"])
+        def api_reset_preferences():
+            """Reset preferences to defaults."""
+            try:
+                self._reset_preferences()
+                return jsonify({"success": True, "message": "Preferences reset to defaults"})
+            except Exception as e:
+                logging.error(f"Error resetting preferences: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/browse-folder", methods=["POST"])
+        def api_browse_folder():
+            """Open native folder picker dialog and return selected path."""
+            try:
+                import tkinter as tk
+                from tkinter import filedialog
+
+                # Get initial directory from request or use current preference
+                data = request.get_json() or {}
+                initial_dir = data.get("initial_dir", "")
+
+                if not initial_dir or not Path(initial_dir).exists():
+                    # Use current preference or default
+                    prefs = self._load_preferences()
+                    initial_dir = prefs.get("download_directory", str(Path.home() / "Downloads"))
+
+                # Create hidden root window
+                root = tk.Tk()
+                root.withdraw()  # Hide the root window
+                root.attributes("-topmost", True)  # Bring dialog to front
+
+                # Open folder picker dialog
+                selected_folder = filedialog.askdirectory(
+                    initialdir=initial_dir,
+                    title="Select Download Directory"
+                )
+
+                root.destroy()  # Clean up
+
+                if selected_folder:
+                    return jsonify({"success": True, "path": selected_folder})
+                else:
+                    return jsonify({"success": False, "error": "No folder selected"})
+
+            except ImportError:
+                logging.error("tkinter not available for folder picker")
+                return jsonify({
+                    "success": False,
+                    "error": "Folder picker not available. Please enter the path manually."
+                }), 500
+            except Exception as e:
+                logging.error(f"Error opening folder picker: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
 
         # User management API routes
         @self.app.route("/api/users", methods=["GET"])
