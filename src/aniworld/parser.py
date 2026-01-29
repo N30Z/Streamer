@@ -408,7 +408,7 @@ def _handle_provider_links(args: argparse.Namespace) -> None:
     # Process provider links
     if args.provider in config.SUPPORTED_PROVIDERS:
         try:
-            module = importlib.import_module("aniworld.extractors")
+            module = importlib.import_module(".extractors", __package__)
             func = getattr(module, f"get_direct_link_from_{args.provider.lower()}")
 
             for provider_episode in args.provider_link:
