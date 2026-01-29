@@ -14,11 +14,7 @@ winfcntl
 jsbeautifier
 flask
 ffmpeg
- 
-# Windows-specific dependencies (installed automatically on Windows)
-# py-cpuinfo
-# windows-curses
-# winfcntl
+py-cpuinfo
  
 # Optional: Chromecast support
 # pychromecast
