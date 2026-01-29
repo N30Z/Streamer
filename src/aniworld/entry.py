@@ -6,6 +6,7 @@ from typing import List
 from .ascii_art import display_traceback_art
 from .action import watch, syncplay
 from .models import Anime, Episode, SUPPORTED_SITES
+from .movie4k import Movie, MovieAnime, is_movie4k_url
 from .parser import arguments
 from .search import search_anime
 from .execute import execute
@@ -67,15 +68,22 @@ def _collect_episode_links() -> List[str]:
     if arguments.episode:
         links.extend(arguments.episode)
 
-    # Convert s.to links to config.S_TO IP for now
-    links = [
-        link.replace("http://s.to", S_TO).replace("https://s.to", S_TO)
-        for link in links
-    ]
-
     links = [link.rstrip("/") for link in links]
 
-    return generate_links(links, arguments)
+    # Separate movie4k links (they don't need generate_links processing)
+    movie4k_links = [link for link in links if is_movie4k_url(link)]
+    series_links = [link for link in links if not is_movie4k_url(link)]
+
+    # Convert s.to links to config.S_TO IP for now
+    series_links = [
+        link.replace("http://s.to", S_TO).replace("https://s.to", S_TO)
+        for link in series_links
+    ]
+
+    # Only run generate_links on aniworld/s.to links
+    processed_links = generate_links(series_links, arguments) if series_links else []
+
+    return processed_links + movie4k_links
 
 
 def _group_episodes_by_series(links: List[str]) -> List[Anime]:
@@ -136,7 +144,23 @@ def _handle_episode_mode() -> None:
         episode = Episode(slug=slug)
         anime_list = [Anime(episode_list=[episode])]
     else:
-        anime_list = _group_episodes_by_series(links)
+        # Separate movie4k links from aniworld/s.to links
+        movie4k_links = [link for link in links if is_movie4k_url(link)]
+        series_links = [link for link in links if not is_movie4k_url(link)]
+
+        anime_list = []
+
+        # Handle movie4k.sx links
+        for link in movie4k_links:
+            try:
+                movie = Movie(url=link)
+                anime_list.append(MovieAnime(movie))
+            except Exception as err:
+                logging.error("Failed to create Movie from '%s': %s", link, err)
+
+        # Handle aniworld/s.to links
+        if series_links:
+            anime_list.extend(_group_episodes_by_series(series_links))
 
     execute(anime_list=anime_list)
 
