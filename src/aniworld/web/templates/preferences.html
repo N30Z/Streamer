@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preferences - AniWorld Downloader</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* Preferences Page Specific Styles */
+        .preference-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .preference-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .preference-group label {
+            color: var(--text-primary);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .preference-group input[type="number"],
+        .preference-group input[type="text"],
+        .preference-group select {
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--input-bg);
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+            max-width: 400px;
+        }
+
+        .preference-group input:focus,
+        .preference-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .preference-group small {
+            color: var(--text-tertiary);
+            font-size: 0.8rem;
+        }
+
+        .preference-group .input-with-button {
+            display: flex;
+            gap: 0.5rem;
+            max-width: 500px;
+        }
+
+        .preference-group .input-with-button input {
+            flex: 1;
+            max-width: none;
+        }
+
+        .preference-group .input-with-button button {
+            padding: 0.75rem 1rem;
+            white-space: nowrap;
+        }
+
+        .color-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .color-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+
+        .color-option input[type="radio"] {
+            display: none;
+        }
+
+        .color-swatch {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 2px solid var(--border-color);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .color-option input[type="radio"]:checked + .color-swatch {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+        }
+
+        .color-option input[type="radio"]:checked + .color-swatch::after {
+            content: '\f00c';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .color-swatch.purple { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .color-swatch.blue { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
+        .color-swatch.green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .color-swatch.orange { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .color-swatch.red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        .color-swatch.pink { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
+        .color-swatch.cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+
+        .color-option span {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .save-preferences-container {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .save-status {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .save-status.success {
+            color: #10b981;
+        }
+
+        .save-status.error {
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="background-container">
+        <div class="cloud"></div>
+        <div class="cloud"></div>
+        <div class="cloud"></div>
+        <div class="cloud"></div>
+        <div class="cloud"></div>
+        <!-- Particle System -->
+        <div class="particles">
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+        </div>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <h1>AniWorld Downloader - Preferences</h1>
+                <span class="version" id="version-display">Loading...</span>
+            </div>
+            <div class="nav-actions">
+                <a href="{{ url_for('index') }}" class="nav-btn" title="Back to Main">
+                    <i class="fas fa-home"></i>
+                </a>
+                {% if auth_enabled and user %}
+                <div class="user-dropdown">
+                    <button class="nav-btn user-btn" id="user-dropdown-btn" title="User Settings">
+                        <i class="fas fa-user"></i>
+                        <span class="username">{{ user.username }}</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu" id="user-dropdown-menu">
+                        <button class="dropdown-item" id="theme-toggle-dropdown">
+                            <i id="theme-icon-dropdown" class="fas fa-moon"></i> Toggle Theme
+                        </button>
+                        <a href="{{ url_for('settings') }}" class="dropdown-item">
+                            <i class="fas fa-cog"></i> Settings
+                        </a>
+                        <button class="dropdown-item logout-btn" id="logout-btn">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </button>
+                    </div>
+                </div>
+                {% else %}
+                <button id="theme-toggle" class="nav-btn theme-toggle" title="Toggle light/dark mode">
+                    <i id="theme-icon" class="fas fa-moon"></i>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="settings-container">
+            <!-- Download Settings Section -->
+            <div class="settings-section">
+                <h2><i class="fas fa-download"></i> Download Settings</h2>
+
+                <div class="preference-group">
+                    <label for="max-concurrent-downloads">Parallel Downloads</label>
+                    <input type="number" id="max-concurrent-downloads" min="1" max="10" value="{{ preferences.max_concurrent_downloads }}">
+                    <small>Number of episodes to download simultaneously (1-10). Higher values may increase bandwidth usage.</small>
+                </div>
+
+                <div class="preference-group">
+                    <label for="download-directory">Download Directory</label>
+                    <div class="input-with-button">
+                        <input type="text" id="download-directory" value="{{ preferences.download_directory }}" placeholder="/path/to/downloads">
+                        <button type="button" class="btn btn-primary" id="browse-directory-btn">
+                            <i class="fas fa-folder-open"></i> Browse
+                        </button>
+                    </div>
+                    <small>Directory where downloaded files will be saved.</small>
+                </div>
+
+                <div class="preference-group">
+                    <label for="default-language">Default Language</label>
+                    <select id="default-language">
+                        <option value="German Dub" {{ 'selected' if preferences.default_language == 'German Dub' else '' }}>German Dub</option>
+                        <option value="English Sub" {{ 'selected' if preferences.default_language == 'English Sub' else '' }}>English Sub</option>
+                        <option value="German Sub" {{ 'selected' if preferences.default_language == 'German Sub' else '' }}>German Sub</option>
+                    </select>
+                    <small>Default language preference for downloads.</small>
+                </div>
+
+                <div class="preference-group">
+                    <label for="default-provider">Default Provider</label>
+                    <select id="default-provider">
+                        {% for provider in providers %}
+                        <option value="{{ provider }}" {{ 'selected' if preferences.default_provider == provider else '' }}>{{ provider }}</option>
+                        {% endfor %}
+                    </select>
+                    <small>Preferred video provider for downloads.</small>
+                </div>
+            </div>
+
+            <!-- Appearance Section -->
+            <div class="settings-section">
+                <h2><i class="fas fa-palette"></i> Appearance</h2>
+
+                <div class="preference-group">
+                    <label>Accent Color</label>
+                    <div class="color-options">
+                        <label class="color-option">
+                            <input type="radio" name="accent-color" value="purple" {{ 'checked' if preferences.accent_color == 'purple' or not preferences.accent_color else '' }}>
+                            <div class="color-swatch purple"></div>
+                            <span>Purple</span>
+                        </label>
+                        <label class="color-option">
+                            <input type="radio" name="accent-color" value="blue" {{ 'checked' if preferences.accent_color == 'blue' else '' }}>
+                            <div class="color-swatch blue"></div>
+                            <span>Blue</span>
+                        </label>
+                        <label class="color-option">
+                            <input type="radio" name="accent-color" value="green" {{ 'checked' if preferences.accent_color == 'green' else '' }}>
+                            <div class="color-swatch green"></div>
+                            <span>Green</span>
+                        </label>
+                        <label class="color-option">
+                            <input type="radio" name="accent-color" value="orange" {{ 'checked' if preferences.accent_color == 'orange' else '' }}>
+                            <div class="color-swatch orange"></div>
+                            <span>Orange</span>
+                        </label>
+                        <label class="color-option">
+                            <input type="radio" name="accent-color" value="red" {{ 'checked' if preferences.accent_color == 'red' else '' }}>
+                            <div class="color-swatch red"></div>
+                            <span>Red</span>
+                        </label>
+                        <label class="color-option">
+                            <input type="radio" name="accent-color" value="pink" {{ 'checked' if preferences.accent_color == 'pink' else '' }}>
+                            <div class="color-swatch pink"></div>
+                            <span>Pink</span>
+                        </label>
+                        <label class="color-option">
+                            <input type="radio" name="accent-color" value="cyan" {{ 'checked' if preferences.accent_color == 'cyan' else '' }}>
+                            <div class="color-swatch cyan"></div>
+                            <span>Cyan</span>
+                        </label>
+                    </div>
+                    <small>Choose an accent color for buttons and highlights.</small>
+                </div>
+
+                <div class="preference-group">
+                    <label for="animations-enabled">
+                        <input type="checkbox" id="animations-enabled" {{ 'checked' if preferences.animations_enabled else '' }}>
+                        Enable Animations
+                    </label>
+                    <small>Toggle background animations and particle effects.</small>
+                </div>
+            </div>
+
+            <!-- Playback Section -->
+            <div class="settings-section">
+                <h2><i class="fas fa-play-circle"></i> Playback Settings</h2>
+
+                <div class="preference-group">
+                    <label for="default-action">Default Action</label>
+                    <select id="default-action">
+                        <option value="Download" {{ 'selected' if preferences.default_action == 'Download' else '' }}>Download</option>
+                        <option value="Watch" {{ 'selected' if preferences.default_action == 'Watch' else '' }}>Watch</option>
+                        <option value="Syncplay" {{ 'selected' if preferences.default_action == 'Syncplay' else '' }}>Syncplay</option>
+                    </select>
+                    <small>Default action when selecting episodes.</small>
+                </div>
+
+                <div class="preference-group">
+                    <label for="watch-provider">Default Watch Provider</label>
+                    <select id="watch-provider">
+                        {% for provider in providers %}
+                        <option value="{{ provider }}" {{ 'selected' if preferences.watch_provider == provider else '' }}>{{ provider }}</option>
+                        {% endfor %}
+                    </select>
+                    <small>Preferred video provider for streaming/watching.</small>
+                </div>
+            </div>
+
+            <!-- Save Button -->
+            <div class="save-preferences-container">
+                <button type="button" class="btn btn-primary" id="save-preferences-btn">
+                    <i class="fas fa-save"></i> Save Preferences
+                </button>
+                <button type="button" class="btn" id="reset-preferences-btn">
+                    <i class="fas fa-undo"></i> Reset to Defaults
+                </button>
+                <span class="save-status" id="save-status"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success/Error Messages -->
+    <div id="message-container" class="message-container"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Theme handling
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.body.setAttribute('data-theme', savedTheme);
+
+            // Load version info
+            loadVersionInfo();
+
+            // Apply saved accent color
+            const accentColor = document.querySelector('input[name="accent-color"]:checked');
+            if (accentColor) {
+                applyAccentColor(accentColor.value);
+            }
+
+            // User dropdown functionality
+            const userDropdownBtn = document.getElementById('user-dropdown-btn');
+            const userDropdownMenu = document.getElementById('user-dropdown-menu');
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeIcon = document.getElementById('theme-icon');
+            const themeToggleDropdown = document.getElementById('theme-toggle-dropdown');
+            const themeIconDropdown = document.getElementById('theme-icon-dropdown');
+
+            if (userDropdownBtn && userDropdownMenu) {
+                userDropdownBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    userDropdownMenu.classList.toggle('show');
+                });
+
+                document.addEventListener('click', function() {
+                    userDropdownMenu.classList.remove('show');
+                });
+
+                userDropdownMenu.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+
+            // Theme toggle (non-auth mode)
+            if (themeToggle && themeIcon) {
+                updateThemeIcon(savedTheme, themeIcon);
+
+                themeToggle.addEventListener('click', function() {
+                    const currentTheme = document.body.getAttribute('data-theme');
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+                    document.body.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                    updateThemeIcon(newTheme, themeIcon);
+                });
+            }
+
+            // Theme toggle in dropdown
+            if (themeToggleDropdown && themeIconDropdown) {
+                updateDropdownThemeIcon(savedTheme);
+
+                themeToggleDropdown.addEventListener('click', function() {
+                    const currentTheme = document.body.getAttribute('data-theme');
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+                    document.body.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                    updateDropdownThemeIcon(newTheme);
+                });
+            }
+
+            function updateThemeIcon(theme, iconElement) {
+                if (theme === 'dark') {
+                    iconElement.className = 'fas fa-sun';
+                } else {
+                    iconElement.className = 'fas fa-moon';
+                }
+            }
+
+            function updateDropdownThemeIcon(theme) {
+                if (theme === 'dark') {
+                    themeIconDropdown.className = 'fas fa-sun';
+                } else {
+                    themeIconDropdown.className = 'fas fa-moon';
+                }
+            }
+
+            async function loadVersionInfo() {
+                try {
+                    const response = await fetch('/api/info');
+                    const data = await response.json();
+
+                    const versionDisplay = document.getElementById('version-display');
+                    if (versionDisplay && data.version) {
+                        versionDisplay.textContent = `v${data.version}`;
+                    }
+                } catch (error) {
+                    console.error('Failed to load version info:', error);
+                }
+            }
+
+            // Logout functionality
+            const logoutBtn = document.getElementById('logout-btn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', async function() {
+                    try {
+                        const response = await fetch('/logout', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            }
+                        });
+
+                        const data = await response.json();
+                        if (data.success) {
+                            window.location.href = data.redirect;
+                        }
+                    } catch (error) {
+                        showMessage('Logout failed: ' + error.message, 'error');
+                    }
+                });
+            }
+
+            // Browse directory button
+            const browseBtn = document.getElementById('browse-directory-btn');
+            if (browseBtn) {
+                browseBtn.addEventListener('click', function() {
+                    // Note: Browser file system access is limited
+                    // This would need a backend implementation for full directory picker
+                    showMessage('Directory picker requires selecting via the input field. Enter the full path to your desired download directory.', 'info');
+                });
+            }
+
+            // Accent color change
+            const colorOptions = document.querySelectorAll('input[name="accent-color"]');
+            colorOptions.forEach(option => {
+                option.addEventListener('change', function() {
+                    applyAccentColor(this.value);
+                });
+            });
+
+            // Animations toggle
+            const animationsToggle = document.getElementById('animations-enabled');
+            if (animationsToggle) {
+                // Apply initial state
+                toggleAnimations(animationsToggle.checked);
+
+                animationsToggle.addEventListener('change', function() {
+                    toggleAnimations(this.checked);
+                });
+            }
+
+            function toggleAnimations(enabled) {
+                const bgContainer = document.querySelector('.background-container');
+                if (bgContainer) {
+                    bgContainer.style.display = enabled ? 'block' : 'none';
+                }
+            }
+
+            function applyAccentColor(color) {
+                const colors = {
+                    purple: { primary: '#667eea', secondary: '#764ba2' },
+                    blue: { primary: '#3b82f6', secondary: '#1d4ed8' },
+                    green: { primary: '#10b981', secondary: '#059669' },
+                    orange: { primary: '#f59e0b', secondary: '#d97706' },
+                    red: { primary: '#ef4444', secondary: '#dc2626' },
+                    pink: { primary: '#ec4899', secondary: '#db2777' },
+                    cyan: { primary: '#06b6d4', secondary: '#0891b2' }
+                };
+
+                const selected = colors[color] || colors.purple;
+                document.documentElement.style.setProperty('--accent-primary', selected.primary);
+                document.documentElement.style.setProperty('--accent-secondary', selected.secondary);
+
+                // Store in localStorage for persistence
+                localStorage.setItem('accentColor', color);
+            }
+
+            // Save preferences
+            const saveBtn = document.getElementById('save-preferences-btn');
+            const saveStatus = document.getElementById('save-status');
+
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async function() {
+                    const preferences = {
+                        max_concurrent_downloads: parseInt(document.getElementById('max-concurrent-downloads').value),
+                        download_directory: document.getElementById('download-directory').value,
+                        default_language: document.getElementById('default-language').value,
+                        default_provider: document.getElementById('default-provider').value,
+                        default_action: document.getElementById('default-action').value,
+                        watch_provider: document.getElementById('watch-provider').value,
+                        accent_color: document.querySelector('input[name="accent-color"]:checked')?.value || 'purple',
+                        animations_enabled: document.getElementById('animations-enabled').checked
+                    };
+
+                    try {
+                        const response = await fetch('/api/preferences', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(preferences)
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            showMessage('Preferences saved successfully!', 'success');
+                            saveStatus.textContent = 'Saved!';
+                            saveStatus.className = 'save-status success';
+                        } else {
+                            showMessage('Failed to save preferences: ' + data.error, 'error');
+                            saveStatus.textContent = 'Error saving';
+                            saveStatus.className = 'save-status error';
+                        }
+
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                        }, 3000);
+
+                    } catch (error) {
+                        showMessage('Failed to save preferences: ' + error.message, 'error');
+                        saveStatus.textContent = 'Error saving';
+                        saveStatus.className = 'save-status error';
+                    }
+                });
+            }
+
+            // Reset preferences
+            const resetBtn = document.getElementById('reset-preferences-btn');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', async function() {
+                    if (!confirm('Are you sure you want to reset all preferences to defaults?')) {
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch('/api/preferences/reset', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            }
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            showMessage('Preferences reset to defaults!', 'success');
+                            // Reload page to show default values
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1000);
+                        } else {
+                            showMessage('Failed to reset preferences: ' + data.error, 'error');
+                        }
+                    } catch (error) {
+                        showMessage('Failed to reset preferences: ' + error.message, 'error');
+                    }
+                });
+            }
+
+            function showMessage(message, type) {
+                const container = document.getElementById('message-container');
+                const messageEl = document.createElement('div');
+                messageEl.className = `message ${type}`;
+                messageEl.innerHTML = `
+                    <span>${message}</span>
+                    <button class="message-close">&times;</button>
+                `;
+
+                container.appendChild(messageEl);
+
+                setTimeout(() => {
+                    if (messageEl.parentNode) {
+                        messageEl.parentNode.removeChild(messageEl);
+                    }
+                }, 5000);
+
+                messageEl.querySelector('.message-close').addEventListener('click', () => {
+                    if (messageEl.parentNode) {
+                        messageEl.parentNode.removeChild(messageEl);
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
