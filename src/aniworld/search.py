@@ -205,15 +205,20 @@ def fetch_sto_search_results(keyword: str) -> List[Dict]:
     soup = BeautifulSoup(response.text, "html.parser")
     results = []
 
-    # s.to search results are in div.search-results-list > div > div.row.g-3
-    # Each result row contains links to /serie/<slug>
-    result_container = soup.select_one(".search-results-list")
+    # s.to search results are in:
+    # div.search-results-list > div:nth-child(1) > div.row.g-3
+    # The div.row.g-3 is the direct container holding all result items
+    result_container = soup.select_one(".search-results-list .row.g-3")
+
+    if not result_container:
+        # Fallback: try just .search-results-list
+        result_container = soup.select_one(".search-results-list")
 
     if result_container:
-        # Find all links to /serie/ within the search results container
+        # Each direct child of the row is a result item (column)
         items = result_container.find_all("a", href=re.compile(r"/serie/[^/]+"))
     else:
-        # Fallback: find all links pointing to /serie/ anywhere on the page
+        # Last fallback: find all /serie/ links on the page
         items = soup.find_all("a", href=re.compile(r"/serie/[^/]+$"))
 
     seen_slugs = set()
@@ -231,13 +236,16 @@ def fetch_sto_search_results(keyword: str) -> List[Dict]:
             continue
         seen_slugs.add(slug)
 
-        # Walk up to the parent row to extract all info
-        row = item.find_parent("div", class_="row")
+        # Walk up to the parent column (direct child of div.row.g-3)
+        col = item.find_parent("div", class_=re.compile(r"col"))
+        # Fallback to any parent div if no col found
+        if not col:
+            col = item.parent
 
         # Extract title from the link or its parent context
         name = ""
-        if row:
-            h_tag = row.find(["h3", "h4", "h5", "h2"])
+        if col:
+            h_tag = col.find(["h3", "h4", "h5", "h2"])
             if h_tag:
                 name = h_tag.get_text(strip=True)
         if not name:
@@ -247,9 +255,9 @@ def fetch_sto_search_results(keyword: str) -> List[Dict]:
         if not name:
             name = slug.replace("-", " ").title()
 
-        # Extract cover image from the row or link
+        # Extract cover image from the column or link
         cover = ""
-        img_context = row if row else item
+        img_context = col if col else item
         img = img_context.find("img")
         if img:
             cover = img.get("data-src") or img.get("src") or ""
@@ -258,14 +266,14 @@ def fetch_sto_search_results(keyword: str) -> List[Dict]:
 
         # Extract year if present
         year = ""
-        year_context = row if row else item
+        year_context = col if col else item
         year_el = year_context.find("span", class_="year") or year_context.find(class_="productionYear")
         if year_el:
             year = year_el.get_text(strip=True)
 
         # Extract description if present
         description = ""
-        desc_context = row if row else item
+        desc_context = col if col else item
         desc_el = desc_context.find("p") or desc_context.find(class_="description")
         if desc_el:
             description = desc_el.get_text(strip=True)
