@@ -459,113 +459,58 @@ def download_syncplay(
     return True
 
 
-def _parse_season_episodes(soup: BeautifulSoup, season: int) -> int:
-    """Parse episode count for a specific season."""
-    episode_links = soup.find_all("a", href=True)
-    unique_links = set(
-        link["href"]
-        for link in episode_links
-        if f"staffel-{season}/episode-" in link["href"]
-    )
-    return len(unique_links)
-
-
 def get_season_episode_count(slug: str, link: str = ANIWORLD_TO) -> Dict[int, int]:
     """
-    Get episode count for each season of an anime with caching.
+    Get episode count for each season with caching.
+    Dispatches to the correct site module based on the link.
 
     Args:
-        slug: Anime slug from URL
-        link: Base Url
+        slug: Anime/series slug from URL
+        link: Base URL or episode link used to detect the site
 
     Returns:
         Dictionary mapping season numbers to episode counts
     """
-    # Check cache first
     cache_key = f"seasons_{slug}"
     if cache_key in _ANIME_DATA_CACHE:
         return _ANIME_DATA_CACHE[cache_key]
 
-    try:
-        if S_TO not in link:
-            base_url = f"{ANIWORLD_TO}/anime/stream/{slug}/"
-        else:
-            base_url = f"{S_TO}/serie/{slug}/"
-        response = _make_request(base_url)
-        soup = BeautifulSoup(response.content, "html.parser")
+    if S_TO in link:
+        from ..sites.s_to import get_season_episode_count as _sto_get
+        result = _sto_get(slug)
+    else:
+        from ..sites.aniworld import get_season_episode_count as _aw_get
+        result = _aw_get(slug)
 
-        season_meta = soup.find("meta", itemprop="numberOfSeasons")
-        number_of_seasons = int(season_meta["content"]) if season_meta else 0
-
-        episode_counts = {}
-        for season in range(1, number_of_seasons + 1):
-            season_url = f"{base_url}staffel-{season}"
-            try:
-                season_response = _make_request(season_url)
-                season_soup = BeautifulSoup(season_response.content, "html.parser")
-                episode_counts[season] = _parse_season_episodes(season_soup, season)
-            except Exception as err:
-                logging.warning("Failed to get episodes for season %d: %s", season, err)
-                episode_counts[season] = 0
-
-        # Cache the result
-        _ANIME_DATA_CACHE[cache_key] = episode_counts
-        return episode_counts
-
-    except Exception as err:
-        logging.error("Failed to get season episode count for %s: %s", slug, err)
-        # Cache empty result to avoid repeated failures
-        _ANIME_DATA_CACHE[cache_key] = {}
-        return {}
+    _ANIME_DATA_CACHE[cache_key] = result
+    return result
 
 
-def get_movie_episode_count(slug: str) -> int:
+def get_movie_episode_count(slug: str, link: str = ANIWORLD_TO) -> int:
     """
-    Get movie count for an anime with caching.
+    Get movie count with caching.
+    Dispatches to the correct site module based on the link.
 
     Args:
-        slug: Anime slug from URL
+        slug: Anime/series slug from URL
+        link: Base URL or episode link used to detect the site
 
     Returns:
         Number of movies available
     """
-    # Check cache first
     cache_key = f"movies_{slug}"
     if cache_key in _ANIME_DATA_CACHE:
         return _ANIME_DATA_CACHE[cache_key]
 
-    try:
-        movie_page_url = f"{ANIWORLD_TO}/anime/stream/{slug}/filme"
-        response = _make_request(movie_page_url)
-        soup = BeautifulSoup(response.content, "html.parser")
+    if S_TO in link:
+        from ..sites.s_to import get_movie_episode_count as _sto_get
+        result = _sto_get(slug)
+    else:
+        from ..sites.aniworld import get_movie_episode_count as _aw_get
+        result = _aw_get(slug)
 
-        movie_indices = []
-        movie_index = 1
-
-        while True:
-            expected_subpath = f"{slug}/filme/film-{movie_index}"
-            matching_links = [
-                link["href"]
-                for link in soup.find_all("a", href=True)
-                if expected_subpath in link["href"]
-            ]
-
-            if matching_links:
-                movie_indices.append(movie_index)
-                movie_index += 1
-            else:
-                break
-
-        result = max(movie_indices) if movie_indices else 0
-        # Cache the result
-        _ANIME_DATA_CACHE[cache_key] = result
-        return result
-
-    except Exception as err:
-        logging.error("Failed to get movie count for %s: %s", slug, err)
-        # Cache failure result
-        _ANIME_DATA_CACHE[cache_key] = 0
-        return 0
+    _ANIME_DATA_CACHE[cache_key] = result
+    return result
 
 
 def _natural_sort_key(link_url: str) -> List:
@@ -596,7 +541,7 @@ def _process_base_url(
             seasons_info, movies_info = slug_cache[series_slug]
         else:
             seasons_info = get_season_episode_count(slug=series_slug, link=base_url)
-            movies_info = get_movie_episode_count(slug=series_slug)
+            movies_info = get_movie_episode_count(slug=series_slug, link=base_url)
             slug_cache[series_slug] = (seasons_info, movies_info)
 
     except (ValueError, IndexError) as err:

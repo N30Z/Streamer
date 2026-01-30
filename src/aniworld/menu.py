@@ -58,7 +58,6 @@ from .config import (
     DEFAULT_PROVIDER_WATCH,
     USES_DEFAULT_PROVIDER,
     IS_NEWEST_VERSION,
-    ANIWORLD_TO,
 )
 from . import parser
 
@@ -98,22 +97,26 @@ class SelectionMenu(npyscreen.NPSApp):
     provider and language settings.
     """
 
-    def __init__(self, arguments: Any, slug: str) -> None:
+    def __init__(self, arguments: Any, slug: str, site: str = "aniworld.to") -> None:
         """
         Initialize the selection menu.
 
         Args:
             arguments: Parsed command-line arguments
             slug: Anime slug identifier
+            site: Streaming site identifier (e.g. "aniworld.to", "s.to")
         """
         super().__init__()
         self.arguments = arguments
         self.slug = slug
+        self.site = site
 
         # Initialize anime data
         try:
             self.anime = Anime(
-                slug=slug, episode_list=[Episode(slug=slug, season=1, episode=1)]
+                slug=slug,
+                site=site,
+                episode_list=[Episode(slug=slug, season=1, episode=1, site=site)],
             )
         except Exception as err:
             logging.error(
@@ -207,6 +210,9 @@ class SelectionMenu(npyscreen.NPSApp):
         """
         episode_dict = {}
 
+        base_url = self.anime.base_url
+        stream_path = self.anime.stream_path
+
         # Add season episodes
         for season, episodes in season_episode_count.items():
             for episode in range(1, episodes + 1):
@@ -214,7 +220,7 @@ class SelectionMenu(npyscreen.NPSApp):
                     f"{self.anime.title} - Season {season} - Episode {episode}"
                 )
                 link = (
-                    f"{ANIWORLD_TO}/anime/stream/{self.anime.slug}/"
+                    f"{base_url}/{stream_path}/{self.anime.slug}/"
                     f"staffel-{season}/episode-{episode}"
                 )
                 episode_dict[link] = link_formatted
@@ -223,7 +229,7 @@ class SelectionMenu(npyscreen.NPSApp):
         for episode in range(1, movie_episode_count + 1):
             movie_link_formatted = f"{self.anime.title} - Movie {episode}"
             movie_link = (
-                f"{ANIWORLD_TO}/anime/stream/{self.anime.slug}/filme/film-{episode}"
+                f"{base_url}/{stream_path}/{self.anime.slug}/filme/film-{episode}"
             )
             episode_dict[movie_link] = movie_link_formatted
 
@@ -631,6 +637,7 @@ class SelectionMenu(npyscreen.NPSApp):
             Episode(
                 slug=self.anime.slug,
                 link=link,
+                site=self.site,
                 _selected_language=selected_language,
                 _selected_provider=selected_provider,
             )
@@ -712,6 +719,7 @@ class SelectionMenu(npyscreen.NPSApp):
             # Create and return Anime object
             return Anime(
                 title=self.anime.title,
+                site=self.site,
                 episode_list=episode_list,
                 action=selected_action,
                 language=selected_language,
@@ -728,13 +736,14 @@ class SelectionMenu(npyscreen.NPSApp):
             raise RuntimeError(f"Failed to get selected values: {err}") from err
 
 
-def menu(arguments: Any, slug: str) -> Anime:
+def menu(arguments: Any, slug: str, site: str = "aniworld.to") -> Anime:
     """
     Create and run the interactive menu for episode selection.
 
     Args:
         arguments: Parsed command-line arguments
         slug: Anime slug identifier
+        site: Streaming site identifier (e.g. "aniworld.to", "s.to")
 
     Returns:
         Anime object with selected configuration and episodes
@@ -744,7 +753,7 @@ def menu(arguments: Any, slug: str) -> Anime:
         RuntimeError: If there's an error creating or running the menu
     """
     try:
-        app = SelectionMenu(arguments=arguments, slug=slug)
+        app = SelectionMenu(arguments=arguments, slug=slug, site=site)
         app.run()
         return app.get_selected_values()
 

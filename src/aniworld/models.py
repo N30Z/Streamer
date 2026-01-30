@@ -411,7 +411,11 @@ class Anime:
                     first_episode_link
                     or f"{self.base_url}/{self.stream_path}/{self.slug}",
                 )
-                self._shared_movie_episode_count = get_movie_episode_count(self.slug)
+                self._shared_movie_episode_count = get_movie_episode_count(
+                    self.slug,
+                    first_episode_link
+                    or f"{self.base_url}/{self.stream_path}/{self.slug}",
+                )
 
                 # Share this data with all episodes
                 for episode in self.episode_list:
