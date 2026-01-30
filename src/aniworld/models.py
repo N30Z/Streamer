@@ -756,11 +756,26 @@ class Episode:
         """
         try:
             episode_soup = BeautifulSoup(self.html.content, "html.parser")
+
+            # s.to uses button.link-box[data-language-id] inside div#episode-links
+            episode_links_div = episode_soup.find("div", id="episode-links")
+            if episode_links_div:
+                language_codes = set()
+                for btn in episode_links_div.find_all(
+                    "button", class_="link-box"
+                ):
+                    lang_id = btn.get("data-language-id")
+                    if lang_id and lang_id.isdigit():
+                        language_codes.add(int(lang_id))
+                return sorted(language_codes)
+
+            # aniworld.to uses div.changeLanguageBox > img[data-lang-key]
             change_language_box = episode_soup.find("div", class_="changeLanguageBox")
 
             if not change_language_box:
                 logging.warning(
-                    "No language selection box found for episode: %s", self.link
+                    "_get_available_languages_from_html: No language selection found for episode: %s",
+                    self.link,
                 )
                 return []
 
@@ -801,28 +816,41 @@ class Episode:
             soup = BeautifulSoup(self.html.content, "html.parser")
             providers = {}
 
-            episode_links = soup.find_all(
-                "li", class_=lambda x: x and x.startswith("episodeLink")
-            )
+            # s.to uses button.link-box inside div#episode-links
+            episode_links_div = soup.find("div", id="episode-links")
+            if episode_links_div:
+                for btn in episode_links_div.find_all("button", class_="link-box"):
+                    provider_data = self._extract_provider_data_sto(btn)
+                    if provider_data:
+                        provider_name, lang_key, redirect_url = provider_data
+                        if provider_name not in providers:
+                            providers[provider_name] = {}
+                        providers[provider_name][lang_key] = redirect_url
+            else:
+                # aniworld.to uses li.episodeLink* elements
+                episode_links = soup.find_all(
+                    "li", class_=lambda x: x and x.startswith("episodeLink")
+                )
 
-            if not episode_links:
+                if not episode_links:
+                    raise ValueError(
+                        f"No streams available for episode: {self.link}\n"
+                        "Try again later or check in the community chat."
+                    )
+
+                for link in episode_links:
+                    provider_data = self._extract_provider_data(link)
+                    if provider_data:
+                        provider_name, lang_key, redirect_url = provider_data
+                        if provider_name not in providers:
+                            providers[provider_name] = {}
+                        providers[provider_name][lang_key] = redirect_url
+
+            if not providers:
                 raise ValueError(
                     f"No streams available for episode: {self.link}\n"
                     "Try again later or check in the community chat."
                 )
-
-            for link in episode_links:
-                provider_data = self._extract_provider_data(link)
-                if provider_data:
-                    provider_name, lang_key, redirect_url = provider_data
-
-                    if provider_name not in providers:
-                        providers[provider_name] = {}
-
-                    providers[provider_name][lang_key] = redirect_url
-
-            if not providers:
-                raise ValueError(f"Could not extract providers from {self.link}")
 
             logging.debug(
                 'Available providers for "%s":\n%s',
@@ -833,7 +861,7 @@ class Episode:
             return providers
 
         except Exception as err:
-            logging.error("Error extracting providers: %s", err)
+            logging.error("_get_providers_from_html: Error extracting providers: %s", err)
             raise
 
     def _extract_provider_data(self, link_element) -> Optional[Tuple[str, int, str]]:
@@ -872,6 +900,35 @@ class Episode:
 
         except (ValueError, AttributeError) as err:
             logging.debug("Failed to extract provider data from element: %s", err)
+            return None
+
+    def _extract_provider_data_sto(self, button_element) -> Optional[Tuple[str, int, str]]:
+        """
+        Extract provider data from an s.to button.link-box element.
+
+        Args:
+            button_element: BeautifulSoup button element with data attributes
+
+        Returns:
+            Tuple of (provider_name, lang_key, redirect_url) or None
+        """
+        try:
+            provider_name = button_element.get("data-provider-name")
+            lang_id_str = button_element.get("data-language-id")
+            play_url = button_element.get("data-play-url")
+
+            lang_key = (
+                int(lang_id_str) if lang_id_str and lang_id_str.isdigit() else None
+            )
+
+            if provider_name and play_url and lang_key is not None:
+                redirect_url = f"{self.base_url}{play_url}"
+                return provider_name, lang_key, redirect_url
+
+            return None
+
+        except (ValueError, AttributeError) as err:
+            logging.debug("Failed to extract s.to provider data from element: %s", err)
             return None
 
     def _get_language_key_from_name(self, language_name: str) -> int:
