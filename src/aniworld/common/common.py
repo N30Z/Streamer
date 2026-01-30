@@ -490,7 +490,7 @@ def get_season_episode_count(slug: str, link: str = ANIWORLD_TO) -> Dict[int, in
         if S_TO not in link:
             base_url = f"{ANIWORLD_TO}/anime/stream/{slug}/"
         else:
-            base_url = f"{S_TO}/serie/stream/{slug}/"
+            base_url = f"{S_TO}/serie/{slug}/"
         response = _make_request(base_url)
         soup = BeautifulSoup(response.content, "html.parser")
 

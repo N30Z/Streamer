@@ -17,7 +17,6 @@ from .config import (
     SITE_LANGUAGE_CODES,
     SITE_LANGUAGE_NAMES,
     SUPPORTED_PROVIDERS,
-    S_TO,
 )
 from .parser import arguments
 from .common import get_season_episode_count, get_movie_episode_count
@@ -1434,7 +1433,7 @@ def get_anime_title_from_html(
         soup = BeautifulSoup(html.content, "html.parser")
 
         # Site-specific title extraction
-        if site == S_TO:
+        if site == "s.to":
             # S_TO uses: <div class="series-title"><h1><span>Title</span></h1>...</div>
             title_div = soup.find("div", class_="series-title")
             if title_div:

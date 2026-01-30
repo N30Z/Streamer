@@ -935,14 +935,14 @@ class WebApp:
 
                     if "s.to" in sites:
                         try:
-                            url = f"{config.S_TO}/ajax/seriesSearch?keyword={quote(keyword)}"
-                            results = fetch_anime_list(url)
+                            from ..search import fetch_sto_search_results
+                            results = fetch_sto_search_results(keyword)
                             for anime in results:
                                 slug = anime.get("link", "")
                                 if slug and slug not in seen_slugs:
                                     anime["site"] = "s.to"
                                     anime["base_url"] = config.S_TO
-                                    anime["stream_path"] = "serie/stream"
+                                    anime["stream_path"] = "serie"
                                     all_results.append(anime)
                                     seen_slugs.add(slug)
                         except Exception as e:
@@ -1143,7 +1143,7 @@ class WebApp:
                     if is_sto:
                         site = "s.to"
                         base_url = config.S_TO
-                        stream_path = "serie/stream"
+                        stream_path = "serie"
                     else:
                         site = "aniworld.to"
                         base_url = config.ANIWORLD_TO
@@ -1165,11 +1165,11 @@ class WebApp:
                         search_query = slug.replace("-", " ")
 
                         if site == "s.to":
-                            search_url = f"{config.S_TO}/ajax/seriesSearch?keyword={search_query}"
+                            from ..search import fetch_sto_search_results
+                            search_results = fetch_sto_search_results(search_query)
                         else:
                             search_url = f"{config.ANIWORLD_TO}/ajax/seriesSearch?keyword={search_query}"
-
-                        search_results = fetch_anime_list(search_url)
+                            search_results = fetch_anime_list(search_url)
 
                         matching_anime = None
                         for anime in search_results:
@@ -1390,9 +1390,9 @@ class WebApp:
                         slug = series_url.split("/anime/stream/")[-1].rstrip("/")
                         stream_path = "anime/stream"
                         base_url = config.ANIWORLD_TO
-                    elif "/serie/stream/" in series_url:
-                        slug = series_url.split("/serie/stream/")[-1].rstrip("/")
-                        stream_path = "serie/stream"
+                    elif "/serie/" in series_url:
+                        slug = series_url.split("/serie/")[-1].rstrip("/")
+                        stream_path = "serie"
                         base_url = config.S_TO
                     else:
                         raise ValueError("Invalid series URL format")
