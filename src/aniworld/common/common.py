@@ -519,12 +519,13 @@ def get_season_episode_count(slug: str, link: str = ANIWORLD_TO) -> Dict[int, in
         return {}
 
 
-def get_movie_episode_count(slug: str) -> int:
+def get_movie_episode_count(slug: str, link: str = ANIWORLD_TO) -> int:
     """
     Get movie count for an anime with caching.
 
     Args:
         slug: Anime slug from URL
+        link: Base URL or episode link used to detect the site
 
     Returns:
         Number of movies available
@@ -535,7 +536,10 @@ def get_movie_episode_count(slug: str) -> int:
         return _ANIME_DATA_CACHE[cache_key]
 
     try:
-        movie_page_url = f"{ANIWORLD_TO}/anime/stream/{slug}/filme"
+        if S_TO not in link:
+            movie_page_url = f"{ANIWORLD_TO}/anime/stream/{slug}/filme"
+        else:
+            movie_page_url = f"{S_TO}/serie/{slug}/filme"
         response = _make_request(movie_page_url)
         soup = BeautifulSoup(response.content, "html.parser")
 
@@ -596,7 +600,7 @@ def _process_base_url(
             seasons_info, movies_info = slug_cache[series_slug]
         else:
             seasons_info = get_season_episode_count(slug=series_slug, link=base_url)
-            movies_info = get_movie_episode_count(slug=series_slug)
+            movies_info = get_movie_episode_count(slug=series_slug, link=base_url)
             slug_cache[series_slug] = (seasons_info, movies_info)
 
     except (ValueError, IndexError) as err:

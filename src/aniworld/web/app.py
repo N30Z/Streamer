@@ -1415,11 +1415,11 @@ class WebApp:
                                     }
                                 )
 
-                    # Get movies if this is from aniworld.to (movies only available there)
+                    # Get movies for aniworld.to and s.to
                     movies = []
-                    if base_url == config.ANIWORLD_TO:
+                    if base_url in (config.ANIWORLD_TO, config.S_TO):
                         try:
-                            movie_count = get_movie_episode_count(slug)
+                            movie_count = get_movie_episode_count(slug, link=base_url)
                             for movie_num in range(1, movie_count + 1):
                                 movies.append(
                                     {
