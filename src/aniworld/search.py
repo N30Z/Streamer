@@ -205,13 +205,16 @@ def fetch_sto_search_results(keyword: str) -> List[Dict]:
     soup = BeautifulSoup(response.text, "html.parser")
     results = []
 
-    # s.to search results use genre list items or cover list items
-    # Try multiple selectors for the search result items
-    items = soup.select(".coverListItem a, .genre-list a, ul.products li a, .seriesList a")
+    # s.to search results are in div.search-results-list > div > div.row.g-3
+    # Each result row contains links to /serie/<slug>
+    result_container = soup.select_one(".search-results-list")
 
-    if not items:
-        # Fallback: find all links pointing to /serie/
-        items = soup.find_all("a", href=re.compile(r"^/serie/[^/]+$"))
+    if result_container:
+        # Find all links to /serie/ within the search results container
+        items = result_container.find_all("a", href=re.compile(r"/serie/[^/]+"))
+    else:
+        # Fallback: find all links pointing to /serie/ anywhere on the page
+        items = soup.find_all("a", href=re.compile(r"/serie/[^/]+$"))
 
     seen_slugs = set()
     for item in items:
@@ -221,15 +224,22 @@ def fetch_sto_search_results(keyword: str) -> List[Dict]:
 
         # Extract slug from href like /serie/fallout
         slug = href.rstrip("/").split("/serie/")[-1]
-        if not slug or slug in seen_slugs:
+        # Skip if slug contains sub-paths (staffel/episode links)
+        if "/" in slug or not slug:
+            continue
+        if slug in seen_slugs:
             continue
         seen_slugs.add(slug)
 
-        # Extract title
+        # Walk up to the parent row to extract all info
+        row = item.find_parent("div", class_="row")
+
+        # Extract title from the link or its parent context
         name = ""
-        h3 = item.find("h3")
-        if h3:
-            name = h3.get_text(strip=True)
+        if row:
+            h_tag = row.find(["h3", "h4", "h5", "h2"])
+            if h_tag:
+                name = h_tag.get_text(strip=True)
         if not name:
             name = item.get("title", "")
         if not name:
@@ -237,9 +247,10 @@ def fetch_sto_search_results(keyword: str) -> List[Dict]:
         if not name:
             name = slug.replace("-", " ").title()
 
-        # Extract cover image
+        # Extract cover image from the row or link
         cover = ""
-        img = item.find("img")
+        img_context = row if row else item
+        img = img_context.find("img")
         if img:
             cover = img.get("data-src") or img.get("src") or ""
             if cover and cover.startswith("/"):
@@ -247,13 +258,15 @@ def fetch_sto_search_results(keyword: str) -> List[Dict]:
 
         # Extract year if present
         year = ""
-        year_el = item.find("span", class_="year") or item.find(class_="productionYear")
+        year_context = row if row else item
+        year_el = year_context.find("span", class_="year") or year_context.find(class_="productionYear")
         if year_el:
             year = year_el.get_text(strip=True)
 
         # Extract description if present
         description = ""
-        desc_el = item.find("p") or item.find(class_="description")
+        desc_context = row if row else item
+        desc_el = desc_context.find("p") or desc_context.find(class_="description")
         if desc_el:
             description = desc_el.get_text(strip=True)
 
