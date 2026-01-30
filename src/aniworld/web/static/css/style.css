@@ -95,7 +95,7 @@
 
 .auth-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 8px 25px rgba(var(--accent-primary-rgb), 0.3);
 }
 
 .auth-btn:active {
@@ -361,13 +361,13 @@
 
 .form-group input[type="checkbox"]:hover {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.1);
 }
 
 .form-group input[type="checkbox"]:focus {
     outline: none;
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.2);
 }
 
 .btn {
@@ -391,7 +391,7 @@
 
 .btn-primary:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--accent-primary-rgb), 0.3);
 }
 
 .btn-danger {
@@ -600,6 +600,7 @@ body {
     /* Accent colors (can be overridden by JS) */
     --accent-primary: #667eea;
     --accent-secondary: #764ba2;
+    --accent-primary-rgb: 102, 126, 234;
 }
 
 /* Dark mode override */
@@ -1251,7 +1252,7 @@ body[data-theme="dark"] .particle:nth-child(10) {
 
 .search-input:focus {
     outline: none;
-    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 20px rgba(var(--accent-primary-rgb), 0.3);
     transform: translateY(-1px);
 }
 
@@ -1987,7 +1988,7 @@ body[data-theme="dark"] .episode-progress-text {
 .language-dropdown:focus {
     outline: none;
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.1);
 }
 
 .provider-dropdown:hover,

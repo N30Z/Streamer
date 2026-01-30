@@ -529,18 +529,19 @@
 
             function applyAccentColor(color) {
                 const colors = {
-                    purple: { primary: '#667eea', secondary: '#764ba2' },
-                    blue: { primary: '#3b82f6', secondary: '#1d4ed8' },
-                    green: { primary: '#10b981', secondary: '#059669' },
-                    orange: { primary: '#f59e0b', secondary: '#d97706' },
-                    red: { primary: '#ef4444', secondary: '#dc2626' },
-                    pink: { primary: '#ec4899', secondary: '#db2777' },
-                    cyan: { primary: '#06b6d4', secondary: '#0891b2' }
+                    purple: { primary: '#667eea', secondary: '#764ba2', rgb: '102, 126, 234' },
+                    blue: { primary: '#3b82f6', secondary: '#1d4ed8', rgb: '59, 130, 246' },
+                    green: { primary: '#10b981', secondary: '#059669', rgb: '16, 185, 129' },
+                    orange: { primary: '#f59e0b', secondary: '#d97706', rgb: '245, 158, 11' },
+                    red: { primary: '#ef4444', secondary: '#dc2626', rgb: '239, 68, 68' },
+                    pink: { primary: '#ec4899', secondary: '#db2777', rgb: '236, 72, 153' },
+                    cyan: { primary: '#06b6d4', secondary: '#0891b2', rgb: '6, 182, 212' }
                 };
 
                 const selected = colors[color] || colors.purple;
                 document.documentElement.style.setProperty('--accent-primary', selected.primary);
                 document.documentElement.style.setProperty('--accent-secondary', selected.secondary);
+                document.documentElement.style.setProperty('--accent-primary-rgb', selected.rgb);
 
                 // Store in localStorage for persistence
                 localStorage.setItem('accentColor', color);
