@@ -33,6 +33,42 @@ def _detect_site_from_url(url: str) -> str:
     return "aniworld.to"
 
 
+def _extract_series_slug(url: str) -> str:
+    """
+    Extract the series slug from an episode URL using site-specific stream paths.
+
+    Each site uses a different path structure:
+        aniworld.to: /anime/stream/{slug}/staffel-1/episode-1
+        s.to:        /serie/{slug}/staffel-1/episode-1
+        movie4k.sx:  /watch/{slug}/{id}
+
+    Args:
+        url: The episode URL
+
+    Returns:
+        The series slug, or None if extraction fails.
+    """
+    parts = url.split("/")
+
+    for config in SUPPORTED_SITES.values():
+        base_url = config["base_url"]
+        if not url.startswith(base_url):
+            continue
+
+        # The stream_path may contain multiple segments (e.g. "anime/stream")
+        # Find the last segment of the stream_path in the URL parts
+        stream_segments = config["stream_path"].split("/")
+        last_segment = stream_segments[-1]
+
+        try:
+            idx = parts.index(last_segment)
+            return parts[idx + 1]
+        except (ValueError, IndexError):
+            return None
+
+    return None
+
+
 def _handle_local_episodes() -> None:
     """Handle local episode playback."""
     if arguments.action == "Watch":
@@ -90,10 +126,8 @@ def _group_episodes_by_series(links: List[str]) -> List[Anime]:
 
     for link in links:
         if link:
-            parts = link.split("/")
-            try:
-                series_slug = parts[parts.index("stream") + 1]
-            except (ValueError, IndexError):
+            series_slug = _extract_series_slug(link)
+            if series_slug is None:
                 logging.warning("Invalid episode link format: %s", link)
                 continue
 
