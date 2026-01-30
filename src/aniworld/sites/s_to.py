@@ -5,7 +5,7 @@ Provides search functionality and episode/season counting for s.to
 (series streaming). Uses HTML scraping since s.to does not provide
 a JSON API.
 """
-
+import re
 import logging
 import re
 from typing import List, Dict
@@ -153,39 +153,50 @@ def _parse_season_episodes(soup: BeautifulSoup, season: int) -> int:
 
 
 def get_season_episode_count(slug: str) -> Dict[int, int]:
-    """
-    Get episode count for each season of a series on s.to.
+    base_url = f"{S_TO}/serie/{slug}/"
+    response = _make_request(base_url)
+    soup = BeautifulSoup(response.content, "html.parser")
 
-    Args:
-        slug: Series slug from URL
+    # -------- FIND SEASONS --------
+    season_numbers = set()
 
-    Returns:
-        Dictionary mapping season numbers to episode counts
-    """
-    try:
-        base_url = f"{S_TO}/serie/{slug}/"
-        response = _make_request(base_url)
-        soup = BeautifulSoup(response.content, "html.parser")
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
 
-        season_meta = soup.find("meta", itemprop="numberOfSeasons")
-        number_of_seasons = int(season_meta["content"]) if season_meta else 0
+        # match /staffel-<number> but NOT /episode
+        m = re.search(r"/staffel-(\d+)$", href)
+        if m:   
+            season_num = int(m.group(1))
 
-        episode_counts = {}
-        for season in range(1, number_of_seasons + 1):
-            season_url = f"{base_url}staffel-{season}"
-            try:
-                season_response = _make_request(season_url)
-                season_soup = BeautifulSoup(season_response.content, "html.parser")
-                episode_counts[season] = _parse_season_episodes(season_soup, season)
-            except Exception as err:
-                logging.warning("Failed to get episodes for season %d: %s", season, err)
-                episode_counts[season] = 0
+            # optional: ignore season 0 (movies/specials)
+            if season_num > 0:
+                season_numbers.add(season_num)
 
-        return episode_counts
+    episode_counts: Dict[int, int] = {}
 
-    except Exception as err:
-        logging.error("Failed to get season episode count for %s on s.to: %s", slug, err)
-        return {}
+    # -------- FOR EACH SEASON --------
+    for season in sorted(season_numbers):
+        season_url = f"{base_url}staffel-{season}"
+        try:
+            season_response = _make_request(season_url)
+            season_soup = BeautifulSoup(season_response.content, "html.parser")
+
+            episode_links = set()
+
+            for a in season_soup.find_all("a", href=True):
+                href = a["href"]
+
+                # match /staffel-X/episode-Y
+                if f"/staffel-{season}/episode-" in href:
+                    episode_links.add(href)
+
+            episode_counts[season] = len(episode_links)
+
+        except Exception as err:
+            logging.warning("Failed to get episodes for season %d: %s", season, err)
+            episode_counts[season] = 0
+
+    return episode_counts
 
 
 def get_movie_episode_count(slug: str) -> int:
