@@ -13,7 +13,7 @@ import curses
 import requests
 
 from .ascii_art import display_ascii_art
-from .config import DEFAULT_REQUEST_TIMEOUT, ANIWORLD_TO
+from .config import DEFAULT_REQUEST_TIMEOUT, ANIWORLD_TO, S_TO, RANDOM_USER_AGENT
 
 
 # Constants for better maintainability
@@ -172,6 +172,100 @@ def fetch_anime_list(url: str) -> List[Dict]:
     except requests.RequestException as err:
         logging.error("Failed to fetch anime list: %s", err)
         raise ValueError("Could not fetch anime data from server") from err
+
+
+def fetch_sto_search_results(keyword: str) -> List[Dict]:
+    """
+    Fetch and parse search results from s.to HTML search page.
+
+    The s.to /suche?term= endpoint returns HTML, not JSON,
+    so we scrape the results from the page.
+
+    Args:
+        keyword: The search term
+
+    Returns:
+        List[Dict]: List of anime/series dictionaries with keys:
+            name, link, description, cover, productionYear
+    """
+    from urllib.parse import quote
+
+    search_url = f"{S_TO}/suche?term={quote(keyword)}"
+    try:
+        response = requests.get(
+            search_url,
+            timeout=DEFAULT_REQUEST_TIMEOUT,
+            headers={"User-Agent": RANDOM_USER_AGENT},
+        )
+        response.raise_for_status()
+    except requests.RequestException as err:
+        logging.error("Failed to fetch s.to search page: %s", err)
+        raise ValueError("Could not fetch s.to search results") from err
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    results = []
+
+    # s.to search results use genre list items or cover list items
+    # Try multiple selectors for the search result items
+    items = soup.select(".coverListItem a, .genre-list a, ul.products li a, .seriesList a")
+
+    if not items:
+        # Fallback: find all links pointing to /serie/
+        items = soup.find_all("a", href=re.compile(r"^/serie/[^/]+$"))
+
+    seen_slugs = set()
+    for item in items:
+        href = item.get("href", "")
+        if not href or "/serie/" not in href:
+            continue
+
+        # Extract slug from href like /serie/fallout
+        slug = href.rstrip("/").split("/serie/")[-1]
+        if not slug or slug in seen_slugs:
+            continue
+        seen_slugs.add(slug)
+
+        # Extract title
+        name = ""
+        h3 = item.find("h3")
+        if h3:
+            name = h3.get_text(strip=True)
+        if not name:
+            name = item.get("title", "")
+        if not name:
+            name = item.get_text(strip=True)
+        if not name:
+            name = slug.replace("-", " ").title()
+
+        # Extract cover image
+        cover = ""
+        img = item.find("img")
+        if img:
+            cover = img.get("data-src") or img.get("src") or ""
+            if cover and cover.startswith("/"):
+                cover = S_TO + cover
+
+        # Extract year if present
+        year = ""
+        year_el = item.find("span", class_="year") or item.find(class_="productionYear")
+        if year_el:
+            year = year_el.get_text(strip=True)
+
+        # Extract description if present
+        description = ""
+        desc_el = item.find("p") or item.find(class_="description")
+        if desc_el:
+            description = desc_el.get_text(strip=True)
+
+        results.append({
+            "name": name,
+            "link": slug,
+            "description": description,
+            "cover": cover,
+            "productionYear": year,
+        })
+
+    return results
 
 
 def fetch_popular_and_new_anime() -> Dict[str, List[Dict[str, str]]]:

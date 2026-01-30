@@ -935,8 +935,8 @@ class WebApp:
 
                     if "s.to" in sites:
                         try:
-                            url = f"{config.S_TO}/suche?term={quote(keyword)}"
-                            results = fetch_anime_list(url)
+                            from ..search import fetch_sto_search_results
+                            results = fetch_sto_search_results(keyword)
                             for anime in results:
                                 slug = anime.get("link", "")
                                 if slug and slug not in seen_slugs:
@@ -1165,11 +1165,11 @@ class WebApp:
                         search_query = slug.replace("-", " ")
 
                         if site == "s.to":
-                            search_url = f"{config.S_TO}/suche?term={search_query}"
+                            from ..search import fetch_sto_search_results
+                            search_results = fetch_sto_search_results(search_query)
                         else:
                             search_url = f"{config.ANIWORLD_TO}/ajax/seriesSearch?keyword={search_query}"
-
-                        search_results = fetch_anime_list(search_url)
+                            search_results = fetch_anime_list(search_url)
 
                         matching_anime = None
                         for anime in search_results:
