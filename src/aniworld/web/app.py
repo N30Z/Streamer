@@ -950,38 +950,16 @@ class WebApp:
 
                     if "movie4k.sx" in sites:
                         try:
-                            api_url = f"{config.MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}&lang=2"
-                            import requests as req
-                            resp = req.get(
-                                api_url,
-                                timeout=config.DEFAULT_REQUEST_TIMEOUT,
-                                headers={
-                                    "User-Agent": config.RANDOM_USER_AGENT,
-                                    "Accept": "application/json",
-                                },
-                            )
-                            resp.raise_for_status()
-                            movie_results = resp.json()
-
-                            if isinstance(movie_results, list):
-                                for movie in movie_results:
-                                    movie_id = movie.get("_id", "")
-                                    slug = movie.get("slug", "")
-                                    title = movie.get("title", "")
-                                    if movie_id and slug:
-                                        movie_url = f"{config.MOVIE4K_SX}/watch/{slug}/{movie_id}"
-                                        poster = movie.get("poster_path", "")
-                                        cover = f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}" if poster else ""
-                                        all_results.append({
-                                            "link": movie_url,
-                                            "name": title,
-                                            "productionYear": movie.get("year", ""),
-                                            "description": movie.get("storyline", movie.get("overview", "")),
-                                            "cover": cover,
-                                            "site": "movie4k.sx",
-                                            "base_url": config.MOVIE4K_SX,
-                                            "stream_path": "watch",
-                                        })
+                            from ..sites.movie4k import fetch_movie4k_search_results
+                            movie_results = fetch_movie4k_search_results(keyword)
+                            for movie in movie_results:
+                                link = movie.get("link", "")
+                                if link and link not in seen_slugs:
+                                    movie["site"] = "movie4k.sx"
+                                    movie["base_url"] = config.MOVIE4K_SX
+                                    movie["stream_path"] = "watch"
+                                    all_results.append(movie)
+                                    seen_slugs.add(link)
                         except Exception as e:
                             logging.warning(f"Failed to fetch from movie4k.sx: {e}")
 
