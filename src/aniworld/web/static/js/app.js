@@ -63,21 +63,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize theme (default is dark mode)
     initializeTheme();
 
-    // Direct input functionality
-    const directInput = document.getElementById('direct-input');
-    const directBtn = document.getElementById('direct-btn');
-    
-    if (directBtn) {
-        directBtn.addEventListener('click', handleDirectInput);
-    }
-    if (directInput) {
-        directInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                handleDirectInput();
-            }
-        });
-    }
-
     // Search functionality
     if (searchBtn) {
         searchBtn.addEventListener('click', performSearch);
@@ -160,7 +145,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Define site-specific providers
         let siteProviders = [];
-        if (site === 's.to') {
+        if (site === 'movie4k.sx') {
+            siteProviders = ['Filemoon', 'Doodstream', 'Streamtape', 'VOE', 'Vidoza'];
+        } else if (site === 's.to') {
             siteProviders = ['VOE'];
         } else { // aniworld.to or default
             siteProviders = ['VOE', 'Filemoon', 'Vidmoly'];
@@ -175,8 +162,7 @@ document.addEventListener('DOMContentLoaded', function() {
             providerSelect.appendChild(option);
         });
 
-        // Set default to VOE (should always be available)
-        providerSelect.value = 'VOE';
+        providerSelect.value = siteProviders[0];
 
         console.log(`Populated providers for ${site}:`, siteProviders);
     }
@@ -190,13 +176,17 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Populating language dropdown for site:', site);
         languageSelect.innerHTML = '';
 
-        // Define site-specific languages based on actual runtime availability
         let availableLanguages = [];
-        if (site === 's.to') {
-            // Based on runtime error: s.to only supports ['German Dub', 'English Dub']
+        let defaultLanguage = '';
+        if (site === 'movie4k.sx') {
+            availableLanguages = ['Deutsch', 'English'];
+            defaultLanguage = 'Deutsch';
+        } else if (site === 's.to') {
             availableLanguages = ['German Dub', 'English Dub'];
+            defaultLanguage = 'German Dub';
         } else { // aniworld.to or default
             availableLanguages = ['German Dub', 'English Sub', 'German Sub'];
+            defaultLanguage = 'German Sub';
         }
 
         availableLanguages.forEach(language => {
@@ -206,56 +196,86 @@ document.addEventListener('DOMContentLoaded', function() {
             languageSelect.appendChild(option);
         });
 
-        // Set default based on site - use setTimeout to ensure DOM is updated
         setTimeout(() => {
-            if (site === 's.to') {
-                languageSelect.value = 'German Dub'; // s.to default
-                console.log('Set default language for s.to to:', languageSelect.value);
-                console.log('Verify s.to language value after setting:', languageSelect.value);
-            } else {
-                languageSelect.value = 'German Sub'; // aniworld default
-                console.log('Set default language for aniworld to:', languageSelect.value);
-                console.log('Verify aniworld language value after setting:', languageSelect.value);
-            }
+            languageSelect.value = defaultLanguage;
         }, 0);
+    }
+
+    function isDirectUrl(input) {
+        return input.startsWith('http://') || input.startsWith('https://');
+    }
+
+    function getSelectedSites() {
+        const checked = document.querySelectorAll('input[name="site"]:checked');
+        return Array.from(checked).map(cb => cb.value);
     }
 
     function performSearch() {
         const query = searchInput.value.trim();
         if (!query) {
-            // If search is empty, show home content again
             showHomeContent();
             return;
         }
-
-        // Get selected site
-        const selectedSite = document.querySelector('input[name="site"]:checked').value;
 
         // Show loading state
         showLoadingState();
         searchBtn.disabled = true;
         searchBtn.textContent = 'Searching...';
 
+        // Detect if input is a direct URL
+        if (isDirectUrl(query)) {
+            fetch('/api/direct', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: query })
+            })
+            .then(response => {
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                return response.json();
+            })
+            .then(data => {
+                if (!data) return;
+                if (data.success) {
+                    displaySearchResults([data.result]);
+                } else {
+                    showNotification(data.error || 'Failed to load URL', 'error');
+                    showEmptyState();
+                }
+            })
+            .catch(error => {
+                console.error('Direct URL error:', error);
+                showNotification('Failed to load URL. Please check and try again.', 'error');
+                showEmptyState();
+            })
+            .finally(() => {
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Search';
+                hideLoadingState();
+            });
+            return;
+        }
+
+        // Normal search with selected site checkboxes
+        const selectedSites = getSelectedSites();
+        if (selectedSites.length === 0) {
+            showNotification('Please select at least one site to search', 'error');
+            searchBtn.disabled = false;
+            searchBtn.textContent = 'Search';
+            hideLoadingState();
+            return;
+        }
+
         fetch('/api/search', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                query: query,
-                site: selectedSite
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: query, sites: selectedSites })
         })
         .then(response => {
-            if (response.status === 401) {
-                // Authentication required - redirect to login
-                window.location.href = '/login';
-                return;
-            }
+            if (response.status === 401) { window.location.href = '/login'; return; }
             return response.json();
         })
         .then(data => {
-            if (!data) return; // Handle redirect case
+            if (!data) return;
             if (data.success) {
                 displaySearchResults(data.results);
             } else {
@@ -271,57 +291,6 @@ document.addEventListener('DOMContentLoaded', function() {
         .finally(() => {
             searchBtn.disabled = false;
             searchBtn.textContent = 'Search';
-            hideLoadingState();
-        });
-    }
-
-    function handleDirectInput() {
-        const url = directInput.value.trim();
-        if (!url) {
-            showNotification('Please enter a URL', 'error');
-            return;
-        }
-
-        // Show loading state
-        showLoadingState();
-        directBtn.disabled = true;
-        directBtn.textContent = 'Loading...';
-
-        fetch('/api/direct', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                url: url
-            })
-        })
-        .then(response => {
-            if (response.status === 401) {
-                window.location.href = '/login';
-                return;
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (!data) return;
-            if (data.success) {
-                // Display the result as a single anime card
-                displaySearchResults([data.result]);
-                showNotification('URL loaded successfully', 'success');
-            } else {
-                showNotification(data.error || 'Failed to load URL', 'error');
-                showEmptyState();
-            }
-        })
-        .catch(error => {
-            console.error('Direct URL error:', error);
-            showNotification('Failed to load URL. Please check and try again.', 'error');
-            showEmptyState();
-        })
-        .finally(() => {
-            directBtn.disabled = false;
-            directBtn.textContent = 'Use direct Link';
             hideLoadingState();
         });
     }
@@ -356,10 +325,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     coverUrl = 'https:' + coverUrl;
                 } else if (coverUrl.startsWith('/')) {
                     // Determine base URL based on site
-                    const baseUrl = anime.site === 's.to' ? 'https://s.to' : 'https://aniworld.to';
+                    let baseUrl = 'https://aniworld.to';
+                    if (anime.site === 's.to') baseUrl = 'https://s.to';
+                    else if (anime.site === 'movie4k.sx') baseUrl = 'https://movie4k.sx';
                     coverUrl = baseUrl + coverUrl;
                 } else {
-                    const baseUrl = anime.site === 's.to' ? 'https://s.to' : 'https://aniworld.to';
+                    let baseUrl = 'https://aniworld.to';
+                    if (anime.site === 's.to') baseUrl = 'https://s.to';
+                    else if (anime.site === 'movie4k.sx') baseUrl = 'https://movie4k.sx';
                     coverUrl = baseUrl + '/' + coverUrl;
                 }
             }
@@ -399,7 +372,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function showDownloadModal(animeTitle, episodeTitle, episodeUrl) {
         // Detect site from URL
         let detectedSite = 'aniworld.to'; // default
-        if (episodeUrl.includes('/serie/stream/') || episodeUrl.includes('186.2.175.5')) {
+        if (episodeUrl.includes('movie4k')) {
+            detectedSite = 'movie4k.sx';
+        } else if (episodeUrl.includes('/serie/stream/') || episodeUrl.includes('186.2.175.5')) {
             detectedSite = 's.to';
         }
 
