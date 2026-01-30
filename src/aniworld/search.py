@@ -241,7 +241,7 @@ def fetch_sto_search_results(keyword: str) -> List[Dict]:
         # Extract title from the link or its parent context
         name = ""
         if col:
-            h_tag = col.find(["h3", "h4", "h5", "h2"])
+            h_tag = col.find(["h6", "h3", "h4", "h5", "h2"])
             if h_tag:
                 name = h_tag.get_text(strip=True)
         if not name:
