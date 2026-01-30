@@ -900,117 +900,111 @@ class WebApp:
                         {"success": False, "error": "Query cannot be empty"}
                     ), 400
 
-                # Get site parameter (default to both)
-                site = data.get("site", "both")
+                # Support both old "site" param and new "sites" array
+                sites = data.get("sites", None)
+                if sites is None:
+                    old_site = data.get("site", "both")
+                    if old_site == "both":
+                        sites = ["aniworld.to", "s.to"]
+                    else:
+                        sites = [old_site]
 
-                # Create wrapper function for search with dual-site support
-                def search_anime_wrapper(keyword, site="both"):
-                    """Wrapper function for anime search with multi-site support"""
+                def search_multi_sites(keyword, sites):
+                    """Search across multiple sites."""
                     from ..search import fetch_anime_list
                     from .. import config
                     from urllib.parse import quote
 
-                    if site == "both":
-                        # Search both sites using existing fetch_anime_list function
-                        aniworld_url = f"{config.ANIWORLD_TO}/ajax/seriesSearch?keyword={quote(keyword)}"
-                        sto_url = (
-                            f"{config.S_TO}/ajax/seriesSearch?keyword={quote(keyword)}"
-                        )
+                    all_results = []
+                    seen_slugs = set()
 
-                        # Fetch from both sites
-                        aniworld_results = []
-                        sto_results = []
-
+                    if "aniworld.to" in sites:
                         try:
-                            aniworld_results = fetch_anime_list(aniworld_url)
+                            url = f"{config.ANIWORLD_TO}/ajax/seriesSearch?keyword={quote(keyword)}"
+                            results = fetch_anime_list(url)
+                            for anime in results:
+                                slug = anime.get("link", "")
+                                if slug and slug not in seen_slugs:
+                                    anime["site"] = "aniworld.to"
+                                    anime["base_url"] = config.ANIWORLD_TO
+                                    anime["stream_path"] = "anime/stream"
+                                    all_results.append(anime)
+                                    seen_slugs.add(slug)
                         except Exception as e:
                             logging.warning(f"Failed to fetch from aniworld: {e}")
 
+                    if "s.to" in sites:
                         try:
-                            sto_results = fetch_anime_list(sto_url)
+                            url = f"{config.S_TO}/ajax/seriesSearch?keyword={quote(keyword)}"
+                            results = fetch_anime_list(url)
+                            for anime in results:
+                                slug = anime.get("link", "")
+                                if slug and slug not in seen_slugs:
+                                    anime["site"] = "s.to"
+                                    anime["base_url"] = config.S_TO
+                                    anime["stream_path"] = "serie/stream"
+                                    all_results.append(anime)
+                                    seen_slugs.add(slug)
                         except Exception as e:
                             logging.warning(f"Failed to fetch from s.to: {e}")
 
-                        # Combine and deduplicate results
-                        all_results = []
-                        seen_slugs = set()
-
-                        # Add aniworld results first
-                        for anime in aniworld_results:
-                            slug = anime.get("link", "")
-                            if slug and slug not in seen_slugs:
-                                anime["site"] = "aniworld.to"
-                                anime["base_url"] = config.ANIWORLD_TO
-                                anime["stream_path"] = "anime/stream"
-                                all_results.append(anime)
-                                seen_slugs.add(slug)
-
-                        # Add s.to results, but skip duplicates
-                        for anime in sto_results:
-                            slug = anime.get("link", "")
-                            if slug and slug not in seen_slugs:
-                                anime["site"] = "s.to"
-                                anime["base_url"] = config.S_TO
-                                anime["stream_path"] = "serie/stream"
-                                all_results.append(anime)
-                                seen_slugs.add(slug)
-
-                        return all_results
-
-                    elif site == "s.to":
-                        # Single site search - s.to
-                        search_url = (
-                            f"{config.S_TO}/ajax/seriesSearch?keyword={quote(keyword)}"
-                        )
+                    if "movie4k.sx" in sites:
                         try:
-                            results = fetch_anime_list(search_url)
-                            for anime in results:
-                                anime["site"] = "s.to"
-                                anime["base_url"] = config.S_TO
-                                anime["stream_path"] = "serie/stream"
-                            return results
+                            api_url = f"{config.MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}&lang=2"
+                            import requests as req
+                            resp = req.get(
+                                api_url,
+                                timeout=config.DEFAULT_REQUEST_TIMEOUT,
+                                headers={
+                                    "User-Agent": config.RANDOM_USER_AGENT,
+                                    "Accept": "application/json",
+                                },
+                            )
+                            resp.raise_for_status()
+                            movie_results = resp.json()
+
+                            if isinstance(movie_results, list):
+                                for movie in movie_results:
+                                    movie_id = movie.get("_id", "")
+                                    slug = movie.get("slug", "")
+                                    title = movie.get("title", "")
+                                    if movie_id and slug:
+                                        movie_url = f"{config.MOVIE4K_SX}/watch/{slug}/{movie_id}"
+                                        poster = movie.get("poster_path", "")
+                                        cover = f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}" if poster else ""
+                                        all_results.append({
+                                            "link": movie_url,
+                                            "name": title,
+                                            "productionYear": movie.get("year", ""),
+                                            "description": movie.get("storyline", movie.get("overview", "")),
+                                            "cover": cover,
+                                            "site": "movie4k.sx",
+                                            "base_url": config.MOVIE4K_SX,
+                                            "stream_path": "watch",
+                                        })
                         except Exception as e:
-                            logging.error(f"s.to search failed: {e}")
-                            return []
+                            logging.warning(f"Failed to fetch from movie4k.sx: {e}")
 
-                    else:
-                        # Single site search - aniworld.to (default)
-                        from ..search import search_anime
+                    return all_results
 
-                        try:
-                            results = search_anime(keyword=keyword, only_return=True)
-                            for anime in results:
-                                anime["site"] = "aniworld.to"
-                                anime["base_url"] = config.ANIWORLD_TO
-                                anime["stream_path"] = "anime/stream"
-                            return results
-                        except Exception as e:
-                            logging.error(f"aniworld.to search failed: {e}")
-                            return []
+                results = search_multi_sites(query, sites)
 
-                # Use wrapper function
-                results = search_anime_wrapper(query, site)
-
-                # Process results - simplified without episode fetching
+                # Process results
                 processed_results = []
-                for anime in results[:50]:  # Limit to 50 results
-                    # Get the link and construct full URL if needed
+                for anime in results[:50]:
                     link = anime.get("link", "")
-                    anime_site = anime.get("site", "aniworld")
+                    anime_site = anime.get("site", "aniworld.to")
                     anime_base_url = anime.get("base_url", config.ANIWORLD_TO)
                     anime_stream_path = anime.get("stream_path", "anime/stream")
 
                     if link and not link.startswith("http"):
-                        # If it's just a slug, construct the full URL using the anime's specific site info
                         full_url = f"{anime_base_url}/{anime_stream_path}/{link}"
                     else:
                         full_url = link
 
-                    # Use the same field names as CLI search
                     name = anime.get("name", "Unknown Name")
                     year = anime.get("productionYear", "Unknown Year")
 
-                    # Create title like CLI does, but avoid double parentheses
                     if year and year != "Unknown Year" and str(year) not in name:
                         title = f"{name} {year}"
                     else:
@@ -1020,7 +1014,7 @@ class WebApp:
                         "title": title,
                         "url": full_url,
                         "description": anime.get("description", ""),
-                        "slug": link,
+                        "slug": link if not link.startswith("http") else link.split("/")[-1],
                         "name": name,
                         "year": year,
                         "site": anime_site,
@@ -1070,16 +1064,83 @@ class WebApp:
                     domain = parsed_url.netloc.lower()
 
                     # Check if URL is from a supported site
-                    if "aniworld.to" not in domain and "s.to" not in domain:
+                    is_movie4k = "movie4k" in domain
+                    is_sto = "s.to" in domain
+                    is_aniworld = "aniworld.to" in domain
+
+                    if not is_movie4k and not is_sto and not is_aniworld:
                         return jsonify(
                             {
                                 "success": False,
-                                "error": "URL must be from aniworld.to or s.to",
+                                "error": "URL must be from aniworld.to, s.to, or movie4k.sx",
                             }
                         ), 400
 
-                    # Determine site and stream path
-                    if "s.to" in domain:
+                    # Handle movie4k.sx direct URLs via API
+                    if is_movie4k:
+                        path_parts = [p for p in parsed_url.path.split("/") if p]
+                        # Expected: /watch/{slug}/{movie_id}
+                        if len(path_parts) >= 3 and path_parts[0] == "watch":
+                            slug = path_parts[1]
+                            movie_id = path_parts[2]
+                        else:
+                            return jsonify(
+                                {"success": False, "error": "Invalid movie4k.sx URL format"}
+                            ), 400
+
+                        try:
+                            import requests as req
+                            api_url = f"{config.MOVIE4K_SX}/data/watch/?_id={movie_id}"
+                            resp = req.get(
+                                api_url,
+                                timeout=config.DEFAULT_REQUEST_TIMEOUT,
+                                headers={
+                                    "User-Agent": config.RANDOM_USER_AGENT,
+                                    "Accept": "application/json",
+                                },
+                            )
+                            resp.raise_for_status()
+                            movie_data = resp.json()
+
+                            title = movie_data.get("title", slug.replace("-", " ").title())
+                            year = movie_data.get("year", "")
+                            if year and str(year) not in title:
+                                display_title = f"{title} ({year})"
+                            else:
+                                display_title = title
+
+                            poster = movie_data.get("poster_path", "")
+                            cover = f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}" if poster else ""
+
+                            anime_result = {
+                                "title": display_title,
+                                "url": url,
+                                "slug": slug,
+                                "site": "movie4k.sx",
+                                "description": movie_data.get("storyline", movie_data.get("overview", "")),
+                                "cover": cover,
+                            }
+                        except Exception as movie_err:
+                            logging.warning(f"Failed to fetch movie4k.sx details: {movie_err}")
+                            anime_result = {
+                                "title": slug.replace("-", " ").title(),
+                                "url": url,
+                                "slug": slug,
+                                "site": "movie4k.sx",
+                                "description": "",
+                                "cover": "",
+                            }
+
+                        return jsonify(
+                            {
+                                "success": True,
+                                "result": anime_result,
+                                "source": "direct_url",
+                            }
+                        )
+
+                    # Determine site and stream path for aniworld/s.to
+                    if is_sto:
                         site = "s.to"
                         base_url = config.S_TO
                         stream_path = "serie/stream"
@@ -1099,37 +1160,32 @@ class WebApp:
 
                     # Use search functionality to get the full anime details
                     from ..search import fetch_anime_list
-                    
+
                     try:
-                        # First, search for the anime using its name to get full details
                         search_query = slug.replace("-", " ")
-                        
+
                         if site == "s.to":
                             search_url = f"{config.S_TO}/ajax/seriesSearch?keyword={search_query}"
                         else:
                             search_url = f"{config.ANIWORLD_TO}/ajax/seriesSearch?keyword={search_query}"
-                        
-                        # Fetch anime list from search
+
                         search_results = fetch_anime_list(search_url)
-                        
-                        # Find matching anime by slug
+
                         matching_anime = None
                         for anime in search_results:
                             if anime.get("link", "").strip() == slug:
                                 matching_anime = anime
                                 break
-                        
-                        # If found, use the complete details
+
                         if matching_anime:
                             name = matching_anime.get("name", slug.replace("-", " ").title())
                             year = matching_anime.get("productionYear", "")
-                            
-                            # Create title like search does
+
                             if year and year != "Unknown Year" and str(year) not in name:
                                 title = f"{name} {year}"
                             else:
                                 title = name
-                            
+
                             anime_result = {
                                 "title": title,
                                 "url": url,
@@ -1139,7 +1195,6 @@ class WebApp:
                                 "cover": matching_anime.get("cover", ""),
                             }
                         else:
-                            # Fallback if not found in search
                             anime_result = {
                                 "title": slug.replace("-", " ").title(),
                                 "url": url,
@@ -1148,7 +1203,7 @@ class WebApp:
                                 "description": "",
                                 "cover": "",
                             }
-                        
+
                         return jsonify(
                             {
                                 "success": True,
@@ -1156,10 +1211,9 @@ class WebApp:
                                 "source": "direct_url",
                             }
                         )
-                    
+
                     except Exception as search_err:
                         logging.warning(f"Failed to fetch details from search for direct URL: {search_err}")
-                        # Fallback to basic result
                         anime_result = {
                             "title": slug.replace("-", " ").title(),
                             "url": url,

@@ -19,11 +19,13 @@ from fake_useragent import UserAgent
 
 ANIWORLD_TO = "https://aniworld.to"
 S_TO = "http://186.2.175.5"
+MOVIE4K_SX = "https://movie4k.sx"
 
 # Supported streaming sites with their URL patterns
 SUPPORTED_SITES = {
     "aniworld.to": {"base_url": ANIWORLD_TO, "stream_path": "anime/stream"},
     "s.to": {"base_url": S_TO, "stream_path": "serie/stream"},
+    "movie4k.sx": {"base_url": MOVIE4K_SX, "stream_path": "watch", "type": "movie"},
 }
 
 # Language code mappings for consistent handling
@@ -41,15 +43,24 @@ LANGUAGE_CODES_STO = {
 }
 LANGUAGE_NAMES_STO = {v: k for k, v in LANGUAGE_CODES_STO.items()}
 
+# movie4k.sx uses different language codes
+LANGUAGE_CODES_MOVIE4K = {
+    "Deutsch": 2,
+    "English": 3,
+}
+LANGUAGE_NAMES_MOVIE4K = {v: k for k, v in LANGUAGE_CODES_MOVIE4K.items()}
+
 # Site-specific language mappings
 SITE_LANGUAGE_CODES = {
     "aniworld.to": LANGUAGE_CODES_ANIWORLD,
     "s.to": LANGUAGE_CODES_STO,
+    "movie4k.sx": LANGUAGE_CODES_MOVIE4K,
 }
 
 SITE_LANGUAGE_NAMES = {
     "aniworld.to": LANGUAGE_NAMES_ANIWORLD,
     "s.to": LANGUAGE_NAMES_STO,
+    "movie4k.sx": LANGUAGE_NAMES_MOVIE4K,
 }
 
 #########################################################################################

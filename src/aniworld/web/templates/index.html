@@ -84,27 +84,23 @@
     <div class="container">
         <main>
             <div class="search-section">
-                <h2>Search Anime or Series</h2>
+                <h2>Search Anime, Series or Movies</h2>
                 <div class="site-selection">
                     <label class="site-option">
-                        <input type="radio" name="site" value="aniworld.to" id="site-aniworld">
-                        <span class="radio-label">AniWorld.to</span>
+                        <input type="checkbox" name="site" value="aniworld.to" id="site-aniworld" checked>
+                        <span class="checkbox-label">AniWorld.to</span>
                     </label>
                     <label class="site-option">
-                        <input type="radio" name="site" value="s.to" id="site-sto">
-                        <span class="radio-label">S.to</span>
+                        <input type="checkbox" name="site" value="s.to" id="site-sto" checked>
+                        <span class="checkbox-label">S.to</span>
                     </label>
                     <label class="site-option">
-                        <input type="radio" name="site" value="both" id="site-both" checked>
-                        <span class="radio-label">Both</span>
+                        <input type="checkbox" name="site" value="movie4k.sx" id="site-movie4k">
+                        <span class="checkbox-label">Movie4k.sx</span>
                     </label>
-                </div>
-                <div class="direct-container">
-                    <input type="text" id="direct-input" placeholder="Enter URL..." class="direct-input">
-                    <button id="direct-btn" class="direct-btn">Use direct Link</button>
                 </div>
                 <div class="search-container">
-                    <input type="text" id="search-input" placeholder="Enter anime or series name..." class="search-input">
+                    <input type="text" id="search-input" placeholder="Search or paste a direct URL..." class="search-input">
                     <button id="search-btn" class="search-btn">Search</button>
                 </div>
             </div>
