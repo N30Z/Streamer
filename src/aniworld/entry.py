@@ -12,7 +12,6 @@ from .search import search_anime
 from .execute import execute
 from .menu import menu
 from .common import generate_links
-from .config import S_TO
 
 
 def _detect_site_from_url(url: str) -> str:
@@ -73,12 +72,6 @@ def _collect_episode_links() -> List[str]:
     # Separate movie4k links (they don't need generate_links processing)
     movie4k_links = [link for link in links if is_movie4k_url(link)]
     series_links = [link for link in links if not is_movie4k_url(link)]
-
-    # Convert s.to links to config.S_TO IP for now
-    series_links = [
-        link.replace("http://s.to", S_TO).replace("https://s.to", S_TO)
-        for link in series_links
-    ]
 
     # Only run generate_links on aniworld/s.to links
     processed_links = generate_links(series_links, arguments) if series_links else []

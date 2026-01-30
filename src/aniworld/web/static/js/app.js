@@ -434,7 +434,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let detectedSite = 'aniworld.to'; // default
         if (episodeUrl.includes('movie4k')) {
             detectedSite = 'movie4k.sx';
-        } else if (episodeUrl.includes('/serie/stream/') || episodeUrl.includes('186.2.175.5')) {
+        } else if (episodeUrl.includes('/serie/') || episodeUrl.includes('s.to')) {
             detectedSite = 's.to';
         }
 

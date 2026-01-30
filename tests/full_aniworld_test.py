@@ -113,7 +113,7 @@ def main():
         FAILED_TESTS += 1
 
     try:
-        command = 'aniworld --episode https://s.to/serie/stream/smoke/staffel-1/episode-1 --language "German Dub"'
+        command = 'aniworld --episode https://s.to/serie/smoke/staffel-1/episode-1 --language "German Dub"'
         print("Testing command:\n", command)
         subprocess.run(command, check=True, shell=True)
         PASSED_TESTS += 1
