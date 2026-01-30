@@ -208,14 +208,14 @@ def fetch_sto_search_results(keyword: str) -> List[Dict]:
     # s.to search results are in:
     # div.search-results.search-results-list > div:nth-child(1) > div.row.g-3
     # The div.row.g-3 is the direct container holding only the result items
-    result_container = soup.select_one("div.search-results-list > div > div.row.g-3")
+    row = soup.select_one("div.search-results.search-results-list div.row.g-3")
 
-    if not result_container:
+    if not row:
         logging.warning("fetch_sto_search_results: could not find div.row.g-3 result container")
         return results
 
     # Only look for /serie/ links inside the result container
-    items = result_container.find_all("a", href=re.compile(r"/serie/[^/]+"))
+    items = row.select('a[href*="/serie/"]')
 
     seen_slugs = set()
     for item in items:
