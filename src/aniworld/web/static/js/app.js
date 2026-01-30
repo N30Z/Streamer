@@ -50,8 +50,14 @@ document.addEventListener('DOMContentLoaded', function() {
     let progressInterval = null;
     let availableProviders = [];
 
+    // Saved user preferences (loaded from server)
+    let userPreferences = {};
+
     // Load version info and providers on page load
     loadVersionInfo();
+
+    // Load user preferences from server, then initialize UI
+    loadUserPreferences();
 
     // Check for active downloads on page load
     checkQueueStatus();
@@ -62,6 +68,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize theme (default is dark mode)
     initializeTheme();
+
+    // Initialize accent color from saved preferences
+    initializeAccentColor();
+
+    // Direct input functionality
+    const directInput = document.getElementById('direct-input');
+    const directBtn = document.getElementById('direct-btn');
+    
+    if (directBtn) {
+        directBtn.addEventListener('click', handleDirectInput);
+    }
+    if (directInput) {
+        directInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleDirectInput();
+            }
+        });
+    }
 
     // Search functionality
     if (searchBtn) {
@@ -132,6 +156,26 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
+    function loadUserPreferences() {
+        fetch('/api/preferences')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.preferences) {
+                    userPreferences = data.preferences;
+                    console.log('Loaded user preferences:', userPreferences);
+
+                    // Sync accent color from server to localStorage
+                    if (userPreferences.accent_color) {
+                        localStorage.setItem('accentColor', userPreferences.accent_color);
+                        applyAccentColor(userPreferences.accent_color);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Failed to load user preferences:', error);
+            });
+    }
+
     function loadAvailableProviders() {
         // This will be called from showDownloadModal with site-specific logic
         // Default providers for initial load (aniworld.to)
@@ -162,7 +206,13 @@ document.addEventListener('DOMContentLoaded', function() {
             providerSelect.appendChild(option);
         });
 
-        providerSelect.value = siteProviders[0];
+        // Set default based on saved preference, fallback to VOE
+        let defaultProvider = userPreferences.default_provider || '';
+        if (defaultProvider && siteProviders.includes(defaultProvider)) {
+            providerSelect.value = defaultProvider;
+        } else {
+            providerSelect.value = 'VOE';
+        }
 
         console.log(`Populated providers for ${site}:`, siteProviders);
     }
@@ -196,8 +246,18 @@ document.addEventListener('DOMContentLoaded', function() {
             languageSelect.appendChild(option);
         });
 
+        // Set default based on saved preference, then site fallback
         setTimeout(() => {
-            languageSelect.value = defaultLanguage;
+            let defaultLang = userPreferences.default_language || '';
+            // Check if the saved preference is available for this site
+            if (defaultLang && availableLanguages.includes(defaultLang)) {
+                languageSelect.value = defaultLang;
+            } else if (site === 's.to') {
+                languageSelect.value = 'German Dub';
+            } else {
+                languageSelect.value = 'German Sub';
+            }
+            console.log('Set default language to:', languageSelect.value);
         }, 0);
     }
 
@@ -1098,6 +1158,29 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if user has a saved theme preference, default to dark mode
         const savedTheme = localStorage.getItem('theme') || 'dark';
         setTheme(savedTheme);
+    }
+
+    // Accent color functions
+    function initializeAccentColor() {
+        const savedColor = localStorage.getItem('accentColor') || 'purple';
+        applyAccentColor(savedColor);
+    }
+
+    function applyAccentColor(color) {
+        const colors = {
+            purple: { primary: '#667eea', secondary: '#764ba2', rgb: '102, 126, 234' },
+            blue: { primary: '#3b82f6', secondary: '#1d4ed8', rgb: '59, 130, 246' },
+            green: { primary: '#10b981', secondary: '#059669', rgb: '16, 185, 129' },
+            orange: { primary: '#f59e0b', secondary: '#d97706', rgb: '245, 158, 11' },
+            red: { primary: '#ef4444', secondary: '#dc2626', rgb: '239, 68, 68' },
+            pink: { primary: '#ec4899', secondary: '#db2777', rgb: '236, 72, 153' },
+            cyan: { primary: '#06b6d4', secondary: '#0891b2', rgb: '6, 182, 212' }
+        };
+
+        const selected = colors[color] || colors.purple;
+        document.documentElement.style.setProperty('--accent-primary', selected.primary);
+        document.documentElement.style.setProperty('--accent-secondary', selected.secondary);
+        document.documentElement.style.setProperty('--accent-primary-rgb', selected.rgb);
     }
 
     function toggleTheme() {

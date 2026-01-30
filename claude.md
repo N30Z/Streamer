@@ -24,6 +24,11 @@ This document provides guidance for AI assistants working on the AniWorld Downlo
 │   │   ├── database.py          # User authentication & sessions
 │   │   ├── download_manager.py  # Parallel download queue
 │   │   ├── templates/           # Jinja2 HTML templates
+│   │   │   ├── index.html       # Main page
+│   │   │   ├── settings.html    # User/admin settings (authentication)
+│   │   │   ├── preferences.html # Application preferences (downloads, appearance)
+│   │   │   ├── login.html       # Login page
+│   │   │   └── setup.html       # Initial setup
 │   │   └── static/              # CSS and JavaScript
 │   ├── action/                   # Core actions
 │   │   ├── download.py          # Download functionality
@@ -46,11 +51,14 @@ This document provides guidance for AI assistants working on the AniWorld Downlo
 
 | File | Purpose |
 |------|---------|
-| `src/aniworld/web/app.py` | Main Flask application with all API routes (~2200 lines) |
+| `src/aniworld/web/app.py` | Main Flask application with all API routes |
 | `src/aniworld/web/database.py` | SQLite user/session management |
 | `src/aniworld/web/download_manager.py` | ThreadPoolExecutor-based download queue |
+| `src/aniworld/web/templates/preferences.html` | Application preferences page |
+| `src/aniworld/web/templates/settings.html` | User/admin settings page |
 | `src/aniworld/models.py` | `Anime` and `Episode` dataclasses |
 | `src/aniworld/search.py` | Search implementation for both sites |
+| `src/aniworld/config.py` | Default configuration values |
 | `src/aniworld/extractors/provider/` | Video URL extraction for each provider |
 
 ## Supported Sites
@@ -199,9 +207,36 @@ aniworld --url "https://aniworld.to/anime/stream/..."
 ## Important Notes
 
 1. **Security**: File paths are validated to prevent directory traversal
-2. **Parallel Downloads**: Default is 3 concurrent downloads
+2. **Parallel Downloads**: Default is 5 concurrent downloads (configurable via Preferences)
 3. **Session Duration**: 30 days before expiry
 4. **Video Formats**: mp4, mkv, avi, webm, mov, m4v, flv, wmv supported
+
+## Preferences System
+
+The application has a preferences system (`/preferences`) for configuring:
+
+### Download Settings
+- **Parallel Downloads**: Number of concurrent downloads (1-10)
+- **Download Directory**: Where files are saved
+- **Default Language**: German Dub, English Sub, German Sub
+- **Default Provider**: Video provider for downloads (VOE, Filemoon, etc.)
+
+### Appearance Settings
+- **Accent Color**: UI color theme (purple, blue, green, orange, red, pink, cyan)
+- **Animations**: Toggle background animations and particles
+
+### Playback Settings
+- **Default Action**: Download, Watch, or Syncplay
+- **Watch Provider**: Preferred provider for streaming
+
+### Preferences Storage
+- **Windows**: `%APPDATA%/aniworld/preferences.json`
+- **Linux/Mac**: `~/.local/share/aniworld/preferences.json`
+
+### Preferences API Endpoints
+- `GET /api/preferences` - Get current preferences
+- `POST /api/preferences` - Save preferences
+- `POST /api/preferences/reset` - Reset to defaults
 
 ## API Documentation
 

@@ -50,6 +50,9 @@
                 <button id="theme-toggle" class="nav-btn theme-toggle" title="Toggle light/dark mode">
                     <i id="theme-icon" class="fas fa-moon"></i>
                 </button>
+                <a href="{{ url_for('preferences') }}" class="nav-btn" title="Preferences">
+                    <i class="fas fa-sliders-h"></i>
+                </a>
                 {% endif %}
                 {% if auth_enabled and user %}
                 <div class="user-dropdown">
@@ -64,6 +67,9 @@
                         </button>
                         <a href="{{ url_for('settings') }}" class="dropdown-item">
                             <i class="fas fa-cog"></i> Settings
+                        </a>
+                        <a href="{{ url_for('preferences') }}" class="dropdown-item">
+                            <i class="fas fa-sliders-h"></i> Preferences
                         </a>
                         <button class="dropdown-item logout-btn" id="logout-btn">
                             <i class="fas fa-sign-out-alt"></i> Logout

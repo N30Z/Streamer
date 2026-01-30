@@ -78,7 +78,7 @@
 }
 
 .auth-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
     color: white;
     border: none;
     padding: 0.875rem 1.5rem;
@@ -95,7 +95,7 @@
 
 .auth-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 8px 25px rgba(var(--accent-primary-rgb), 0.3);
 }
 
 .auth-btn:active {
@@ -344,8 +344,8 @@
 }
 
 .form-group input[type="checkbox"]:checked {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-color: #667eea;
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+    border-color: var(--accent-primary);
 }
 
 .form-group input[type="checkbox"]:checked::before {
@@ -360,14 +360,14 @@
 }
 
 .form-group input[type="checkbox"]:hover {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.1);
 }
 
 .form-group input[type="checkbox"]:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.2);
 }
 
 .btn {
@@ -385,13 +385,13 @@
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
     color: white;
 }
 
 .btn-primary:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--accent-primary-rgb), 0.3);
 }
 
 .btn-danger {
@@ -597,6 +597,10 @@ body {
     --button-secondary-text: #4a5568;
     --border-color: #e2e8f0;
     --progress-bg: #e2e8f0;
+    /* Accent colors (can be overridden by JS) */
+    --accent-primary: #667eea;
+    --accent-secondary: #764ba2;
+    --accent-primary-rgb: 102, 126, 234;
 }
 
 /* Dark mode override */
@@ -1172,7 +1176,7 @@ body[data-theme="dark"] .particle:nth-child(10) {
 
 .search-input:focus {
     outline: none;
-    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 20px rgba(var(--accent-primary-rgb), 0.3);
     transform: translateY(-1px);
 }
 
@@ -1907,8 +1911,8 @@ body[data-theme="dark"] .episode-progress-text {
 .provider-dropdown:focus,
 .language-dropdown:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.1);
 }
 
 .provider-dropdown:hover,
@@ -1995,7 +1999,7 @@ body[data-theme="dark"] .episode-progress-text {
     width: 20px;
     height: 20px;
     border: 2px solid var(--border-color);
-    border-top: 2px solid #667eea;
+    border-top: 2px solid var(--accent-primary);
     border-radius: 50%;
     animation: spin 1s linear infinite;
     transition: border-color 0.3s ease;
@@ -2299,7 +2303,7 @@ body[data-theme="dark"] .episode-progress-text {
 }
 
 .anime-section h3 i {
-    color: #667eea;
+    color: var(--accent-primary);
 }
 
 .anime-grid {
@@ -2846,7 +2850,7 @@ body[data-theme="dark"] .episode-progress-text {
     justify-content: center;
     width: 28px;
     height: 28px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
     color: white;
     border-radius: 50%;
     font-weight: 600;
