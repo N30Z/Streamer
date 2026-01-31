@@ -1868,6 +1868,29 @@ body[data-theme="dark"] .episode-progress-text {
     max-width: 100%;
 }
 
+/* Download Info Row with Cover */
+.download-info-row {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+
+.download-info-row .download-settings {
+    flex: 1;
+    min-width: 0;
+}
+
+.download-cover {
+    flex-shrink: 0;
+    width: 120px;
+}
+
+.download-cover img {
+    width: 100%;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
 /* Download Settings Styles */
 .download-settings {
     margin: 1.5rem 0;
@@ -2325,6 +2348,15 @@ body[data-theme="dark"] .episode-progress-text {
         margin: 1rem;
         width: calc(100% - 2rem);
         max-height: 90vh;
+    }
+
+    .download-info-row {
+        flex-direction: column;
+    }
+
+    .download-cover {
+        width: 100px;
+        align-self: center;
     }
 
     .modal-footer {

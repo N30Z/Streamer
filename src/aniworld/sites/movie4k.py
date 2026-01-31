@@ -275,7 +275,13 @@ def fetch_popular_and_new_movie4k() -> Dict[str, List[Dict[str, str]]]:
                 )
 
                 if cover:
-                    result[key].append({"name": title, "cover": cover})
+                    entry = {"name": title, "cover": cover}
+                    # Build URL from slug and _id if available
+                    movie_id = movie.get("_id", "")
+                    slug = movie.get("slug", "") or _title_to_slug(title)
+                    if movie_id and slug:
+                        entry["url"] = f"{MOVIE4K_SX}/watch/{slug}/{movie_id}"
+                    result[key].append(entry)
 
         except (requests.RequestException, ValueError, KeyError) as err:
             logging.warning(

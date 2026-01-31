@@ -277,8 +277,21 @@ def extract_anime_from_carousel(carousel_div):
                 if cover and cover.startswith("/"):
                     cover = ANIWORLD_TO + cover
 
+            # Extract URL from the link tag
+            url = None
+            link = item.find("a", href=True)
+            if link:
+                href = link.get("href", "")
+                if href.startswith("/"):
+                    url = ANIWORLD_TO + href
+                elif href.startswith("http"):
+                    url = href
+
             if name and cover:
-                anime_list.append({"name": name, "cover": cover})
+                entry = {"name": name, "cover": cover}
+                if url:
+                    entry["url"] = url
+                anime_list.append(entry)
 
         except Exception:
             # Skip this item if extraction fails
@@ -425,6 +438,52 @@ def _parse_season_episodes(soup: BeautifulSoup, season: int) -> int:
     return len(unique_links)
 
 
+def _parse_episode_titles(soup: BeautifulSoup, season: int) -> Dict[int, str]:
+    """
+    Extract episode titles from a season page on aniworld.to.
+
+    Looks for episodeGermanTitle / episodeEnglishTitle spans within
+    episode table rows, falling back to link title attributes.
+
+    Returns:
+        Dictionary mapping episode numbers to title strings
+    """
+    titles: Dict[int, str] = {}
+    pattern = re.compile(rf"staffel-{season}/episode-(\d+)")
+
+    for link in soup.find_all("a", href=pattern):
+        match = pattern.search(link["href"])
+        if not match:
+            continue
+        ep_num = int(match.group(1))
+        if ep_num in titles:
+            continue
+
+        title = ""
+        row = link.find_parent("tr") or link.find_parent("li") or link.parent
+
+        if row:
+            german = row.find("span", class_="episodeGermanTitle")
+            english = row.find("small", class_="episodeEnglishTitle")
+            if german:
+                g_text = german.get_text(strip=True)
+                e_text = english.get_text(strip=True) if english else ""
+                if g_text and e_text:
+                    title = f"{g_text} / {e_text}"
+                elif g_text:
+                    title = g_text
+                elif e_text:
+                    title = e_text
+
+        if not title and link.get("title"):
+            title = link["title"].strip()
+
+        if title:
+            titles[ep_num] = title
+
+    return titles
+
+
 def get_season_episode_count(slug: str) -> Dict[int, int]:
     """
     Get episode count for each season of an anime on aniworld.to.
@@ -458,6 +517,48 @@ def get_season_episode_count(slug: str) -> Dict[int, int]:
 
     except Exception as err:
         logging.error("Failed to get season episode count for %s on aniworld.to: %s", slug, err)
+        return {}
+
+
+def get_episode_titles(slug: str) -> Dict[int, Dict[int, str]]:
+    """
+    Get episode titles for all seasons of an anime on aniworld.to.
+
+    Fetches each season page and extracts German/English episode titles.
+
+    Args:
+        slug: Anime slug from URL
+
+    Returns:
+        Nested dict: {season_num: {episode_num: title_string}}
+    """
+    try:
+        base_url = f"{ANIWORLD_TO}/anime/stream/{slug}/"
+        response = _make_request(base_url)
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        season_meta = soup.find("meta", itemprop="numberOfSeasons")
+        number_of_seasons = int(season_meta["content"]) if season_meta else 0
+
+        all_titles: Dict[int, Dict[int, str]] = {}
+        for season in range(1, number_of_seasons + 1):
+            season_url = f"{base_url}staffel-{season}"
+            try:
+                season_response = _make_request(season_url)
+                season_soup = BeautifulSoup(season_response.content, "html.parser")
+                all_titles[season] = _parse_episode_titles(season_soup, season)
+            except Exception as err:
+                logging.warning(
+                    "Failed to get episode titles for season %d: %s", season, err
+                )
+                all_titles[season] = {}
+
+        return all_titles
+
+    except Exception as err:
+        logging.error(
+            "Failed to get episode titles for %s on aniworld.to: %s", slug, err
+        )
         return {}
 
 

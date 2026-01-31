@@ -81,6 +81,35 @@ def get_movie_episode_count(slug: str, link: str = ANIWORLD_TO) -> int:
     return result
 
 
+def get_episode_titles(
+    slug: str, link: str = ANIWORLD_TO
+) -> Dict[int, Dict[int, str]]:
+    """
+    Get episode titles for all seasons with caching.
+    Dispatches to the correct site module based on the link.
+
+    Args:
+        slug: Anime/series slug from URL
+        link: Base URL used to detect the site
+
+    Returns:
+        Nested dict: {season_num: {episode_num: title_string}}
+    """
+    cache_key = f"titles_{slug}"
+    if cache_key in _ANIME_DATA_CACHE:
+        return _ANIME_DATA_CACHE[cache_key]
+
+    if S_TO in link:
+        from ..sites.s_to import get_episode_titles as _sto_get
+        result = _sto_get(slug)
+    else:
+        from ..sites.aniworld import get_episode_titles as _aw_get
+        result = _aw_get(slug)
+
+    _ANIME_DATA_CACHE[cache_key] = result
+    return result
+
+
 def _natural_sort_key(link_url: str) -> List:
     """Natural sort key for URLs."""
     return [

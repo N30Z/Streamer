@@ -470,6 +470,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Populate modal
         document.getElementById('download-anime-title').textContent = animeTitle;
 
+        // Show cover image if available
+        const coverContainer = document.getElementById('download-cover');
+        const coverImg = document.getElementById('download-cover-img');
+        if (coverUrl && coverContainer && coverImg) {
+            coverImg.src = coverUrl;
+            coverContainer.style.display = 'block';
+        } else if (coverContainer) {
+            coverContainer.style.display = 'none';
+        }
+
         // Show loading state for provider and language dropdowns
         // They will be populated dynamically when episodes are fetched
         if (providerSelect) {
@@ -1326,10 +1336,16 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
 
-        // Add click handler to search for this anime
+        // Add click handler to open download modal directly if URL is available
         card.addEventListener('click', () => {
-            searchInput.value = anime.name;
-            performSearch();
+            if (anime.url) {
+                const isMovie = anime.url.includes('movie4k');
+                const episodeLabel = isMovie ? 'Movie' : 'Series';
+                showDownloadModal(anime.name, episodeLabel, anime.url, anime.cover);
+            } else {
+                searchInput.value = anime.name;
+                performSearch();
+            }
         });
 
         return card;
