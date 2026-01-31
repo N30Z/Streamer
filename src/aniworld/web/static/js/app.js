@@ -430,46 +430,18 @@ document.addEventListener('DOMContentLoaded', function() {
             coverStyle = `style="background-image: url('${coverUrl}')"`;
         }
 
-        // Build actions based on type (movie vs series)
-        let actionsHtml = `<button class="download-btn">Download</button>`;
-        if (anime.type === 'movie' || anime.is_movie || anime.site === 'movie4k.sx') {
-            actionsHtml = `
-                <button class="download-btn">Download Movie</button>
-                <button class="watch-btn">Open</button>
-            `;
-        }
-
         card.innerHTML = `
             <div class="anime-card-background" ${coverStyle}></div>
             <div class="anime-card-content">
                 <div class="anime-title">${escapeHtml(anime.title)}</div>
-                <div class="anime-info">
-                    <strong>Site:</strong> ${escapeHtml(anime.site || 'aniworld.to')}<br>
-                    <strong>Slug:</strong> ${escapeHtml(anime.slug || 'Unknown')}<br>
-                    ${anime.description ? `<strong>Description:</strong> ${escapeHtml(anime.description)}<br>` : ''}
-                </div>
-                <div class="anime-actions">
-                    ${actionsHtml}
-                </div>
             </div>
         `;
 
-        // Add event listener for the download button to avoid onclick string issues
-        const downloadBtn = card.querySelector('.download-btn');
-        if (downloadBtn) {
-            const episodeLabel = (anime.type === 'movie' || anime.is_movie) ? 'Movie' : 'Series';
-            downloadBtn.addEventListener('click', () => {
-                showDownloadModal(anime.title, episodeLabel, anime.url);
-            });
-        }
-
-        const watchBtn = card.querySelector('.watch-btn');
-        if (watchBtn) {
-            watchBtn.addEventListener('click', () => {
-                // Open movie page in a new tab
-                if (anime.url) window.open(anime.url, '_blank');
-            });
-        }
+        // Make the entire card clickable to open download modal
+        const episodeLabel = (anime.type === 'movie' || anime.is_movie) ? 'Movie' : 'Series';
+        card.addEventListener('click', () => {
+            showDownloadModal(anime.title, episodeLabel, anime.url);
+        });
 
         return card;
     }
@@ -583,116 +555,212 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderEpisodeTree() {
         episodeTree.innerHTML = '';
 
-        // Render seasons and episodes
-        Object.keys(availableEpisodes).sort((a, b) => Number(a) - Number(b)).forEach(seasonNum => {
-            const season = availableEpisodes[seasonNum];
+        const seasonNums = Object.keys(availableEpisodes).sort((a, b) => Number(a) - Number(b));
+        let activeSeason = seasonNums.length > 0 ? seasonNums[0] : null;
 
-            // Create season container
-            const seasonContainer = document.createElement('div');
-            seasonContainer.className = 'season-container';
+        // Season pills navigation
+        if (seasonNums.length > 0 || (availableMovies && availableMovies.length > 0)) {
+            const seasonNav = document.createElement('div');
+            seasonNav.className = 'season-nav';
+            seasonNav.id = 'season-nav';
 
-            // Season header with checkbox
-            const seasonHeader = document.createElement('div');
-            seasonHeader.className = 'season-header';
+            const seasonLabel = document.createElement('span');
+            seasonLabel.className = 'season-nav-label';
+            seasonLabel.textContent = 'Seasons:';
+            seasonNav.appendChild(seasonLabel);
 
-            const seasonCheckbox = document.createElement('input');
-            seasonCheckbox.type = 'checkbox';
-            seasonCheckbox.className = 'season-checkbox';
-            seasonCheckbox.id = `season-${seasonNum}`;
-            seasonCheckbox.addEventListener('change', () => toggleSeason(seasonNum));
-
-            const seasonLabel = document.createElement('label');
-            seasonLabel.htmlFor = `season-${seasonNum}`;
-            seasonLabel.textContent = `Season ${seasonNum} (${season.length} episodes)`;
-            seasonLabel.className = 'season-label';
-
-            seasonHeader.appendChild(seasonCheckbox);
-            seasonHeader.appendChild(seasonLabel);
-
-            // Episodes container
-            const episodesContainer = document.createElement('div');
-            episodesContainer.className = 'episodes-container';
-
-            season.forEach(episode => {
-                const episodeItem = document.createElement('div');
-                episodeItem.className = 'episode-item-tree';
-
-                const episodeCheckbox = document.createElement('input');
-                episodeCheckbox.type = 'checkbox';
-                episodeCheckbox.className = 'episode-checkbox';
-                const episodeId = `${episode.season}-${episode.episode}`;
-                episodeCheckbox.id = `episode-${episodeId}`;
-                episodeCheckbox.addEventListener('change', () => toggleEpisode(episode, episodeCheckbox.checked));
-
-                const episodeLabel = document.createElement('label');
-                episodeLabel.htmlFor = `episode-${episodeId}`;
-                episodeLabel.textContent = episode.title;
-                episodeLabel.className = 'episode-label';
-
-                episodeItem.appendChild(episodeCheckbox);
-                episodeItem.appendChild(episodeLabel);
-                episodesContainer.appendChild(episodeItem);
+            seasonNums.forEach(seasonNum => {
+                const pill = document.createElement('button');
+                pill.className = 'season-pill' + (seasonNum === activeSeason ? ' active' : '');
+                pill.textContent = seasonNum;
+                pill.dataset.season = seasonNum;
+                pill.addEventListener('click', () => {
+                    seasonNav.querySelectorAll('.season-pill').forEach(p => p.classList.remove('active'));
+                    pill.classList.add('active');
+                    activeSeason = seasonNum;
+                    renderSeasonTable(seasonNum);
+                });
+                seasonNav.appendChild(pill);
             });
 
-            seasonContainer.appendChild(seasonHeader);
-            seasonContainer.appendChild(episodesContainer);
-            episodeTree.appendChild(seasonContainer);
-        });
+            // Movies pill
+            if (availableMovies && availableMovies.length > 0) {
+                const moviePill = document.createElement('button');
+                moviePill.className = 'season-pill';
+                moviePill.textContent = 'Movies';
+                moviePill.dataset.season = 'movies';
+                moviePill.addEventListener('click', () => {
+                    seasonNav.querySelectorAll('.season-pill').forEach(p => p.classList.remove('active'));
+                    moviePill.classList.add('active');
+                    activeSeason = 'movies';
+                    renderMoviesTable();
+                });
+                seasonNav.appendChild(moviePill);
+            }
 
-        // Render movies section if available
-        if (availableMovies && availableMovies.length > 0) {
-            const moviesContainer = document.createElement('div');
-            moviesContainer.className = 'season-container';
+            episodeTree.appendChild(seasonNav);
+        }
 
-            // Movies header with checkbox
-            const moviesHeader = document.createElement('div');
-            moviesHeader.className = 'season-header';
+        // Episode table container
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'episode-table-wrap';
+        tableContainer.id = 'episode-table-container';
+        episodeTree.appendChild(tableContainer);
 
-            const moviesCheckbox = document.createElement('input');
-            moviesCheckbox.type = 'checkbox';
-            moviesCheckbox.className = 'season-checkbox';
-            moviesCheckbox.id = 'movies-section';
-            moviesCheckbox.addEventListener('change', () => toggleMovies());
-
-            const moviesLabel = document.createElement('label');
-            moviesLabel.htmlFor = 'movies-section';
-            moviesLabel.textContent = `Movies (${availableMovies.length} movies)`;
-            moviesLabel.className = 'season-label';
-
-            moviesHeader.appendChild(moviesCheckbox);
-            moviesHeader.appendChild(moviesLabel);
-
-            // Movies items container
-            const moviesItemsContainer = document.createElement('div');
-            moviesItemsContainer.className = 'episodes-container';
-
-            availableMovies.forEach(movie => {
-                const movieItem = document.createElement('div');
-                movieItem.className = 'episode-item-tree';
-
-                const movieCheckbox = document.createElement('input');
-                movieCheckbox.type = 'checkbox';
-                movieCheckbox.className = 'episode-checkbox';
-                const movieId = `movie-${movie.movie}`;
-                movieCheckbox.id = `movie-${movieId}`;
-                movieCheckbox.addEventListener('change', () => toggleMovie(movie, movieCheckbox.checked));
-
-                const movieLabel = document.createElement('label');
-                movieLabel.htmlFor = `movie-${movieId}`;
-                movieLabel.textContent = movie.title;
-                movieLabel.className = 'episode-label';
-
-                movieItem.appendChild(movieCheckbox);
-                movieItem.appendChild(movieLabel);
-                moviesItemsContainer.appendChild(movieItem);
-            });
-
-            moviesContainer.appendChild(moviesHeader);
-            moviesContainer.appendChild(moviesItemsContainer);
-            episodeTree.appendChild(moviesContainer);
+        // Render first season or movies
+        if (activeSeason) {
+            renderSeasonTable(activeSeason);
+        } else if (availableMovies && availableMovies.length > 0) {
+            renderMoviesTable();
         }
 
         updateSelectedCount();
+
+        function renderSeasonTable(seasonNum) {
+            const container = document.getElementById('episode-table-container');
+            const season = availableEpisodes[seasonNum];
+            if (!season) return;
+
+            container.innerHTML = `
+                <table class="episode-table">
+                    <thead>
+                        <tr>
+                            <th class="episode-checkbox-cell">
+                                <input type="checkbox" id="season-${seasonNum}" title="Select all">
+                            </th>
+                            <th class="episode-number-cell">#</th>
+                            <th>Title</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            `;
+
+            const tbody = container.querySelector('tbody');
+            const seasonCheckbox = container.querySelector(`#season-${seasonNum}`);
+
+            season.forEach(episode => {
+                const episodeId = `${episode.season}-${episode.episode}`;
+                const tr = document.createElement('tr');
+                tr.className = 'episode-row';
+                tr.innerHTML = `
+                    <td class="episode-checkbox-cell">
+                        <input type="checkbox" class="episode-checkbox" id="episode-${episodeId}" ${selectedEpisodes.has(episodeId) ? 'checked' : ''}>
+                    </td>
+                    <td class="episode-number-cell">${episode.episode}</td>
+                    <td class="episode-title-cell">${escapeHtml(episode.title)}</td>
+                `;
+
+                const checkbox = tr.querySelector('.episode-checkbox');
+                checkbox.addEventListener('change', () => {
+                    toggleEpisode(episode, checkbox.checked);
+                    updateHeaderCheckbox(seasonNum, seasonCheckbox);
+                });
+
+                tr.addEventListener('click', (e) => {
+                    if (e.target.tagName === 'INPUT') return;
+                    checkbox.checked = !checkbox.checked;
+                    toggleEpisode(episode, checkbox.checked);
+                    updateHeaderCheckbox(seasonNum, seasonCheckbox);
+                });
+
+                tbody.appendChild(tr);
+            });
+
+            updateHeaderCheckbox(seasonNum, seasonCheckbox);
+            seasonCheckbox.addEventListener('change', () => {
+                const isChecked = seasonCheckbox.checked;
+                season.forEach(episode => {
+                    const episodeId = `${episode.season}-${episode.episode}`;
+                    const cb = container.querySelector(`#episode-${episodeId}`);
+                    if (cb) {
+                        cb.checked = isChecked;
+                        toggleEpisode(episode, isChecked);
+                    }
+                });
+            });
+        }
+
+        function renderMoviesTable() {
+            const container = document.getElementById('episode-table-container');
+            if (!availableMovies || availableMovies.length === 0) return;
+
+            container.innerHTML = `
+                <table class="episode-table">
+                    <thead>
+                        <tr>
+                            <th class="episode-checkbox-cell">
+                                <input type="checkbox" id="movies-section" title="Select all">
+                            </th>
+                            <th class="episode-number-cell">#</th>
+                            <th>Title</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            `;
+
+            const tbody = container.querySelector('tbody');
+            const moviesCheckbox = container.querySelector('#movies-section');
+
+            availableMovies.forEach((movie, index) => {
+                const movieId = `movie-${movie.movie}`;
+                const tr = document.createElement('tr');
+                tr.className = 'episode-row';
+                tr.innerHTML = `
+                    <td class="episode-checkbox-cell">
+                        <input type="checkbox" class="episode-checkbox" id="movie-${movieId}" ${selectedEpisodes.has(movieId) ? 'checked' : ''}>
+                    </td>
+                    <td class="episode-number-cell">${index + 1}</td>
+                    <td class="episode-title-cell">${escapeHtml(movie.title)}</td>
+                `;
+
+                const checkbox = tr.querySelector('.episode-checkbox');
+                checkbox.addEventListener('change', () => {
+                    toggleMovie(movie, checkbox.checked);
+                    updateMoviesHeader(moviesCheckbox);
+                });
+
+                tr.addEventListener('click', (e) => {
+                    if (e.target.tagName === 'INPUT') return;
+                    checkbox.checked = !checkbox.checked;
+                    toggleMovie(movie, checkbox.checked);
+                    updateMoviesHeader(moviesCheckbox);
+                });
+
+                tbody.appendChild(tr);
+            });
+
+            updateMoviesHeader(moviesCheckbox);
+            moviesCheckbox.addEventListener('change', () => {
+                const isChecked = moviesCheckbox.checked;
+                availableMovies.forEach(movie => {
+                    const movieId = `movie-${movie.movie}`;
+                    const cb = container.querySelector(`#movie-${movieId}`);
+                    if (cb) {
+                        cb.checked = isChecked;
+                        toggleMovie(movie, isChecked);
+                    }
+                });
+            });
+        }
+
+        function updateHeaderCheckbox(seasonNum, checkbox) {
+            const season = availableEpisodes[seasonNum];
+            if (!checkbox || !season) return;
+            const keys = season.map(ep => `${ep.season}-${ep.episode}`);
+            const selected = keys.filter(key => selectedEpisodes.has(key));
+            checkbox.checked = selected.length === keys.length;
+            checkbox.indeterminate = selected.length > 0 && selected.length < keys.length;
+        }
+
+        function updateMoviesHeader(checkbox) {
+            if (!checkbox || !availableMovies || availableMovies.length === 0) return;
+            const keys = availableMovies.map(m => `movie-${m.movie}`);
+            const selected = keys.filter(key => selectedEpisodes.has(key));
+            checkbox.checked = selected.length === keys.length;
+            checkbox.indeterminate = selected.length > 0 && selected.length < keys.length;
+        }
     }
 
     function toggleSeason(seasonNum) {
