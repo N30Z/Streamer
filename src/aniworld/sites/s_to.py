@@ -218,11 +218,11 @@ def fetch_popular_and_new_sto() -> Dict[str, List[Dict[str, str]]]:
 
         # Extract popular series section
         popular_section = soup.find(
-            "h2", string=lambda text: text and "beliebt" in text.lower()
+            "h2", string=lambda text: text and "angesagt" in text.lower()
         )
         if popular_section:
             popular_carousel = popular_section.find_parent().find_next_sibling(
-                "div", class_="previews"
+                "div", class_="trend-row"
             )
             if popular_carousel:
                 result["popular"] = _extract_series_from_carousel(popular_carousel)
