@@ -59,11 +59,24 @@ def _extract_provider_from_url(url: str) -> Optional[str]:
     return None
 
 
+def _title_to_slug(title: str) -> str:
+    """Convert a movie title to a URL slug.
+
+    Example: "Greenland *ENGLISH*" -> "greenland-english"
+    """
+    # Lowercase and replace non-alphanumeric chars with hyphens
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower())
+    return slug.strip("-")
+
+
 def _parse_api_results(data: Any) -> List[Dict]:
     """
     Parse movie4k.sx API response into a list of result dicts.
 
     Handles both list responses and dict responses with nested arrays.
+    The browse API returns ``{"pager": {...}, "movies": [...]}``.
+    Individual movie objects may or may not contain a ``slug`` field;
+    when missing, it is derived from the title.
     """
     movies = []
     items = []
@@ -78,29 +91,34 @@ def _parse_api_results(data: Any) -> List[Dict]:
                 break
         if not items:
             # Maybe the dict itself is a single movie
-            if "_id" in data or "slug" in data:
+            if "_id" in data:
                 items = [data]
     else:
         return movies
 
     for movie in items:
         movie_id = movie.get("_id", "")
-        slug = movie.get("slug", "")
         title = movie.get("title", "")
-        if movie_id and slug:
-            poster = movie.get("poster_path", "")
-            cover = (
-                f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}"
-                if poster
-                else ""
-            )
-            movies.append({
-                "name": title,
-                "link": f"{MOVIE4K_SX}/watch/{slug}/{movie_id}",
-                "description": movie.get("storyline", movie.get("overview", "")),
-                "cover": cover,
-                "productionYear": movie.get("year", ""),
-            })
+        if not movie_id:
+            continue
+
+        slug = movie.get("slug", "") or _title_to_slug(title)
+        if not slug:
+            continue
+
+        poster = movie.get("poster_path", "")
+        cover = (
+            f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}"
+            if poster
+            else ""
+        )
+        movies.append({
+            "name": title,
+            "link": f"{MOVIE4K_SX}/watch/{slug}/{movie_id}",
+            "description": movie.get("storyline", movie.get("overview", "")),
+            "cover": cover,
+            "productionYear": movie.get("year", ""),
+        })
 
     return movies
 
