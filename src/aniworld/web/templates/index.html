@@ -226,8 +226,8 @@
     <!-- Download Confirmation Modal -->
     <div id="download-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
-            <div class="modal-header">
-                <h3>Confirm Download</h3>
+            <div class="modal-header download-info">
+                <strong id="download-anime-title"></strong>
                 <button id="close-download-modal" class="close-btn">&times;</button>
             </div>
             <div class="modal-body">
@@ -261,14 +261,7 @@
 
                 <!-- Episode Selection Tree -->
                 <div class="episode-selection">
-                    <div class="selection-header">
-                        <h4>Select Episodes</h4>
-                        <div class="selection-controls">
-                            <button id="select-all" class="control-btn">Select All</button>
-                            <button id="deselect-all" class="control-btn">Deselect All</button>
-                        </div>
-                    </div>
-
+                    
                     <div class="episode-tree-loading" id="episode-tree-loading">
                         <div class="loading-spinner-small"></div>
                         <span>Loading episodes...</span>
