@@ -122,9 +122,8 @@ class WebApp:
             "max_concurrent_downloads": getattr(config, "DEFAULT_MAX_CONCURRENT_DOWNLOADS", 5),
             "download_directory": str(getattr(config, "DEFAULT_DOWNLOAD_PATH", Path.home() / "Downloads")),
             "default_language": getattr(config, "DEFAULT_LANGUAGE", "German Sub"),
-            "default_provider": getattr(config, "DEFAULT_PROVIDER_DOWNLOAD", "VOE"),
+            "default_provider": getattr(config, "DEFAULT_PROVIDER", "VOE"),
             "default_action": getattr(config, "DEFAULT_ACTION", "Download"),
-            "watch_provider": getattr(config, "DEFAULT_PROVIDER_WATCH", "Filemoon"),
             "accent_color": "purple",
             "animations_enabled": True,
         }

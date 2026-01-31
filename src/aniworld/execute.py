@@ -3,14 +3,12 @@ import logging
 from typing import List, Dict, Callable
 
 from .models import Anime
-from .action import watch, download, syncplay
+from .action import download
 
 
 # Action mapping for better performance and maintainability
 ACTION_MAP: Dict[str, Callable[[Anime], None]] = {
-    "Watch": watch,
     "Download": download,
-    "Syncplay": syncplay,
 }
 
 

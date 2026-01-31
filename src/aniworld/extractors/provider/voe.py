@@ -126,7 +126,6 @@ def get_direct_link_from_voe(embeded_voe_link: str) -> str:
         if len(parts) >= 3:
             referer = f'Referer: "{parts[0]}//{parts[2]}/"'
             config.PROVIDER_HEADERS_D["VOE"].append(referer)
-            config.PROVIDER_HEADERS_W["VOE"].append(referer)
 
         # Follow redirect and get final HTML
         try:

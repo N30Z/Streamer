@@ -311,21 +311,9 @@
                 <div class="preference-group">
                     <label for="default-action">Default Action</label>
                     <select id="default-action">
-                        <option value="Download" {{ 'selected' if preferences.default_action == 'Download' else '' }}>Download</option>
-                        <option value="Watch" {{ 'selected' if preferences.default_action == 'Watch' else '' }}>Watch</option>
-                        <option value="Syncplay" {{ 'selected' if preferences.default_action == 'Syncplay' else '' }}>Syncplay</option>
+                        <option value="Download" selected>Download</option>
                     </select>
                     <small>Default action when selecting episodes.</small>
-                </div>
-
-                <div class="preference-group">
-                    <label for="watch-provider">Default Watch Provider</label>
-                    <select id="watch-provider">
-                        {% for provider in providers %}
-                        <option value="{{ provider }}" {{ 'selected' if preferences.watch_provider == provider else '' }}>{{ provider }}</option>
-                        {% endfor %}
-                    </select>
-                    <small>Preferred video provider for streaming/watching.</small>
                 </div>
             </div>
 
@@ -559,7 +547,6 @@
                         default_language: document.getElementById('default-language').value,
                         default_provider: document.getElementById('default-provider').value,
                         default_action: document.getElementById('default-action').value,
-                        watch_provider: document.getElementById('watch-provider').value,
                         accent_color: document.querySelector('input[name="accent-color"]:checked')?.value || 'purple',
                         animations_enabled: document.getElementById('animations-enabled').checked
                     };

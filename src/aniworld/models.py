@@ -53,7 +53,7 @@ class Anime:
         title (str): The title of the anime.
         slug (str): A URL-friendly version of the title used for web requests.
         site (str): The streaming site to use (ANIWORLD_TO or S_TO).
-        action (str): The default action to be performed ("Download", "Watch", "Syncplay").
+        action (str): The default action to be performed ("Download").
         provider (str): The provider of the anime content.
         language (str): The language code for the anime.
         aniskip (bool): Whether to skip certain actions (default is False).
@@ -86,7 +86,7 @@ class Anime:
             title: The anime title
             slug: URL-friendly anime identifier
             site: Streaming site to use (ANIWORLD_TO or S_TO)
-            action: Action to perform (Watch/Download/Syncplay)
+            action: Action to perform (Download)
             provider: Streaming provider
             language: Language preference
             aniskip: Whether to skip intro/outro
@@ -312,7 +312,7 @@ class Anime:
         if self.site not in SUPPORTED_SITES:
             issues.append(f"Unsupported site: {self.site}")
 
-        if self.action not in ["Watch", "Download", "Syncplay"]:
+        if self.action not in ["Download"]:
             issues.append(f"Invalid action: {self.action}")
 
         # Use site-specific language codes for validation
