@@ -196,19 +196,21 @@ document.addEventListener('DOMContentLoaded', function() {
         populateProviderDropdown('aniworld.to');
     }
 
-    function populateProviderDropdown(site) {
+    function populateProviderDropdown(site, providers) {
         if (!providerSelect) {
             return;
         }
 
-        // Define site-specific providers
-        let siteProviders = [];
-        if (site === 'movie4k.sx') {
-            siteProviders = ['Filemoon', 'Doodstream', 'Streamtape', 'VOE', 'Vidoza'];
-        } else if (site === 's.to') {
-            siteProviders = ['VOE'];
-        } else { // aniworld.to or default
-            siteProviders = ['VOE', 'Filemoon', 'Vidmoly'];
+        // Use dynamic providers if available, otherwise fall back to site defaults
+        let siteProviders = providers || [];
+        if (siteProviders.length === 0) {
+            if (site === 'movie4k.sx') {
+                siteProviders = ['Filemoon', 'Doodstream', 'Streamtape', 'VOE', 'Vidoza'];
+            } else if (site === 's.to') {
+                siteProviders = ['VOE'];
+            } else {
+                siteProviders = ['VOE', 'Filemoon', 'Vidmoly'];
+            }
         }
 
         providerSelect.innerHTML = '';
@@ -224,14 +226,14 @@ document.addEventListener('DOMContentLoaded', function() {
         let defaultProvider = userPreferences.default_provider || '';
         if (defaultProvider && siteProviders.includes(defaultProvider)) {
             providerSelect.value = defaultProvider;
-        } else {
-            providerSelect.value = 'VOE';
+        } else if (siteProviders.length > 0) {
+            providerSelect.value = siteProviders[0];
         }
 
         console.log(`Populated providers for ${site}:`, siteProviders);
     }
 
-    function populateLanguageDropdown(site) {
+    function populateLanguageDropdown(site, languages) {
         if (!languageSelect) {
             console.error('Language select element not found!');
             return;
@@ -240,17 +242,29 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Populating language dropdown for site:', site);
         languageSelect.innerHTML = '';
 
-        let availableLanguages = [];
+        // Use dynamic languages if available, otherwise fall back to site defaults
+        let availableLanguages = languages || [];
         let defaultLanguage = '';
-        if (site === 'movie4k.sx') {
-            availableLanguages = ['Deutsch', 'English'];
-            defaultLanguage = 'Deutsch';
-        } else if (site === 's.to') {
-            availableLanguages = ['German Dub', 'English Dub'];
-            defaultLanguage = 'German Dub';
-        } else { // aniworld.to or default
-            availableLanguages = ['German Dub', 'English Sub', 'German Sub'];
-            defaultLanguage = 'German Sub';
+        if (availableLanguages.length === 0) {
+            if (site === 'movie4k.sx') {
+                availableLanguages = ['Deutsch', 'English'];
+                defaultLanguage = 'Deutsch';
+            } else if (site === 's.to') {
+                availableLanguages = ['German Dub', 'English Dub'];
+                defaultLanguage = 'German Dub';
+            } else {
+                availableLanguages = ['German Dub', 'English Sub', 'German Sub'];
+                defaultLanguage = 'German Sub';
+            }
+        } else {
+            // Set default from dynamic list
+            if (site === 'movie4k.sx') {
+                defaultLanguage = 'Deutsch';
+            } else if (site === 's.to') {
+                defaultLanguage = 'German Dub';
+            } else {
+                defaultLanguage = 'German Sub';
+            }
         }
 
         availableLanguages.forEach(language => {
@@ -263,13 +277,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set default based on saved preference, then site fallback
         setTimeout(() => {
             let defaultLang = userPreferences.default_language || '';
-            // Check if the saved preference is available for this site
             if (defaultLang && availableLanguages.includes(defaultLang)) {
                 languageSelect.value = defaultLang;
-            } else if (site === 's.to') {
-                languageSelect.value = 'German Dub';
-            } else {
-                languageSelect.value = 'German Sub';
+            } else if (defaultLanguage && availableLanguages.includes(defaultLanguage)) {
+                languageSelect.value = defaultLanguage;
+            } else if (availableLanguages.length > 0) {
+                languageSelect.value = availableLanguages[0];
             }
             console.log('Set default language to:', languageSelect.value);
         }, 0);
@@ -485,11 +498,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Populate modal
         document.getElementById('download-anime-title').textContent = animeTitle;
 
-        // Populate language dropdown based on site
-        populateLanguageDropdown(detectedSite);
-
-        // Populate provider dropdown based on site
-        populateProviderDropdown(detectedSite);
+        // Show loading state for provider and language dropdowns
+        // They will be populated dynamically when episodes are fetched
+        if (providerSelect) {
+            providerSelect.innerHTML = '<option value="">Loading providers...</option>';
+        }
+        if (languageSelect) {
+            languageSelect.innerHTML = '<option value="">Loading languages...</option>';
+        }
 
         // Show loading state for episodes
         episodeTreeLoading.style.display = 'flex';
@@ -524,13 +540,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 availableEpisodes = data.episodes;
                 availableMovies = data.movies || [];
                 renderEpisodeTree();
+
+                // Populate provider and language dropdowns with scanned data
+                populateProviderDropdown(
+                    currentDownloadData.site,
+                    data.available_providers || []
+                );
+                populateLanguageDropdown(
+                    currentDownloadData.site,
+                    data.available_languages || []
+                );
             } else {
                 showNotification(data.error || 'Failed to load episodes', 'error');
+                // Fall back to site defaults on error
+                populateProviderDropdown(currentDownloadData.site);
+                populateLanguageDropdown(currentDownloadData.site);
             }
         })
         .catch(error => {
             console.error('Failed to fetch episodes:', error);
             showNotification('Failed to load episodes', 'error');
+            // Fall back to site defaults on network error
+            populateProviderDropdown(currentDownloadData.site);
+            populateLanguageDropdown(currentDownloadData.site);
         })
         .finally(() => {
             episodeTreeLoading.style.display = 'none';

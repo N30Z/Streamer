@@ -1452,6 +1452,40 @@ class WebApp:
 
                     return episodes_by_season, movies, slug
 
+                def scan_available_providers(sample_url, site):
+                    """Scan a sample episode URL for available providers and languages."""
+                    from ..models import Episode
+                    from ..config import SUPPORTED_PROVIDERS, SITE_LANGUAGE_NAMES
+
+                    available_providers = []
+                    available_languages = []
+                    try:
+                        ep = Episode(link=sample_url, site=site)
+                        providers = ep._get_providers_from_html()
+                        # Filter to only supported providers, preserve order
+                        available_providers = [
+                            p for p in providers.keys()
+                            if p in SUPPORTED_PROVIDERS
+                        ]
+
+                        # Extract available languages from provider data
+                        lang_keys = set()
+                        for lang_map in providers.values():
+                            lang_keys.update(lang_map.keys())
+
+                        lang_names = SITE_LANGUAGE_NAMES.get(site, {})
+                        available_languages = [
+                            lang_names[k] for k in sorted(lang_keys)
+                            if k in lang_names
+                        ]
+                    except Exception as e:
+                        logging.warning(
+                            "Failed to scan providers for %s: %s",
+                            sample_url, e
+                        )
+
+                    return available_providers, available_languages
+
                 # Use the wrapper function
                 try:
                     episodes_by_season, movies, slug = get_episodes_for_series(
@@ -1465,12 +1499,37 @@ class WebApp:
                         {"success": False, "error": "Failed to fetch episodes"}
                     ), 500
 
+                # Determine site and pick a sample episode to scan providers
+                sample_url = None
+                site = "aniworld.to"
+                if "s.to" in series_url or "/serie/" in series_url:
+                    site = "s.to"
+                elif "movie4k.sx" in series_url or "/watch/" in series_url:
+                    site = "movie4k.sx"
+
+                # Pick first available episode or movie as sample
+                for season_eps in episodes_by_season.values():
+                    if season_eps:
+                        sample_url = season_eps[0]["url"]
+                        break
+                if not sample_url and movies:
+                    sample_url = movies[0]["url"]
+
+                available_providers = []
+                available_languages = []
+                if sample_url:
+                    available_providers, available_languages = (
+                        scan_available_providers(sample_url, site)
+                    )
+
                 return jsonify(
                     {
                         "success": True,
                         "episodes": episodes_by_season,
                         "movies": movies,
                         "slug": slug,
+                        "available_providers": available_providers,
+                        "available_languages": available_languages,
                     }
                 )
 
