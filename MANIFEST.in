@@ -1,7 +1,3 @@
-include src/aniworld/aniskip/scripts/aniskip.lua
-include src/aniworld/aniskip/scripts/autostart.lua
-include src/aniworld/aniskip/scripts/autoexit.lua
-include src/aniworld/ASCII.txt
 include src/aniworld/web/templates/index.html
 include src/aniworld/web/templates/login.html
 include src/aniworld/web/templates/settings.html

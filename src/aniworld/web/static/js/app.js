@@ -403,6 +403,15 @@ document.addEventListener('DOMContentLoaded', function() {
             coverStyle = `style="background-image: url('${coverUrl}')"`;
         }
 
+        // Build actions based on type (movie vs series)
+        let actionsHtml = `<button class="download-btn">Download</button>`;
+        if (anime.type === 'movie' || anime.is_movie || anime.site === 'movie4k.sx') {
+            actionsHtml = `
+                <button class="download-btn">Download Movie</button>
+                <button class="watch-btn">Open</button>
+            `;
+        }
+
         card.innerHTML = `
             <div class="anime-card-background" ${coverStyle}></div>
             <div class="anime-card-content">
@@ -413,18 +422,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${anime.description ? `<strong>Description:</strong> ${escapeHtml(anime.description)}<br>` : ''}
                 </div>
                 <div class="anime-actions">
-                    <button class="download-btn">
-                        Download
-                    </button>
+                    ${actionsHtml}
                 </div>
             </div>
         `;
 
         // Add event listener for the download button to avoid onclick string issues
         const downloadBtn = card.querySelector('.download-btn');
-        downloadBtn.addEventListener('click', () => {
-            showDownloadModal(anime.title, 'Series', anime.url);
-        });
+        if (downloadBtn) {
+            const episodeLabel = (anime.type === 'movie' || anime.is_movie) ? 'Movie' : 'Series';
+            downloadBtn.addEventListener('click', () => {
+                showDownloadModal(anime.title, episodeLabel, anime.url);
+            });
+        }
+
+        const watchBtn = card.querySelector('.watch-btn');
+        if (watchBtn) {
+            watchBtn.addEventListener('click', () => {
+                // Open movie page in a new tab
+                if (anime.url) window.open(anime.url, '_blank');
+            });
+        }
 
         return card;
     }

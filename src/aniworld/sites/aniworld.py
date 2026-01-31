@@ -20,7 +20,6 @@ from bs4 import BeautifulSoup
 import curses
 import requests
 
-from ..ascii_art import display_ascii_art
 from ..config import DEFAULT_REQUEST_TIMEOUT, ANIWORLD_TO, RANDOM_USER_AGENT
 
 
@@ -108,7 +107,7 @@ def search_anime(
         ValueError: If no anime found or invalid input
     """
     if not only_return:
-        print(display_ascii_art())
+        pass
 
     if not keyword:
         keyword = _get_user_input()
