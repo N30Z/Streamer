@@ -20,7 +20,7 @@ from .s_to import (
     get_season_episode_count as sto_get_season_episode_count,
     get_movie_episode_count as sto_get_movie_episode_count,
 )
-from .movie4k import Movie, MovieAnime, is_movie4k_url
+from .movie4k import Movie, MovieAnime, is_movie4k_url, fetch_movie4k_search_results
 
 __all__ = [
     "search_anime",
@@ -35,4 +35,5 @@ __all__ = [
     "Movie",
     "MovieAnime",
     "is_movie4k_url",
+    "fetch_movie4k_search_results",
 ]

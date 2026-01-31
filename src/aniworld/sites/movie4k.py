@@ -13,10 +13,12 @@ The module provides:
 
 import importlib
 import logging
+import re
 from typing import Dict, List, Optional, Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 import requests
+from bs4 import BeautifulSoup
 
 from ..config import (
     DEFAULT_REQUEST_TIMEOUT,
@@ -55,6 +57,223 @@ def _extract_provider_from_url(url: str) -> Optional[str]:
         if pattern in url_lower:
             return provider
     return None
+
+
+def _title_to_slug(title: str) -> str:
+    """Convert a movie title to a URL slug.
+
+    Example: "Greenland *ENGLISH*" -> "greenland-english"
+    """
+    # Lowercase and replace non-alphanumeric chars with hyphens
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower())
+    return slug.strip("-")
+
+
+def _parse_api_results(data: Any) -> List[Dict]:
+    """
+    Parse movie4k.sx API response into a list of result dicts.
+
+    Handles both list responses and dict responses with nested arrays.
+    The browse API returns ``{"pager": {...}, "movies": [...]}``.
+    Individual movie objects may or may not contain a ``slug`` field;
+    when missing, it is derived from the title.
+    """
+    movies = []
+    items = []
+
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        # Try common response wrapper keys
+        for key in ("movies", "results", "data", "items"):
+            if key in data and isinstance(data[key], list):
+                items = data[key]
+                break
+        if not items:
+            # Maybe the dict itself is a single movie
+            if "_id" in data:
+                items = [data]
+    else:
+        return movies
+
+    for movie in items:
+        movie_id = movie.get("_id", "")
+        title = movie.get("title", "")
+        if not movie_id:
+            continue
+
+        slug = movie.get("slug", "") or _title_to_slug(title)
+        if not slug:
+            continue
+
+        poster = movie.get("poster_path", "")
+        cover = (
+            f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}"
+            if poster
+            else ""
+        )
+        movies.append({
+            "name": title,
+            "link": f"{MOVIE4K_SX}/watch/{slug}/{movie_id}",
+            "description": movie.get("storyline", movie.get("overview", "")),
+            "cover": cover,
+            "productionYear": movie.get("year", ""),
+        })
+
+    return movies
+
+
+def _scrape_browse_results(keyword: str) -> List[Dict]:
+    """
+    Scrape movie4k.sx HTML browse/search page as a fallback.
+
+    Tries the /browse page with keyword parameter and parses
+    the HTML for movie entries.
+    """
+    search_url = f"{MOVIE4K_SX}/browse?keyword={quote(keyword)}"
+    try:
+        response = requests.get(
+            search_url,
+            timeout=DEFAULT_REQUEST_TIMEOUT,
+            headers={"User-Agent": RANDOM_USER_AGENT},
+        )
+        response.raise_for_status()
+    except requests.RequestException as err:
+        logging.warning("movie4k.sx HTML browse request failed: %s", err)
+        return []
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    results = []
+    seen_slugs = set()
+
+    # Look for links matching /watch/{slug}/{id} pattern
+    watch_links = soup.find_all("a", href=re.compile(r"/watch/[^/]+/[a-f0-9]+"))
+
+    for link in watch_links:
+        href = link.get("href", "")
+        if not href:
+            continue
+
+        # Parse /watch/{slug}/{movie_id}
+        parts = href.strip("/").split("/")
+        if len(parts) < 3 or parts[0] != "watch":
+            continue
+
+        slug = parts[1]
+        movie_id = parts[2]
+
+        if slug in seen_slugs:
+            continue
+        seen_slugs.add(slug)
+
+        # Extract title from link text or parent context
+        name = ""
+        parent = link.find_parent(["div", "article", "li"])
+        if parent:
+            h_tag = parent.find(["h1", "h2", "h3", "h4", "h5", "h6"])
+            if h_tag:
+                name = h_tag.get_text(strip=True)
+        if not name:
+            name = link.get("title", "")
+        if not name:
+            name = link.get_text(strip=True)
+        if not name:
+            name = slug.replace("-", " ").title()
+
+        # Extract cover image
+        cover = ""
+        img_context = parent if parent else link
+        img = img_context.find("img")
+        if img:
+            cover = img.get("data-src") or img.get("src") or ""
+            if cover and cover.startswith("/"):
+                cover = MOVIE4K_SX + cover
+
+        # Extract year if present
+        year = ""
+        if parent:
+            year_el = parent.find("span", class_="year") or parent.find(
+                class_="productionYear"
+            )
+            if year_el:
+                year = year_el.get_text(strip=True)
+            else:
+                # Try to find year in text like "(2024)"
+                text = parent.get_text()
+                year_match = re.search(r"\((\d{4})\)", text)
+                if year_match:
+                    year = year_match.group(1)
+
+        # Extract description
+        description = ""
+        if parent:
+            desc_el = parent.find("p") or parent.find(class_="description")
+            if desc_el:
+                description = desc_el.get_text(strip=True)
+
+        results.append({
+            "name": name,
+            "link": f"{MOVIE4K_SX}/watch/{slug}/{movie_id}",
+            "description": description,
+            "cover": cover,
+            "productionYear": year,
+        })
+
+    return results
+
+
+def fetch_movie4k_search_results(keyword: str) -> List[Dict]:
+    """
+    Search movie4k.sx for movies/series matching keyword.
+
+    Tries the JSON API first (with and without language filter),
+    then falls back to HTML scraping if the API returns no results.
+
+    Args:
+        keyword: The search term
+
+    Returns:
+        List of result dicts with keys: name, link, description, cover, productionYear
+    """
+    results = []
+
+    # Try JSON API without language filter first (broader results)
+    for api_url in [
+        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}",
+        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}&lang=2",
+    ]:
+        try:
+            resp = requests.get(
+                api_url,
+                timeout=DEFAULT_REQUEST_TIMEOUT,
+                headers={
+                    "User-Agent": RANDOM_USER_AGENT,
+                    "Accept": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            results = _parse_api_results(data)
+            if results:
+                logging.debug(
+                    "movie4k.sx API returned %d results from %s", len(results), api_url
+                )
+                return results
+            logging.debug("movie4k.sx API returned empty results from %s", api_url)
+        except requests.RequestException as err:
+            logging.warning("movie4k.sx API request failed (%s): %s", api_url, err)
+        except (ValueError, KeyError) as err:
+            logging.warning("movie4k.sx API response parse error: %s", err)
+
+    # Fallback: scrape the HTML browse page
+    logging.info("movie4k.sx API returned no results, trying HTML scrape fallback")
+    results = _scrape_browse_results(keyword)
+    if results:
+        logging.debug("movie4k.sx HTML scrape returned %d results", len(results))
+    else:
+        logging.warning("movie4k.sx: no results found for keyword '%s'", keyword)
+
+    return results
 
 
 class Movie:
