@@ -459,7 +459,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (downloadBtn) {
             const episodeLabel = (anime.type === 'movie' || anime.is_movie) ? 'Movie' : 'Series';
             downloadBtn.addEventListener('click', () => {
-                showDownloadModal(anime.title, episodeLabel, anime.url);
+                showDownloadModal(anime.title, episodeLabel, anime.url, anime.cover);
             });
         }
 
@@ -474,7 +474,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return card;
     }
 
-    function showDownloadModal(animeTitle, episodeTitle, episodeUrl) {
+    function showDownloadModal(animeTitle, episodeTitle, episodeUrl, coverUrl) {
         // Detect site from URL
         let detectedSite = 'aniworld.to'; // default
         if (episodeUrl.includes('movie4k')) {
@@ -497,6 +497,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Populate modal
         document.getElementById('download-anime-title').textContent = animeTitle;
+
+        // Show cover image if available
+        const coverContainer = document.getElementById('download-cover');
+        const coverImg = document.getElementById('download-cover-img');
+        if (coverUrl) {
+            coverImg.src = coverUrl;
+            coverContainer.style.display = 'block';
+        } else {
+            coverContainer.style.display = 'none';
+        }
 
         // Show loading state for provider and language dropdowns
         // They will be populated dynamically when episodes are fetched
@@ -626,7 +636,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const episodeLabel = document.createElement('label');
                 episodeLabel.htmlFor = `episode-${episodeId}`;
-                episodeLabel.textContent = episode.title;
+                // Show "E1 - Title" if a real title was extracted, otherwise just "Episode N"
+                const fallback = `Episode ${episode.episode}`;
+                episodeLabel.textContent = episode.title && episode.title !== fallback
+                    ? `E${episode.episode} - ${episode.title}`
+                    : fallback;
                 episodeLabel.className = 'episode-label';
 
                 episodeItem.appendChild(episodeCheckbox);
@@ -1263,7 +1277,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (anime.url) {
                 const isMovie = anime.url.includes('movie4k');
                 const episodeLabel = isMovie ? 'Movie' : 'Series';
-                showDownloadModal(anime.name, episodeLabel, anime.url);
+                showDownloadModal(anime.name, episodeLabel, anime.url, anime.cover);
             } else {
                 searchInput.value = anime.name;
                 performSearch();

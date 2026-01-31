@@ -1781,7 +1781,7 @@ body[data-theme="dark"] .episode-progress-text {
     background: var(--modal-bg);
     border-radius: 12px;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-    max-width: 500px;
+    max-width: 650px;
     width: 90%;
     max-height: 80vh;
     display: flex;
@@ -1866,6 +1866,29 @@ body[data-theme="dark"] .episode-progress-text {
     overflow-wrap: break-word;
     display: inline-block;
     max-width: 100%;
+}
+
+/* Download Info Row with Cover */
+.download-info-row {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+
+.download-info-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.download-cover {
+    flex-shrink: 0;
+    width: 130px;
+}
+
+.download-cover img {
+    width: 100%;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* Download Settings Styles */
@@ -2196,6 +2219,15 @@ body[data-theme="dark"] .episode-progress-text {
         margin: 1rem;
         width: calc(100% - 2rem);
         max-height: 90vh;
+    }
+
+    .download-info-row {
+        flex-direction: column;
+    }
+
+    .download-cover {
+        width: 100px;
+        align-self: center;
     }
 
     .modal-footer {

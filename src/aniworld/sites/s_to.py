@@ -7,7 +7,6 @@ a JSON API.
 """
 import re
 import logging
-import re
 from typing import List, Dict
 from urllib.parse import quote
 
@@ -150,6 +149,100 @@ def _parse_season_episodes(soup: BeautifulSoup, season: int) -> int:
         if f"staffel-{season}/episode-" in link["href"]
     )
     return len(unique_links)
+
+
+def _parse_episode_titles(soup: BeautifulSoup, season: int) -> Dict[int, str]:
+    """
+    Extract episode titles from a season page on s.to.
+
+    Looks for episodeGermanTitle / episodeEnglishTitle spans within
+    episode table rows, falling back to link title attributes.
+
+    Returns:
+        Dictionary mapping episode numbers to title strings
+    """
+    titles: Dict[int, str] = {}
+    pattern = re.compile(rf"staffel-{season}/episode-(\d+)")
+
+    for link in soup.find_all("a", href=pattern):
+        match = pattern.search(link["href"])
+        if not match:
+            continue
+        ep_num = int(match.group(1))
+        if ep_num in titles:
+            continue
+
+        title = ""
+        row = link.find_parent("tr") or link.find_parent("li") or link.parent
+
+        if row:
+            german = row.find("span", class_="episodeGermanTitle")
+            english = row.find("small", class_="episodeEnglishTitle")
+            if german:
+                g_text = german.get_text(strip=True)
+                e_text = english.get_text(strip=True) if english else ""
+                if g_text and e_text:
+                    title = f"{g_text} / {e_text}"
+                elif g_text:
+                    title = g_text
+                elif e_text:
+                    title = e_text
+
+        if not title and link.get("title"):
+            title = link["title"].strip()
+
+        if title:
+            titles[ep_num] = title
+
+    return titles
+
+
+def get_episode_titles(slug: str) -> Dict[int, Dict[int, str]]:
+    """
+    Get episode titles for all seasons of a series on s.to.
+
+    Args:
+        slug: Series slug from URL
+
+    Returns:
+        Nested dict: {season_num: {episode_num: title_string}}
+    """
+    try:
+        base_url = f"{S_TO}/serie/{slug}/"
+        response = _make_request(base_url)
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        season_numbers = set()
+        for a in soup.find_all("a", href=True):
+            m = re.search(r"/staffel-(\d+)$", a["href"])
+            if m and int(m.group(1)) > 0:
+                season_numbers.add(int(m.group(1)))
+
+        all_titles: Dict[int, Dict[int, str]] = {}
+        for season in sorted(season_numbers):
+            season_url = f"{base_url}staffel-{season}"
+            try:
+                season_response = _make_request(season_url)
+                season_soup = BeautifulSoup(
+                    season_response.content, "html.parser"
+                )
+                all_titles[season] = _parse_episode_titles(
+                    season_soup, season
+                )
+            except Exception as err:
+                logging.warning(
+                    "Failed to get episode titles for season %d: %s",
+                    season, err
+                )
+                all_titles[season] = {}
+
+        return all_titles
+
+    except Exception as err:
+        logging.error(
+            "Failed to get episode titles for %s on s.to: %s", slug, err
+        )
+        return {}
 
 
 def get_season_episode_count(slug: str) -> Dict[int, int]:

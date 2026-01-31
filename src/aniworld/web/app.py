@@ -1373,6 +1373,7 @@ class WebApp:
                     from ..common import (
                         get_season_episode_count,
                         get_movie_episode_count,
+                        get_episode_titles,
                     )
                     from ..entry import _detect_site_from_url
                     from .. import config
@@ -1406,17 +1407,31 @@ class WebApp:
                     # Use existing function to get season/episode counts
                     season_counts = get_season_episode_count(slug, base_url)
 
+                    # Fetch episode titles from season pages
+                    try:
+                        episode_titles = get_episode_titles(slug, base_url)
+                    except Exception as e:
+                        logging.warning(
+                            "Failed to fetch episode titles for %s: %s",
+                            slug, e
+                        )
+                        episode_titles = {}
+
                     # Build episodes structure
                     episodes_by_season = {}
                     for season_num, episode_count in season_counts.items():
                         if episode_count > 0:
+                            season_titles = episode_titles.get(season_num, {})
                             episodes_by_season[season_num] = []
                             for ep_num in range(1, episode_count + 1):
+                                title = season_titles.get(
+                                    ep_num, f"Episode {ep_num}"
+                                )
                                 episodes_by_season[season_num].append(
                                     {
                                         "season": season_num,
                                         "episode": ep_num,
-                                        "title": f"Episode {ep_num}",
+                                        "title": title,
                                         "url": f"{base_url}/{stream_path}/{slug}/staffel-{season_num}/episode-{ep_num}",
                                     }
                                 )

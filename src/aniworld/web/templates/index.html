@@ -231,24 +231,31 @@
                 <button id="close-download-modal" class="close-btn">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="download-info">
-                    <p><strong>Anime:</strong> <span id="download-anime-title"></span></p>
-                    {% if not auth_enabled or (user and user.is_admin) %}<p><strong>Download Path:</strong> <span id="download-path"></span> <i class="fas fa-info-circle path-info-icon" title="You can change the download path by using the --output-dir /your/custom/path parameter"></i></p>{% endif %}
-                </div>
+                <div class="download-info-row">
+                    <div class="download-info-left">
+                        <div class="download-info">
+                            <p><strong>Anime:</strong> <span id="download-anime-title"></span></p>
+                            {% if not auth_enabled or (user and user.is_admin) %}<p><strong>Download Path:</strong> <span id="download-path"></span> <i class="fas fa-info-circle path-info-icon" title="You can change the download path by using the --output-dir /your/custom/path parameter"></i></p>{% endif %}
+                        </div>
 
-                <!-- Download Settings -->
-                <div class="download-settings">
-                    <div class="setting-group">
-                        <label for="language-select"><strong>Language:</strong></label>
-                        <select id="language-select" class="language-dropdown">
-                            <option value="">Loading languages...</option>
-                        </select>
+                        <!-- Download Settings -->
+                        <div class="download-settings">
+                            <div class="setting-group">
+                                <label for="language-select"><strong>Language:</strong></label>
+                                <select id="language-select" class="language-dropdown">
+                                    <option value="">Loading languages...</option>
+                                </select>
+                            </div>
+                            <div class="setting-group">
+                                <label for="provider-select"><strong>Provider:</strong></label>
+                                <select id="provider-select" class="provider-dropdown">
+                                    <option value="">Loading providers...</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
-                    <div class="setting-group">
-                        <label for="provider-select"><strong>Provider:</strong></label>
-                        <select id="provider-select" class="provider-dropdown">
-                            <option value="">Loading providers...</option>
-                        </select>
+                    <div class="download-cover" id="download-cover" style="display: none;">
+                        <img id="download-cover-img" src="" alt="Cover">
                     </div>
                 </div>
 
