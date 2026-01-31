@@ -1844,6 +1844,7 @@ body[data-theme="dark"] .episode-progress-text {
 
 .download-info strong {
     color: var(--text-secondary);
+    font-size: 30px;
     transition: color 0.3s ease;
 }
 
@@ -1896,7 +1897,7 @@ body[data-theme="dark"] .episode-progress-text {
 
 .provider-dropdown,
 .language-dropdown {
-    flex: 1;
+    /* flex: 1; */
     padding: 8px 12px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
@@ -2005,7 +2006,7 @@ body[data-theme="dark"] .episode-progress-text {
 }
 
 .episode-tree {
-    max-height: 250px;
+    max-height: 500px;
     overflow-y: auto;
     border: 1px solid var(--border-color);
     border-radius: 6px;
@@ -2090,13 +2091,13 @@ body[data-theme="dark"] .episode-progress-text {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 0.75rem;
+    padding: 10px;
     flex-wrap: wrap;
 }
 
 .season-nav-label {
     color: var(--text-tertiary);
-    font-size: 0.85rem;
+    font-size: 1.3rem;
     font-weight: 600;
     margin-right: 0.25rem;
     white-space: nowrap;

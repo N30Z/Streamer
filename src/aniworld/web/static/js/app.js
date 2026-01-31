@@ -440,13 +440,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // Make the entire card clickable to open download modal
         const episodeLabel = (anime.type === 'movie' || anime.is_movie) ? 'Movie' : 'Series';
         card.addEventListener('click', () => {
-            showDownloadModal(anime.title, episodeLabel, anime.url);
+            showDownloadModal(anime.title, episodeLabel, anime.url, anime.cover);
         });
 
         return card;
     }
 
-    function showDownloadModal(animeTitle, episodeTitle, episodeUrl) {
+    function showDownloadModal(animeTitle, episodeTitle, episodeUrl, coverUrl) {
         // Detect site from URL
         let detectedSite = 'aniworld.to'; // default
         if (episodeUrl.includes('movie4k')) {
