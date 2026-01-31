@@ -1518,6 +1518,54 @@ class WebApp:
                     }
                 ), 500
 
+        @self.app.route("/api/popular-new-sto")
+        @self._require_api_auth
+        def api_popular_new_sto():
+            """Get popular and new series from s.to."""
+            try:
+                from ..search import fetch_popular_and_new_sto
+
+                sto_data = fetch_popular_and_new_sto()
+                return jsonify(
+                    {
+                        "success": True,
+                        "popular": sto_data.get("popular", []),
+                        "new": sto_data.get("new", []),
+                    }
+                )
+            except Exception as e:
+                logging.error(f"Failed to fetch popular/new from s.to: {e}")
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": f"Failed to fetch popular/new from s.to: {str(e)}",
+                    }
+                ), 500
+
+        @self.app.route("/api/popular-new-movie4k")
+        @self._require_api_auth
+        def api_popular_new_movie4k():
+            """Get popular and new movies from movie4k.sx."""
+            try:
+                from ..search import fetch_popular_and_new_movie4k
+
+                movie4k_data = fetch_popular_and_new_movie4k()
+                return jsonify(
+                    {
+                        "success": True,
+                        "popular": movie4k_data.get("popular", []),
+                        "new": movie4k_data.get("new", []),
+                    }
+                )
+            except Exception as e:
+                logging.error(f"Failed to fetch popular/new from movie4k: {e}")
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": f"Failed to fetch popular/new from movie4k: {str(e)}",
+                    }
+                ), 500
+
         @self.app.route("/api/files")
         @self._require_api_auth
         def api_list_files():
