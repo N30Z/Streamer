@@ -199,6 +199,103 @@ def get_season_episode_count(slug: str) -> Dict[int, int]:
     return episode_counts
 
 
+def fetch_popular_and_new_sto() -> Dict[str, List[Dict[str, str]]]:
+    """
+    Fetch popular and new series from s.to homepage.
+
+    Scrapes the s.to homepage for "Beliebt" and "Neue" sections,
+    similar to how aniworld.to homepage parsing works.
+
+    Returns:
+        Dictionary with 'popular' and 'new' keys containing lists of series data
+    """
+    try:
+        response = _make_request(S_TO)
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        result = {"popular": [], "new": []}
+
+        # Extract popular series section
+        popular_section = soup.find(
+            "h2", string=lambda text: text and "beliebt" in text.lower()
+        )
+        if popular_section:
+            popular_carousel = popular_section.find_parent().find_next_sibling(
+                "div", class_="previews"
+            )
+            if popular_carousel:
+                result["popular"] = _extract_series_from_carousel(popular_carousel)
+
+        # Extract new series section
+        new_section = soup.find(
+            "h2",
+            string=lambda text: text
+            and "neue" in text.lower()
+            and "serie" in text.lower(),
+        )
+        if new_section:
+            new_carousel = new_section.find_parent().find_next_sibling(
+                "div", class_="previews"
+            )
+            if new_carousel:
+                result["new"] = _extract_series_from_carousel(new_carousel)
+
+        return result
+
+    except requests.RequestException as err:
+        logging.error("Failed to fetch s.to homepage: %s", err)
+        raise ValueError("Could not fetch s.to homepage data") from err
+
+
+def _extract_series_from_carousel(carousel_div) -> List[Dict[str, str]]:
+    """
+    Extract series data from a carousel div section on s.to.
+
+    Args:
+        carousel_div: BeautifulSoup element containing the carousel
+
+    Returns:
+        List of dictionaries with 'name' and 'cover' keys
+    """
+    series_list = []
+
+    cover_items = carousel_div.find_all("div", class_="coverListItem")
+
+    for item in cover_items:
+        try:
+            name = None
+            h3_tag = item.find("h3")
+            if h3_tag:
+                name = h3_tag.get_text(strip=True)
+                name = name.split(" \u2022")[0].strip()
+
+            if not name:
+                link = item.find("a")
+                if link and link.get("title"):
+                    title_text = link.get("title")
+                    name = (
+                        title_text.split(" alle Folgen")[0]
+                        .split(" jetzt online")[0]
+                        .strip()
+                    )
+
+            cover = None
+            img_tag = item.find("img")
+            if img_tag:
+                cover = img_tag.get("data-src") or img_tag.get("src")
+                if cover and cover.startswith("/"):
+                    cover = S_TO + cover
+
+            if name and cover:
+                series_list.append({"name": name, "cover": cover})
+
+        except Exception:
+            continue
+
+    return series_list
+
+
 def get_movie_episode_count(slug: str) -> int:
     """
     Get movie count for a series on s.to.

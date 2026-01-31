@@ -18,6 +18,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const popularAnimeGrid = document.getElementById('popular-anime-grid');
     const newAnimeGrid = document.getElementById('new-anime-grid');
 
+    // S.to and Movie4k grid elements
+    const popularStoGrid = document.getElementById('popular-sto-grid');
+    const newStoGrid = document.getElementById('new-sto-grid');
+    const popularMovie4kGrid = document.getElementById('popular-movie4k-grid');
+    const newMovie4kGrid = document.getElementById('new-movie4k-grid');
+
+    // Provider column loading elements
+    const aniworldLoading = document.getElementById('aniworld-loading');
+    const aniworldContent = document.getElementById('aniworld-content');
+    const stoLoading = document.getElementById('sto-loading');
+    const stoContent = document.getElementById('sto-content');
+    const movie4kLoading = document.getElementById('movie4k-loading');
+    const movie4kContent = document.getElementById('movie4k-content');
+
     // Theme toggle elements
     const themeToggle = document.getElementById('theme-toggle');
     const themeIcon = document.getElementById('theme-icon');
@@ -1072,59 +1086,110 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function loadPopularAndNewAnime() {
-        console.log('Loading popular and new anime...');
+        console.log('Loading popular and new content from all providers...');
 
         // Show loading state for home content
         homeLoading.style.display = 'block';
         popularNewSections.style.display = 'none';
 
+        let loadedCount = 0;
+        const totalProviders = 3;
+
+        function checkAllLoaded() {
+            loadedCount++;
+            if (loadedCount >= totalProviders) {
+                homeLoading.style.display = 'none';
+                popularNewSections.style.display = 'block';
+                showHomeContent();
+            }
+        }
+
+        // Load AniWorld
+        if (aniworldLoading) aniworldLoading.style.display = 'flex';
+        if (aniworldContent) aniworldContent.style.display = 'none';
         fetch('/api/popular-new')
             .then(response => {
-                if (response.status === 401) {
-                    window.location.href = '/login';
-                    return;
-                }
+                if (response.status === 401) { window.location.href = '/login'; return; }
                 return response.json();
             })
             .then(data => {
                 if (!data) return;
-
                 if (data.success) {
-                    displayPopularAndNewAnime(data.popular || [], data.new || []);
-                } else {
-                    console.error('Failed to load popular/new anime:', data.error);
-                    showEmptyState();
+                    displayProviderContent(
+                        data.popular || [], data.new || [],
+                        popularAnimeGrid, newAnimeGrid
+                    );
                 }
             })
-            .catch(error => {
-                console.error('Error loading popular/new anime:', error);
-                showEmptyState();
-            })
+            .catch(error => console.error('Error loading aniworld:', error))
             .finally(() => {
-                homeLoading.style.display = 'none';
+                if (aniworldLoading) aniworldLoading.style.display = 'none';
+                if (aniworldContent) aniworldContent.style.display = 'block';
+                checkAllLoaded();
+            });
+
+        // Load S.to
+        if (stoLoading) stoLoading.style.display = 'flex';
+        if (stoContent) stoContent.style.display = 'none';
+        fetch('/api/popular-new-sto')
+            .then(response => {
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                return response.json();
+            })
+            .then(data => {
+                if (!data) return;
+                if (data.success) {
+                    displayProviderContent(
+                        data.popular || [], data.new || [],
+                        popularStoGrid, newStoGrid
+                    );
+                }
+            })
+            .catch(error => console.error('Error loading s.to:', error))
+            .finally(() => {
+                if (stoLoading) stoLoading.style.display = 'none';
+                if (stoContent) stoContent.style.display = 'block';
+                checkAllLoaded();
+            });
+
+        // Load Movie4k
+        if (movie4kLoading) movie4kLoading.style.display = 'flex';
+        if (movie4kContent) movie4kContent.style.display = 'none';
+        fetch('/api/popular-new-movie4k')
+            .then(response => {
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                return response.json();
+            })
+            .then(data => {
+                if (!data) return;
+                if (data.success) {
+                    displayProviderContent(
+                        data.popular || [], data.new || [],
+                        popularMovie4kGrid, newMovie4kGrid
+                    );
+                }
+            })
+            .catch(error => console.error('Error loading movie4k:', error))
+            .finally(() => {
+                if (movie4kLoading) movie4kLoading.style.display = 'none';
+                if (movie4kContent) movie4kContent.style.display = 'block';
+                checkAllLoaded();
             });
     }
 
-    function displayPopularAndNewAnime(popularAnime, newAnime) {
-        // Clear existing content
-        popularAnimeGrid.innerHTML = '';
-        newAnimeGrid.innerHTML = '';
-
-        // Populate popular anime (limit to 8)
-        popularAnime.slice(0, 8).forEach(anime => {
-            const animeCard = createHomeAnimeCard(anime);
-            popularAnimeGrid.appendChild(animeCard);
-        });
-
-        // Populate new anime (limit to 8)
-        newAnime.slice(0, 8).forEach(anime => {
-            const animeCard = createHomeAnimeCard(anime);
-            newAnimeGrid.appendChild(animeCard);
-        });
-
-        // Show the sections
-        popularNewSections.style.display = 'block';
-        showHomeContent();
+    function displayProviderContent(popularItems, newItems, popularGrid, newGrid) {
+        if (popularGrid) {
+            popularGrid.innerHTML = '';
+            popularItems.slice(0, 8).forEach(item => {
+                popularGrid.appendChild(createHomeAnimeCard(item));
+            });
+        }
+        if (newGrid) {
+            newGrid.innerHTML = '';
+            newItems.slice(0, 8).forEach(item => {
+                newGrid.appendChild(createHomeAnimeCard(item));
+            });
+        }
     }
 
     function createHomeAnimeCard(anime) {

@@ -16,8 +16,8 @@ from .sites.aniworld import (
     extract_anime_from_carousel,
     show_menu,
 )
-from .sites.s_to import fetch_sto_search_results
-from .sites.movie4k import fetch_movie4k_search_results
+from .sites.s_to import fetch_sto_search_results, fetch_popular_and_new_sto
+from .sites.movie4k import fetch_movie4k_search_results, fetch_popular_and_new_movie4k
 
 __all__ = [
     "search_anime",
@@ -26,7 +26,9 @@ __all__ = [
     "extract_anime_from_carousel",
     "show_menu",
     "fetch_sto_search_results",
+    "fetch_popular_and_new_sto",
     "fetch_movie4k_search_results",
+    "fetch_popular_and_new_movie4k",
 ]
 
 if __name__ == "__main__":

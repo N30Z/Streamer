@@ -223,6 +223,68 @@ def _scrape_browse_results(keyword: str) -> List[Dict]:
     return results
 
 
+def fetch_popular_and_new_movie4k() -> Dict[str, List[Dict[str, str]]]:
+    """
+    Fetch popular (trending) and new movies from movie4k.sx.
+
+    Uses the movie4k.sx JSON browse API with order_by parameters
+    to get trending and newest movies.
+
+    Returns:
+        Dictionary with 'popular' and 'new' keys containing lists of movie data
+    """
+    result = {"popular": [], "new": []}
+
+    # Fetch trending/popular movies
+    for order_by, key in [("trending", "popular"), ("Neu", "new")]:
+        api_url = (
+            f"{MOVIE4K_SX}/data/browse/"
+            f"?order_by={order_by}&type=movies&lang=2"
+        )
+        try:
+            resp = requests.get(
+                api_url,
+                timeout=DEFAULT_REQUEST_TIMEOUT,
+                headers={
+                    "User-Agent": RANDOM_USER_AGENT,
+                    "Accept": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            items = []
+            if isinstance(data, dict):
+                for k in ("movies", "results", "data", "items"):
+                    if k in data and isinstance(data[k], list):
+                        items = data[k]
+                        break
+            elif isinstance(data, list):
+                items = data
+
+            for movie in items:
+                title = movie.get("title", "")
+                if not title:
+                    continue
+
+                poster = movie.get("poster_path", "")
+                cover = (
+                    f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}"
+                    if poster
+                    else ""
+                )
+
+                if cover:
+                    result[key].append({"name": title, "cover": cover})
+
+        except (requests.RequestException, ValueError, KeyError) as err:
+            logging.warning(
+                "movie4k.sx browse API failed for %s: %s", order_by, err
+            )
+
+    return result
+
+
 def fetch_movie4k_search_results(keyword: str) -> List[Dict]:
     """
     Search movie4k.sx for movies/series matching keyword.
