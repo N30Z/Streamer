@@ -748,13 +748,34 @@ class Episode:
 
         Language Codes:
             1: German Dub
-            2: English Sub
-            3: German Sub
+            2: English Sub / Deutsch
+            3: German Sub / English
 
         Returns:
             List of available language codes
         """
         try:
+            # Special-case: movie4k watch pages provide languages via API
+            if self.link and ("movie4k.sx" in self.link or "/watch/" in self.link):
+                try:
+                    from .sites.movie4k import Movie as Movie4kMovie
+
+                    movie = Movie4kMovie(url=self.link)
+                    available_names = movie.available_languages
+
+                    site_codes = SITE_LANGUAGE_CODES.get("movie4k.sx", {})
+                    lang_keys = []
+                    for name in available_names:
+                        key = site_codes.get(name)
+                        if key is not None:
+                            lang_keys.append(key)
+                    if not lang_keys:
+                        logging.debug("_get_available_languages_from_html: Movie4k returned no mapped language keys for %s", self.link)
+                    return sorted(lang_keys)
+                except Exception as err:
+                    logging.warning("Failed to fetch movie4k languages for %s: %s", self.link, err)
+                    # Fall through to HTML parsing as fallback
+
             episode_soup = BeautifulSoup(self.html.content, "html.parser")
 
             # s.to uses button.link-box[data-language-id] inside div#episode-links
@@ -813,6 +834,80 @@ class Episode:
             ValueError: If no providers found
         """
         try:
+            # Special-case movie4k watch pages: use the movie API instead of fragile HTML parsing
+            if self.link and ("movie4k.sx" in self.link or "/watch/" in self.link):
+                try:
+                    from .sites.movie4k import Movie as Movie4kMovie, _extract_provider_from_url
+
+                    movie = Movie4kMovie(url=self.link)
+                    providers = {}
+
+                    # movie4k uses its own language code mapping; use that explicitly
+                    site_codes = SITE_LANGUAGE_CODES.get("movie4k.sx", {})
+                    available_lang_keys = []
+                    for name in movie.available_languages:
+                        key = site_codes.get(name)
+                        if key is not None:
+                            available_lang_keys.append((key, name))
+
+                    for stream in movie.streams:
+                        # stream items from API can vary in shape; try common keys
+                        stream_url = (
+                            stream.get("stream")
+                            or stream.get("stream_url")
+                            or stream.get("url")
+                            or stream.get("file")
+                        )
+                        if not stream_url:
+                            continue
+
+                        provider = _extract_provider_from_url(stream_url)
+                        if not provider or provider not in SUPPORTED_PROVIDERS:
+                            continue
+
+                        # Determine language key for this stream
+                        lang_key = None
+                        # Prefer explicit numeric lang codes
+                        lang_val = stream.get("lang") or stream.get("language") or stream.get("lang_code")
+                        if isinstance(lang_val, int):
+                            lang_key = lang_val
+                        elif isinstance(lang_val, str):
+                            if lang_val.isdigit():
+                                lang_key = int(lang_val)
+                            else:
+                                # map by language name
+                                lang_key = SITE_LANGUAGE_CODES.get("movie4k.sx", {}).get(lang_val)
+
+                        # If language not provided, fall back to first available language
+                        if lang_key is None and available_lang_keys:
+                            lang_key = available_lang_keys[0][0]
+
+                        if lang_key is None:
+                            # Unknown language; skip this stream
+                            continue
+
+                        if provider not in providers:
+                            providers[provider] = {}
+                        providers[provider][lang_key] = stream_url
+
+                    if not providers:
+                        raise ValueError(
+                            f"No streams available for episode: {self.link}\n"
+                            "Try again later or check in the community chat."
+                        )
+
+                    logging.debug(
+                        'Available providers (movie4k API) for "%s":\n%s',
+                        self.anime_title,
+                        json.dumps(providers, indent=2),
+                    )
+
+                    return providers
+
+                except Exception as err:
+                    logging.warning("movie4k API provider extraction failed for %s: %s", self.link, err)
+                    # Fall through to HTML parsing as a fallback
+
             soup = BeautifulSoup(self.html.content, "html.parser")
             providers = {}
 
@@ -1162,6 +1257,36 @@ class Episode:
         if language:
             self._selected_language = language
 
+        # Special-case movie4k watch links: delegate to Movie API-based flow
+        try:
+            if self.link and ("movie4k.sx" in self.link or "/watch/" in self.link):
+                try:
+                    from .sites.movie4k import Movie as Movie4kMovie
+
+                    movie_obj = Movie4kMovie(url=self.link)
+
+                    # Propagate selected options to the Movie object if set
+                    if getattr(self, "_selected_provider", None):
+                        movie_obj._selected_provider = self._selected_provider
+                    if getattr(self, "_selected_language", None):
+                        movie_obj._selected_language = self._selected_language
+
+                    direct = movie_obj.get_direct_link()
+                    if direct:
+                        # Sync embed/direct links for downstream use
+                        self.embeded_link = movie_obj.embeded_link
+                        self.direct_link = movie_obj.direct_link
+                        return direct
+                    else:
+                        logging.error("Movie4k movie get_direct_link failed for: %s", self.link)
+                        return None
+                except Exception as err:
+                    logging.error("Movie4k delegation error for '%s': %s", self.link, err)
+                    # Fall through to legacy HTML-based flow
+
+        except Exception as err:
+            logging.error("Unexpected error in movie4k delegation: %s", err)
+
         # Validate selected provider
         if self._selected_provider not in SUPPORTED_PROVIDERS:
             logging.error("Provider '%s' is not supported", self._selected_provider)
@@ -1303,26 +1428,49 @@ class Episode:
 
             # Extract components from link if missing (no HTTP requests)
             if self.link:
+                # Attempt to extract slug differently for movie4k watch links
                 if not self.slug:
                     try:
-                        self.slug = self.link.split("/")[-3]
+                        if "movie4k.sx" in self.link or "/watch/" in self.link:
+                            parts = self.link.rstrip("/").split("/")
+                            if "watch" in parts:
+                                idx = parts.index("watch")
+                                # slug is the segment after 'watch'
+                                if idx + 1 < len(parts):
+                                    self.slug = parts[idx + 1]
+                                else:
+                                    self.slug = self.link.split("/")[-3] if len(self.link.split("/")) >= 3 else None
+                            else:
+                                self.slug = self.link.split("/")[-3]
+                        else:
+                            self.slug = self.link.split("/")[-3]
                     except IndexError:
                         logging.warning(
                             "Could not extract slug from link: %s", self.link
                         )
 
-                if self.season is None:
+                # Special-case movie4k watch links: set as movie (season 0)
+                if "/watch/" in self.link or "movie4k.sx" in self.link:
                     try:
-                        self.season = self._extract_season_from_link()
-                    except ValueError as err:
-                        logging.warning("Could not extract season: %s", err)
+                        # If link contains '/watch/', treat it as a movie
+                        if self.season is None:
+                            self.season = 0
+                        if self.episode is None:
+                            self.episode = 1
+                    except Exception as err:
+                        logging.warning("Failed to set movie defaults from link: %s", err)
+                else:
+                    if self.season is None:
+                        try:
+                            self.season = self._extract_season_from_link()
+                        except ValueError as err:
+                            logging.warning("Could not extract season: %s", err)
 
-                if self.episode is None:
-                    try:
-                        self.episode = self._extract_episode_from_link()
-                    except ValueError as err:
-                        logging.warning("Could not extract episode: %s", err)
-
+                    if self.episode is None:
+                        try:
+                            self.episode = self._extract_episode_from_link()
+                        except ValueError as err:
+                            logging.warning("Could not extract episode: %s", err)
             self._basic_details_filled = True
 
         except Exception as err:
@@ -1495,16 +1643,23 @@ def get_anime_title_from_html(
 
         # Site-specific title extraction
         if site == "s.to":
-            # S_TO uses: <div class="series-title"><h1><span>Title</span></h1>...</div>
-            title_div = soup.find("div", class_="series-title")
-            if title_div:
-                title_span = title_div.find("h1")
-                if title_span:
-                    span_element = title_span.find("span")
-                    if span_element:
-                        return span_element.get_text(strip=True)
-                    return title_span.get_text(strip=True)
-                return title_div.get_text(strip=True)
+            # s.to series pages use header tags and meta tags; prefer the actual header text (e.g., "Fallout")
+            header = soup.select_one(
+                "h1.h2.mb-1.fw-bold, div.col-12 h1, div.col-12 h2, div.series-title h1, h1, h2, h3"
+            )
+            if header:
+                span = header.find("span")
+                if span and span.get_text(strip=True):
+                    return span.get_text(strip=True)
+                return header.get_text(strip=True)
+
+            # Fallback to meta og:title and strip common suffixes like " | S.to"
+            meta_title = soup.find("meta", property="og:title")
+            if meta_title and meta_title.get("content"):
+                content = meta_title.get("content").strip()
+                # Remove site suffixes like " | S.to" or " | s.to"
+                content = re.sub(r"\s*\|\s*S\.to$", "", content, flags=re.IGNORECASE)
+                return content
         else:  # aniworld.to (default)
             title_div = soup.find("div", class_="series-title")
 

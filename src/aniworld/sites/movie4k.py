@@ -15,7 +15,7 @@ import importlib
 import logging
 import re
 from typing import Dict, List, Optional, Any
-from urllib.parse import urlparse, quote
+from urllib.parse import urlparse, quote, urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -130,7 +130,8 @@ def _scrape_browse_results(keyword: str) -> List[Dict]:
     Tries the /browse page with keyword parameter and parses
     the HTML for movie entries.
     """
-    search_url = f"{MOVIE4K_SX}/browse?keyword={quote(keyword)}"
+    search_url = f"{MOVIE4K_SX}/browse?keyword={quote(keyword)}&type=movies"
+    print("Scraping movie4k.sx HTML browse page:", search_url)
     try:
         response = requests.get(
             search_url,
@@ -239,8 +240,8 @@ def fetch_movie4k_search_results(keyword: str) -> List[Dict]:
 
     # Try JSON API without language filter first (broader results)
     for api_url in [
-        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}",
-        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}&lang=2",
+        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}&type=movies",
+        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}&lang=2&type=movies",
     ]:
         try:
             resp = requests.get(
@@ -502,6 +503,40 @@ class Movie:
         logging.warning("No supported provider found for movie: %s", self.title)
         return None
 
+    def _resolve_stream_url_for_movie(self, stream_url: str, referer: Optional[str] = None) -> str:
+        """Resolve movie4k stream redirects (HEAD/GET) and return final URL.
+
+        This helper is scoped to movie4k and attempts to follow server redirects
+        (via HEAD first, falling back to GET) up to a small limit. It also handles
+        protocol-relative Location headers ("//..."). On network errors it
+        returns the original stream_url as a safe fallback.
+        """
+        headers = {"User-Agent": RANDOM_USER_AGENT}
+        if referer:
+            headers["Referer"] = referer
+        url = stream_url
+        for _ in range(5):
+            try:
+                resp = requests.head(url, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT, allow_redirects=False)
+                # Follow HTTP redirects manually if Location header provided
+                if resp.status_code in (301, 302, 303, 307, 308) and "Location" in resp.headers:
+                    location = resp.headers["Location"]
+                    if location.startswith("//"):
+                        location = "https:" + location
+                    url = urljoin(url, location)
+                    continue
+
+                # If HEAD didn't reveal a redirect, perform GET with allow_redirects=True
+                resp_get = requests.get(url, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT, allow_redirects=True)
+                final = getattr(resp_get, "url", None)
+                if final and final != url:
+                    return final
+                return url
+            except requests.RequestException:
+                # On request failure return the original URL to avoid failing the whole flow
+                return stream_url
+        return url
+
     def get_direct_link(self) -> Optional[str]:
         """
         Get the direct streaming link for the movie.
@@ -530,6 +565,22 @@ class Movie:
 
             func = getattr(module, func_name)
             kwargs = {f"embeded_{provider.lower()}_link": self.embeded_link}
+
+            # Movie4k-specific: resolve redirects (if any) and normalize provider URL
+            try:
+                resolved = self._resolve_stream_url_for_movie(self.embeded_link, referer=self.link)
+                if resolved and resolved != self.embeded_link:
+                    resolved_provider = _extract_provider_from_url(resolved)
+                    if resolved_provider and resolved_provider in SUPPORTED_PROVIDERS:
+                        provider = resolved_provider
+                        self._selected_provider = provider
+                        self.embeded_link = resolved
+                        kwargs = {f"embeded_{provider.lower()}_link": self.embeded_link}
+            except Exception:
+                pass
+
+            # Provide referer (the movie page URL) to providers that need it
+            kwargs["referer"] = self.link
 
             if provider == "Luluvdo":
                 kwargs["arguments"] = arguments

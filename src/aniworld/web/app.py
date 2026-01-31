@@ -954,9 +954,12 @@ class WebApp:
                             for movie in movie_results:
                                 link = movie.get("link", "")
                                 if link and link not in seen_slugs:
+                                    # Mark movie entries so the frontend can treat them specially
                                     movie["site"] = "movie4k.sx"
                                     movie["base_url"] = config.MOVIE4K_SX
                                     movie["stream_path"] = "watch"
+                                    movie["type"] = "movie"
+                                    movie["is_movie"] = True
                                     all_results.append(movie)
                                     seen_slugs.add(link)
                         except Exception as e:
@@ -987,15 +990,29 @@ class WebApp:
                     else:
                         title = name
 
+                    # Determine a proper slug for movies (use the slug part, not the movie id)
+                    if anime_site == "movie4k.sx" and full_url and "/watch/" in full_url:
+                        try:
+                            parts = full_url.rstrip("/").split("/")
+                            # expected: ... /watch/{slug}/{id}
+                            slug_val = parts[-2] if len(parts) >= 2 else link
+                        except Exception:
+                            slug_val = link
+                    else:
+                        slug_val = link if not link.startswith("http") else link.split("/")[-1]
+
                     processed_anime = {
                         "title": title,
                         "url": full_url,
                         "description": anime.get("description", ""),
-                        "slug": link if not link.startswith("http") else link.split("/")[-1],
+                        "slug": slug_val,
                         "name": name,
                         "year": year,
                         "site": anime_site,
                         "cover": anime.get("cover", ""),
+                        # Propagate type information so the UI can render movies differently
+                        "type": anime.get("type", "series"),
+                        "is_movie": bool(anime.get("is_movie", False)),
                     }
 
                     processed_results.append(processed_anime)
@@ -1372,6 +1389,18 @@ class WebApp:
                         stream_path = "serie"
                         base_url = config.S_TO
                     else:
+                        # Special-case movie URLs (movie4k.sx uses /watch/{slug}/{id})
+                        from ..sites.movie4k import Movie as Movie4kMovie
+                        if "/watch/" in series_url or "movie4k.sx" in series_url:
+                            # Use Movie wrapper to get title and provide as a single movie entry
+                            try:
+                                movie_obj = Movie4kMovie(url=series_url)
+                                movie_title = movie_obj.title
+                            except Exception:
+                                movie_title = "Movie"
+                            # No seasons/episodes for movies; return a movies list with single item
+                            return {}, [{"movie": 1, "title": movie_title, "url": series_url}], series_url
+
                         raise ValueError("Invalid series URL format")
 
                     # Use existing function to get season/episode counts

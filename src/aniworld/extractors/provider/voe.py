@@ -91,12 +91,13 @@ def extract_voe_from_script(html: str) -> Optional[str]:
     return None
 
 
-def get_direct_link_from_voe(embeded_voe_link: str) -> str:
+def get_direct_link_from_voe(embeded_voe_link: str, referer: Optional[str] = None) -> str:
     """
     Extract direct video link from VOE embed page.
 
     Args:
         embeded_voe_link: URL of the VOE embed page
+        referer: Optional referer URL to send (e.g., the movie page)
 
     Returns:
         Direct video URL
@@ -107,9 +108,13 @@ def get_direct_link_from_voe(embeded_voe_link: str) -> str:
     """
     try:
         # Initial request to get redirect URL
+        headers = {"User-Agent": config.RANDOM_USER_AGENT}
+        if referer:
+            headers["Referer"] = referer
+
         response = requests.get(
             embeded_voe_link,
-            headers={"User-Agent": config.RANDOM_USER_AGENT},
+            headers=headers,
             timeout=config.DEFAULT_REQUEST_TIMEOUT,
         )
         response.raise_for_status()
@@ -121,19 +126,39 @@ def get_direct_link_from_voe(embeded_voe_link: str) -> str:
 
         redirect_url = redirect_match.group(0)
 
-        # Update provider headers with referer
+        # Update provider headers with referer (best-effort)
         parts = redirect_url.strip().split("/")
         if len(parts) >= 3:
-            referer = f'Referer: "{parts[0]}//{parts[2]}/"'
-            config.PROVIDER_HEADERS_D["VOE"].append(referer)
+            referer_header = f'Referer: "{parts[0]}//{parts[2]}/"'
+            if referer_header not in config.PROVIDER_HEADERS_D.get("VOE", []):
+                config.PROVIDER_HEADERS_D.setdefault("VOE", []).append(referer_header)
 
-        # Follow redirect and get final HTML
+        # Follow redirect and get final HTML using provided referer if available
         try:
-            with urlopen(
-                Request(redirect_url, headers={"User-Agent": config.RANDOM_USER_AGENT}),
-                timeout=config.DEFAULT_REQUEST_TIMEOUT,
-            ) as resp:
-                html = resp.read().decode()
+            req_headers = {"User-Agent": config.RANDOM_USER_AGENT}
+            if referer:
+                req_headers["Referer"] = referer
+            else:
+                # fallback to domain-derived referer
+                req_headers["Referer"] = f"{parts[0]}//{parts[2]}/"
+
+            # Try the redirect URL; if 404, attempt /e/ fallback (some VOE hosts expect /e/<id>)
+            try:
+                with urlopen(Request(redirect_url, headers=req_headers), timeout=config.DEFAULT_REQUEST_TIMEOUT) as resp:
+                    html = resp.read().decode()
+            except HTTPError as err:
+                if err.code == 404:
+                    # Attempt to construct an /e/ path version
+                    base = f"{parts[0]}//{parts[2]}"
+                    last = parts[-1]
+                    alt = f"{base}/e/{last}"
+                    try:
+                        with urlopen(Request(alt, headers=req_headers), timeout=config.DEFAULT_REQUEST_TIMEOUT) as resp:
+                            html = resp.read().decode()
+                    except Exception:
+                        raise ValueError(f"Failed to follow redirect (404) and fallback alt: {alt}") from err
+                else:
+                    raise ValueError(f"Failed to follow redirect: {err}") from err
         except (HTTPError, URLError, TimeoutError) as err:
             raise ValueError(f"Failed to follow redirect: {err}") from err
 

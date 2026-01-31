@@ -77,7 +77,12 @@ def _collect_episode_links() -> List[str]:
 
 
 def _group_episodes_by_series(links: List[str]) -> List[Anime]:
-    """Group episodes by series and create Anime objects."""
+    """Group episodes by series and create Anime objects.
+
+    Special-cases: movie4k.sx watch URLs are treated as movies and returned as
+    `MovieAnime` wrappers rather than regular `Anime` objects so the download
+    pipeline uses the Movie API instead of HTML scraping.
+    """
     if not links:
         return []
 
@@ -86,26 +91,45 @@ def _group_episodes_by_series(links: List[str]) -> List[Anime]:
     current_anime = None
 
     for link in links:
-        if link:
-            series_slug = _extract_series_slug(link)
-            if series_slug is None:
-                logging.warning("Invalid episode link format: %s", link)
-                continue
+        if not link:
+            continue
 
-            site = _detect_site_from_url(link)
+        # If this is a movie4k link, flush any current grouped episodes and
+        # append a MovieAnime directly.
+        if is_movie4k_url(link):
+            # Flush any pending series episodes
+            if episode_list:
+                episode_site = (
+                    episode_list[0].site if episode_list else "aniworld.to"
+                )
+                anime_list.append(Anime(episode_list=episode_list, site=episode_site))
+                episode_list = []
+                current_anime = None
 
-            if series_slug != current_anime:
-                if episode_list:
-                    episode_site = (
-                        episode_list[0].site if episode_list else "aniworld.to"
-                    )
-                    anime_list.append(
-                        Anime(episode_list=episode_list, site=episode_site)
-                    )
-                    episode_list = []
-                current_anime = series_slug
+            try:
+                movie = Movie(url=link)
+                anime_list.append(MovieAnime(movie))
+            except Exception as err:
+                logging.error("Failed to create Movie from '%s': %s", link, err)
+            continue
 
-            episode_list.append(Episode(link=link, site=site))
+        series_slug = _extract_series_slug(link)
+        if series_slug is None:
+            logging.warning("Invalid episode link format: %s", link)
+            continue
+
+        site = _detect_site_from_url(link)
+
+        if series_slug != current_anime:
+            if episode_list:
+                episode_site = (
+                    episode_list[0].site if episode_list else "aniworld.to"
+                )
+                anime_list.append(Anime(episode_list=episode_list, site=episode_site))
+                episode_list = []
+            current_anime = series_slug
+
+        episode_list.append(Episode(link=link, site=site))
 
     if episode_list:
         episode_site = episode_list[0].site if episode_list else "aniworld.to"
