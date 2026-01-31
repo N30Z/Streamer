@@ -203,8 +203,7 @@ def fetch_popular_and_new_sto() -> Dict[str, List[Dict[str, str]]]:
     """
     Fetch popular and new series from s.to homepage.
 
-    Scrapes the s.to homepage for "Beliebt" and "Neue" sections,
-    similar to how aniworld.to homepage parsing works.
+    Scrapes the s.to homepage for "Angesagt" (trending) and "Neu auf S.to" sections.
 
     Returns:
         Dictionary with 'popular' and 'new' keys containing lists of series data
@@ -216,30 +215,23 @@ def fetch_popular_and_new_sto() -> Dict[str, List[Dict[str, str]]]:
 
         result = {"popular": [], "new": []}
 
-        # Extract popular series section
-        popular_section = soup.find(
-            "h2", string=lambda text: text and "angesagt" in text.lower()
-        )
-        if popular_section:
-            popular_carousel = popular_section.find_parent().find_next_sibling(
-                "div", class_="trend-row"
-            )
-            if popular_carousel:
-                result["popular"] = _extract_series_from_carousel(popular_carousel)
+        # Extract trending/popular series from "Angesagt" section
+        # Structure: section.trending-widget > div.trend-row > swiper > article.trend-card
+        trending_section = soup.find("section", class_="trending-widget")
+        if trending_section:
+            result["popular"] = _extract_trending_series(trending_section)
 
-        # Extract new series section
-        new_section = soup.find(
-            "h2",
-            string=lambda text: text
-            and "neue" in text.lower()
-            and "serie" in text.lower(),
+        # Extract new series from "Neu auf S.to" section
+        # Structure: h4 with "Neu auf S.to" text, followed by div.row.g-3 with show-card links
+        new_heading = soup.find(
+            ["h4", "h3", "h2"],
+            string=lambda text: text and "neu" in text.lower() and "s.to" in text.lower(),
         )
-        if new_section:
-            new_carousel = new_section.find_parent().find_next_sibling(
-                "div", class_="previews"
-            )
-            if new_carousel:
-                result["new"] = _extract_series_from_carousel(new_carousel)
+        if new_heading:
+            # Find the next row container with show-cards
+            new_container = new_heading.find_next("div", class_="row")
+            if new_container:
+                result["new"] = _extract_new_series(new_container)
 
         return result
 
@@ -248,52 +240,107 @@ def fetch_popular_and_new_sto() -> Dict[str, List[Dict[str, str]]]:
         raise ValueError("Could not fetch s.to homepage data") from err
 
 
-def _extract_series_from_carousel(carousel_div) -> List[Dict[str, str]]:
+def _extract_trending_series(trending_section) -> List[Dict[str, str]]:
     """
-    Extract series data from a carousel div section on s.to.
+    Extract series from s.to trending/Angesagt section.
 
-    Args:
-        carousel_div: BeautifulSoup element containing the carousel
-
-    Returns:
-        List of dictionaries with 'name' and 'cover' keys
+    Cards are article.trend-card with h3.trend-title and picture > img for cover.
     """
     series_list = []
 
-    cover_items = carousel_div.find_all("div", class_="coverListItem")
-
-    for item in cover_items:
+    cards = trending_section.find_all("article", class_="trend-card")
+    for card in cards:
         try:
             name = None
-            h3_tag = item.find("h3")
-            if h3_tag:
-                name = h3_tag.get_text(strip=True)
-                name = name.split(" \u2022")[0].strip()
-
+            title_tag = card.find("h3", class_="trend-title")
+            if title_tag:
+                name = title_tag.get_text(strip=True)
             if not name:
-                link = item.find("a")
-                if link and link.get("title"):
-                    title_text = link.get("title")
-                    name = (
-                        title_text.split(" alle Folgen")[0]
-                        .split(" jetzt online")[0]
-                        .strip()
-                    )
+                link = card.find("a", href=re.compile(r"/serie/"))
+                if link:
+                    name = link.get_text(strip=True) or link.get("title", "")
 
-            cover = None
-            img_tag = item.find("img")
-            if img_tag:
-                cover = img_tag.get("data-src") or img_tag.get("src")
-                if cover and cover.startswith("/"):
-                    cover = S_TO + cover
+            cover = _extract_picture_url(card)
 
             if name and cover:
                 series_list.append({"name": name, "cover": cover})
-
         except Exception:
             continue
 
     return series_list
+
+
+def _extract_new_series(row_container) -> List[Dict[str, str]]:
+    """
+    Extract series from s.to 'Neu auf S.to' section.
+
+    Cards are a.show-card with picture > img, title in h6 or img alt.
+    """
+    series_list = []
+
+    # Find show-card links or column divs containing cards
+    cards = row_container.find_all("a", class_="show-card")
+    if not cards:
+        # Fallback: look for column divs with links
+        cards = row_container.find_all("div", class_=re.compile(r"col"))
+
+    for card in cards:
+        try:
+            name = None
+            # Try h6 title first
+            h6 = card.find("h6") or card.find_next_sibling("div", class_="mt-2")
+            if h6:
+                name = h6.get_text(strip=True)
+            # Fallback to img alt
+            if not name:
+                img = card.find("img")
+                if img:
+                    name = img.get("alt", "")
+            # Fallback to link title
+            if not name:
+                link = card if card.name == "a" else card.find("a")
+                if link:
+                    name = link.get("title", "")
+
+            cover = _extract_picture_url(card)
+
+            if name and cover:
+                series_list.append({"name": name, "cover": cover})
+        except Exception:
+            continue
+
+    return series_list
+
+
+def _extract_picture_url(element) -> str:
+    """
+    Extract the best image URL from a picture element or img tag.
+
+    Prefers the img src/data-src, falls back to source srcset.
+    """
+    # Try img tag first
+    img = element.find("img")
+    if img:
+        url = img.get("src") or img.get("data-src") or ""
+        if url and not url.startswith("data:"):
+            if url.startswith("/"):
+                return S_TO + url
+            return url
+
+    # Try source tags in picture element
+    picture = element.find("picture")
+    if picture:
+        for source in picture.find_all("source"):
+            srcset = source.get("srcset") or source.get("data-srcset") or ""
+            if srcset:
+                # Take the first URL from srcset
+                first_url = srcset.split(",")[0].strip().split(" ")[0]
+                if first_url and not first_url.startswith("data:"):
+                    if first_url.startswith("/"):
+                        return S_TO + first_url
+                    return first_url
+
+    return ""
 
 
 def get_movie_episode_count(slug: str) -> int:
