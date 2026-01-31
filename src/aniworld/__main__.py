@@ -5,6 +5,18 @@ AniWorld-Downloader main entry point.
 import sys
 import logging
 from typing import NoReturn
+import pathlib
+
+# Compatibility shim: If the package is invoked as `python -m src.aniworld`,
+# ensure the repository `src` directory is on sys.path so absolute imports
+# like `import aniworld` succeed for worker threads or dynamic imports.
+try:
+    src_dir = pathlib.Path(__file__).resolve().parents[1]  # points to the `src` directory
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+except Exception:
+    # Non-fatal; proceed without modification if something unexpected occurs
+    pass
 
 from .entry import aniworld
 from .config import VERSION, IS_NEWEST_VERSION

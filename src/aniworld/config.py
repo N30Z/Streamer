@@ -2,7 +2,6 @@ import logging
 import os
 import pathlib
 import platform
-import shutil
 import tempfile
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError, version
@@ -11,6 +10,7 @@ from urllib3.exceptions import InsecureRequestWarning
 import urllib3
 import requests
 from fake_useragent import UserAgent
+
 
 
 #########################################################################################
@@ -217,115 +217,28 @@ def _get_provider_headers_d():
     }
 
 
-def _get_provider_headers_w():
-    return {
-        "Vidmoly": ['Referer: "https://vidmoly.net"'],
-        "Doodstream": ['Referer: "https://dood.li/"'],
-        "VOE": [f"User-Agent: {RANDOM_USER_AGENT}"],
-        "Luluvdo": [f"User-Agent: {LULUVDO_USER_AGENT}"],
-        "Filemoon": [
-            f"User-Agent: {RANDOM_USER_AGENT}",
-            'Referer: "https://filemoon.to"',
-        ],
-    }
-
-
-# Properties for backward compatibility
-
-
 def get_provider_headers_d():
     """Return provider headers used when downloading"""
     return _get_provider_headers_d()
 
 
-def get_provider_headers_w():
-    """Return provider headers used when streaming"""
-    return _get_provider_headers_w()
-
-
-# For backward compatibility, keep these as module-level variables
-# but they will be lazily evaluated when accessed
 PROVIDER_HEADERS_D = get_provider_headers_d()
-PROVIDER_HEADERS_W = get_provider_headers_w()
 
 
 USES_DEFAULT_PROVIDER = False
 
-# E.g. Watch, Download, Syncplay
 DEFAULT_ACTION = "Download"
-DEFAULT_ANISKIP = False
 DEFAULT_DOWNLOAD_PATH = pathlib.Path.home() / "Downloads"
 DEFAULT_KEEP_WATCHING = False
-# German Dub, English Sub, German Sub
 DEFAULT_LANGUAGE = "German Sub"
 DEFAULT_ONLY_COMMAND = False
 DEFAULT_ONLY_DIRECT_LINK = False
-# SUPPORTED_PROVIDERS above
-DEFAULT_PROVIDER_DOWNLOAD = "VOE"
-DEFAULT_PROVIDER_WATCH = "Filemoon"
-DEFAULT_TERMINAL_SIZE = (90, 30)
-# Number of concurrent parallel downloads in web interface (default: 3)
+DEFAULT_PROVIDER = "VOE"
+# Number of concurrent parallel downloads in web interface
 DEFAULT_MAX_CONCURRENT_DOWNLOADS = 5
 
 # https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
 INVALID_PATH_CHARS = ("<", ">", ":", '"', "/", "\\", "|", "?", "*", "&")
-
-#########################################################################################
-# Executable Path Resolution
-#########################################################################################
-
-DEFAULT_APPDATA_PATH = os.path.join(
-    os.getenv("APPDATA") or os.path.expanduser("~"), "aniworld"
-)
-
-# Use cached platform check
-MPV_DIRECTORY = (
-    os.path.join(os.environ.get("APPDATA", ""), "mpv")
-    if os.name == "nt"
-    else os.path.expanduser("~/.config/mpv")
-)
-
-MPV_SCRIPTS_DIRECTORY = os.path.join(MPV_DIRECTORY, "scripts")
-
-
-@lru_cache(maxsize=1)
-def _get_mpv_path():
-    """Get MPV path with caching"""
-    mpv_path = shutil.which("mpv")
-    if _IS_WINDOWS and not mpv_path:
-        mpv_path = os.path.join(os.getenv("APPDATA", ""), "aniworld", "mpv", "mpv.exe")
-    return mpv_path
-
-
-@lru_cache(maxsize=1)
-def _get_syncplay_path():
-    """Get Syncplay path with caching"""
-    syncplay_path = shutil.which("syncplay")
-    if _IS_WINDOWS:
-        if syncplay_path:
-            syncplay_path = syncplay_path.replace("syncplay.EXE", "SyncplayConsole.exe")
-        else:
-            syncplay_path = os.path.join(
-                os.getenv("APPDATA", ""), "aniworld", "syncplay", "SyncplayConsole.exe"
-            )
-    return syncplay_path
-
-
-def get_mpv_path():
-    """Get MPV path with lazy initialization"""
-    return _get_mpv_path()
-
-
-def get_syncplay_path():
-    """Get Syncplay path with lazy initialization"""
-    return _get_syncplay_path()
-
-
-# Backward compatibility - Initialize with function calls
-MPV_PATH = get_mpv_path()
-SYNCPLAY_PATH = get_syncplay_path()
-
-YTDLP_PATH = shutil.which("yt-dlp")  # already in pip deps
 
 #########################################################################################
 

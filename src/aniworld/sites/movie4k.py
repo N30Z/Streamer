@@ -15,7 +15,7 @@ import importlib
 import logging
 import re
 from typing import Dict, List, Optional, Any
-from urllib.parse import urlparse, quote
+from urllib.parse import urlparse, quote, urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -59,11 +59,24 @@ def _extract_provider_from_url(url: str) -> Optional[str]:
     return None
 
 
+def _title_to_slug(title: str) -> str:
+    """Convert a movie title to a URL slug.
+
+    Example: "Greenland *ENGLISH*" -> "greenland-english"
+    """
+    # Lowercase and replace non-alphanumeric chars with hyphens
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower())
+    return slug.strip("-")
+
+
 def _parse_api_results(data: Any) -> List[Dict]:
     """
     Parse movie4k.sx API response into a list of result dicts.
 
     Handles both list responses and dict responses with nested arrays.
+    The browse API returns ``{"pager": {...}, "movies": [...]}``.
+    Individual movie objects may or may not contain a ``slug`` field;
+    when missing, it is derived from the title.
     """
     movies = []
     items = []
@@ -78,29 +91,34 @@ def _parse_api_results(data: Any) -> List[Dict]:
                 break
         if not items:
             # Maybe the dict itself is a single movie
-            if "_id" in data or "slug" in data:
+            if "_id" in data:
                 items = [data]
     else:
         return movies
 
     for movie in items:
         movie_id = movie.get("_id", "")
-        slug = movie.get("slug", "")
         title = movie.get("title", "")
-        if movie_id and slug:
-            poster = movie.get("poster_path", "")
-            cover = (
-                f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}"
-                if poster
-                else ""
-            )
-            movies.append({
-                "name": title,
-                "link": f"{MOVIE4K_SX}/watch/{slug}/{movie_id}",
-                "description": movie.get("storyline", movie.get("overview", "")),
-                "cover": cover,
-                "productionYear": movie.get("year", ""),
-            })
+        if not movie_id:
+            continue
+
+        slug = movie.get("slug", "") or _title_to_slug(title)
+        if not slug:
+            continue
+
+        poster = movie.get("poster_path", "")
+        cover = (
+            f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}"
+            if poster
+            else ""
+        )
+        movies.append({
+            "name": title,
+            "link": f"{MOVIE4K_SX}/watch/{slug}/{movie_id}",
+            "description": movie.get("storyline", movie.get("overview", "")),
+            "cover": cover,
+            "productionYear": movie.get("year", ""),
+        })
 
     return movies
 
@@ -112,7 +130,8 @@ def _scrape_browse_results(keyword: str) -> List[Dict]:
     Tries the /browse page with keyword parameter and parses
     the HTML for movie entries.
     """
-    search_url = f"{MOVIE4K_SX}/browse?keyword={quote(keyword)}"
+    search_url = f"{MOVIE4K_SX}/browse?keyword={quote(keyword)}&type=movies"
+    print("Scraping movie4k.sx HTML browse page:", search_url)
     try:
         response = requests.get(
             search_url,
@@ -204,6 +223,68 @@ def _scrape_browse_results(keyword: str) -> List[Dict]:
     return results
 
 
+def fetch_popular_and_new_movie4k() -> Dict[str, List[Dict[str, str]]]:
+    """
+    Fetch popular (trending) and new movies from movie4k.sx.
+
+    Uses the movie4k.sx JSON browse API with order_by parameters
+    to get trending and newest movies.
+
+    Returns:
+        Dictionary with 'popular' and 'new' keys containing lists of movie data
+    """
+    result = {"popular": [], "new": []}
+
+    # Fetch trending/popular movies
+    for order_by, key in [("trending", "popular"), ("Neu", "new")]:
+        api_url = (
+            f"{MOVIE4K_SX}/data/browse/"
+            f"?order_by={order_by}&type=movies&lang=2"
+        )
+        try:
+            resp = requests.get(
+                api_url,
+                timeout=DEFAULT_REQUEST_TIMEOUT,
+                headers={
+                    "User-Agent": RANDOM_USER_AGENT,
+                    "Accept": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            items = []
+            if isinstance(data, dict):
+                for k in ("movies", "results", "data", "items"):
+                    if k in data and isinstance(data[k], list):
+                        items = data[k]
+                        break
+            elif isinstance(data, list):
+                items = data
+
+            for movie in items:
+                title = movie.get("title", "")
+                if not title:
+                    continue
+
+                poster = movie.get("poster_path", "")
+                cover = (
+                    f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}"
+                    if poster
+                    else ""
+                )
+
+                if cover:
+                    result[key].append({"name": title, "cover": cover})
+
+        except (requests.RequestException, ValueError, KeyError) as err:
+            logging.warning(
+                "movie4k.sx browse API failed for %s: %s", order_by, err
+            )
+
+    return result
+
+
 def fetch_movie4k_search_results(keyword: str) -> List[Dict]:
     """
     Search movie4k.sx for movies/series matching keyword.
@@ -221,8 +302,8 @@ def fetch_movie4k_search_results(keyword: str) -> List[Dict]:
 
     # Try JSON API without language filter first (broader results)
     for api_url in [
-        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}",
-        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}&lang=2",
+        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}&type=movies",
+        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}&lang=2&type=movies",
     ]:
         try:
             resp = requests.get(
@@ -484,6 +565,40 @@ class Movie:
         logging.warning("No supported provider found for movie: %s", self.title)
         return None
 
+    def _resolve_stream_url_for_movie(self, stream_url: str, referer: Optional[str] = None) -> str:
+        """Resolve movie4k stream redirects (HEAD/GET) and return final URL.
+
+        This helper is scoped to movie4k and attempts to follow server redirects
+        (via HEAD first, falling back to GET) up to a small limit. It also handles
+        protocol-relative Location headers ("//..."). On network errors it
+        returns the original stream_url as a safe fallback.
+        """
+        headers = {"User-Agent": RANDOM_USER_AGENT}
+        if referer:
+            headers["Referer"] = referer
+        url = stream_url
+        for _ in range(5):
+            try:
+                resp = requests.head(url, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT, allow_redirects=False)
+                # Follow HTTP redirects manually if Location header provided
+                if resp.status_code in (301, 302, 303, 307, 308) and "Location" in resp.headers:
+                    location = resp.headers["Location"]
+                    if location.startswith("//"):
+                        location = "https:" + location
+                    url = urljoin(url, location)
+                    continue
+
+                # If HEAD didn't reveal a redirect, perform GET with allow_redirects=True
+                resp_get = requests.get(url, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT, allow_redirects=True)
+                final = getattr(resp_get, "url", None)
+                if final and final != url:
+                    return final
+                return url
+            except requests.RequestException:
+                # On request failure return the original URL to avoid failing the whole flow
+                return stream_url
+        return url
+
     def get_direct_link(self) -> Optional[str]:
         """
         Get the direct streaming link for the movie.
@@ -512,6 +627,22 @@ class Movie:
 
             func = getattr(module, func_name)
             kwargs = {f"embeded_{provider.lower()}_link": self.embeded_link}
+
+            # Movie4k-specific: resolve redirects (if any) and normalize provider URL
+            try:
+                resolved = self._resolve_stream_url_for_movie(self.embeded_link, referer=self.link)
+                if resolved and resolved != self.embeded_link:
+                    resolved_provider = _extract_provider_from_url(resolved)
+                    if resolved_provider and resolved_provider in SUPPORTED_PROVIDERS:
+                        provider = resolved_provider
+                        self._selected_provider = provider
+                        self.embeded_link = resolved
+                        kwargs = {f"embeded_{provider.lower()}_link": self.embeded_link}
+            except Exception:
+                pass
+
+            # Provide referer (the movie page URL) to providers that need it
+            kwargs["referer"] = self.link
 
             if provider == "Luluvdo":
                 kwargs["arguments"] = arguments

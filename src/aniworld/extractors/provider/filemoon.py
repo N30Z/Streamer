@@ -41,17 +41,59 @@ def _convert_embed_to_download_url(embed_url: str) -> str:
 
 
 def _extract_iframe_src(html_content: str, source_url: str) -> str:
-    """Extract iframe src from HTML content."""
+    """Extract iframe src from HTML content.
+
+    Robustness notes:
+    - Prefer actual <iframe src> tags when present.
+    - If no iframe is present, try to find embed URLs inside <script> tags using
+      regex patterns (handles JS-inserted iframe or protocol-relative URLs).
+    - Resolve relative or protocol-relative URLs using the source page as base.
+    """
+    from urllib.parse import urljoin
+
     try:
         soup = BeautifulSoup(html_content, "html.parser")
         iframe = soup.find("iframe")
 
-        if not iframe or not iframe.has_attr("src"):
-            raise ValueError(f"No iframe with src attribute found in {source_url}")
+        if iframe and iframe.has_attr("src"):
+            iframe_src = iframe["src"]
+            # Resolve relative or protocol-relative URLs against the source URL
+            iframe_src = urljoin(source_url, iframe_src)
+            logging.debug(f"Extracted iframe src from tag: {iframe_src}")
+            return iframe_src
 
-        iframe_src = iframe["src"]
-        logging.debug(f"Extracted iframe src: {iframe_src}")
-        return iframe_src
+        # No direct iframe tag found; try to extract candidate URLs from scripts
+        logging.debug("No <iframe> tag found; searching <script> tags for embed URLs...")
+        script_tags = soup.find_all("script")
+        # Look for urls containing /e/ or /d/ (common Filemoon embed patterns)
+        pattern = re.compile(r"(https?:)?//[^\s'\"]+/(?:e|d)/[A-Za-z0-9_-]+")
+
+        for script in script_tags:
+            script_text = script.string or script.get_text() or ""
+            if not script_text:
+                continue
+            match = pattern.search(script_text)
+            if match:
+                candidate = match.group(0)
+                # Normalize protocol-relative URLs (//host/...) and resolve relative ones
+                if candidate.startswith("//"):
+                    candidate = "https:" + candidate
+                if candidate.startswith("http"):
+                    iframe_src = candidate
+                else:
+                    iframe_src = urljoin(source_url, candidate)
+                logging.debug(f"Found embed URL in script: {iframe_src}")
+                return iframe_src
+
+        # As a last attempt, search the whole HTML for common embed URL patterns
+        fallback_pattern = re.compile(r'https?://[^"\']+/(?:e|d)/[A-Za-z0-9_-]+')
+        fallback_match = fallback_pattern.search(html_content)
+        if fallback_match:
+            iframe_src = fallback_match.group(0)
+            logging.debug(f"Found embed URL in HTML fallback: {iframe_src}")
+            return iframe_src
+
+        raise ValueError(f"No iframe with src attribute found in {source_url}")
 
     except Exception as err:
         logging.error(f"Failed to extract iframe from {source_url}: {err}")

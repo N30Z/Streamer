@@ -6,6 +6,8 @@
     <title>AniWorld Downloader - Web Interface</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Fallback for file preview: relative path to static folder -->
+    <link rel="stylesheet" href="../static/css/style.css">
 </head>
 <body>
     <!-- Animated Background -->
@@ -34,7 +36,6 @@
         <div class="nav-container">
             <div class="nav-brand">
                 <h1 id="nav-title" style="cursor: pointer;">AniWorld Downloader</h1>
-                <span class="version" id="version-display">Loading...</span>
             </div>
             <div class="nav-actions">
                 <button id="file-browser-btn" class="nav-btn file-browser-btn" title="Downloaded Files">
@@ -141,21 +142,72 @@
             <div class="home-content" id="home-content">
                 <div class="loading-section" id="home-loading">
                     <div class="loading-spinner"></div>
-                    <p>Loading popular and new anime...</p>
+                    <p>Loading popular and new content...</p>
                 </div>
 
                 <div class="popular-new-sections" id="popular-new-sections" style="display: none;">
-                    <div class="anime-section" id="popular-section">
-                        <h3><i class="fas fa-fire"></i> Popular Anime</h3>
-                        <div class="anime-grid" id="popular-anime-grid">
-                            <!-- Popular anime will be populated here -->
+                    <div class="provider-columns">
+                        <!-- AniWorld Column -->
+                        <div class="provider-column">
+                            <div class="provider-column-header">
+                                <h3>AniWorld.to</h3>
+                            </div>
+                            <div class="provider-column-loading" id="aniworld-loading" style="display: none;">
+                                <div class="loading-spinner-small"></div>
+                                <span>Loading...</span>
+                            </div>
+                            <div class="provider-column-content" id="aniworld-content">
+                                <div class="anime-section" id="popular-section">
+                                    <h4><i class="fas fa-fire"></i> Popular</h4>
+                                    <div class="anime-grid" id="popular-anime-grid"></div>
+                                </div>
+                                <div class="anime-section" id="new-section">
+                                    <h4><i class="fas fa-star"></i> New</h4>
+                                    <div class="anime-grid" id="new-anime-grid"></div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="anime-section" id="new-section">
-                        <h3><i class="fas fa-star"></i> New Anime</h3>
-                        <div class="anime-grid" id="new-anime-grid">
-                            <!-- New anime will be populated here -->
+                        <!-- S.to Column -->
+                        <div class="provider-column">
+                            <div class="provider-column-header">
+                                <h3>S.to</h3>
+                            </div>
+                            <div class="provider-column-loading" id="sto-loading" style="display: none;">
+                                <div class="loading-spinner-small"></div>
+                                <span>Loading...</span>
+                            </div>
+                            <div class="provider-column-content" id="sto-content">
+                                <div class="anime-section" id="popular-sto-section">
+                                    <h4><i class="fas fa-fire"></i> Popular</h4>
+                                    <div class="anime-grid" id="popular-sto-grid"></div>
+                                </div>
+                                <div class="anime-section" id="new-sto-section">
+                                    <h4><i class="fas fa-star"></i> New</h4>
+                                    <div class="anime-grid" id="new-sto-grid"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Movie4k Column -->
+                        <div class="provider-column">
+                            <div class="provider-column-header">
+                                <h3>Movie4k.sx</h3>
+                            </div>
+                            <div class="provider-column-loading" id="movie4k-loading" style="display: none;">
+                                <div class="loading-spinner-small"></div>
+                                <span>Loading...</span>
+                            </div>
+                            <div class="provider-column-content" id="movie4k-content">
+                                <div class="anime-section" id="popular-movie4k-section">
+                                    <h4><i class="fas fa-fire"></i> Popular</h4>
+                                    <div class="anime-grid" id="popular-movie4k-grid"></div>
+                                </div>
+                                <div class="anime-section" id="new-movie4k-section">
+                                    <h4><i class="fas fa-star"></i> New</h4>
+                                    <div class="anime-grid" id="new-movie4k-grid"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

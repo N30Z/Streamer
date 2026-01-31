@@ -3,51 +3,25 @@ import logging
 import sys
 from typing import List
 
-from .ascii_art import display_traceback_art
-from .action import watch, syncplay
 from .models import Anime, Episode, SUPPORTED_SITES
 from .movie4k import Movie, MovieAnime, is_movie4k_url
 from .parser import arguments
 from .search import search_anime
 from .execute import execute
-from .menu import menu
 from .common import generate_links
 
 
 def _detect_site_from_url(url: str) -> str:
-    """
-    Detect the streaming site from a URL.
-
-    Args:
-        url: The episode URL
-
-    Returns:
-        Site identifier (ANIWORLD_TO, S_TO, etc.)
-    """
+    """Detect the streaming site from a URL."""
     for site, config in SUPPORTED_SITES.items():
         base_url = config["base_url"]
         if url.startswith(base_url):
             return site
-
-    # Default to aniworld.to for backward compatibility
     return "aniworld.to"
 
 
 def _extract_series_slug(url: str) -> str:
-    """
-    Extract the series slug from an episode URL using site-specific stream paths.
-
-    Each site uses a different path structure:
-        aniworld.to: /anime/stream/{slug}/staffel-1/episode-1
-        s.to:        /serie/{slug}/staffel-1/episode-1
-        movie4k.sx:  /watch/{slug}/{id}
-
-    Args:
-        url: The episode URL
-
-    Returns:
-        The series slug, or None if extraction fails.
-    """
+    """Extract the series slug from an episode URL using site-specific stream paths."""
     parts = url.split("/")
 
     for config in SUPPORTED_SITES.values():
@@ -55,8 +29,6 @@ def _extract_series_slug(url: str) -> str:
         if not url.startswith(base_url):
             continue
 
-        # The stream_path may contain multiple segments (e.g. "anime/stream")
-        # Find the last segment of the stream_path in the URL parts
         stream_segments = config["stream_path"].split("/")
         last_segment = stream_segments[-1]
 
@@ -69,19 +41,10 @@ def _extract_series_slug(url: str) -> str:
     return None
 
 
-def _handle_local_episodes() -> None:
-    """Handle local episode playback."""
-    if arguments.action == "Watch":
-        watch(None)
-    elif arguments.action == "Syncplay":
-        syncplay(None)
-
-
 def _read_episode_file(episode_file: str) -> List[str]:
     """Read episode URLs from a file."""
     try:
         with open(episode_file, "r", encoding="UTF-8") as file:
-            # Use list comprehension for better performance
             urls = [line.strip() for line in file if line.strip().startswith("http")]
             return urls
     except FileNotFoundError:
@@ -105,18 +68,21 @@ def _collect_episode_links() -> List[str]:
 
     links = [link.rstrip("/") for link in links]
 
-    # Separate movie4k links (they don't need generate_links processing)
     movie4k_links = [link for link in links if is_movie4k_url(link)]
     series_links = [link for link in links if not is_movie4k_url(link)]
 
-    # Only run generate_links on aniworld/s.to links
     processed_links = generate_links(series_links, arguments) if series_links else []
 
     return processed_links + movie4k_links
 
 
 def _group_episodes_by_series(links: List[str]) -> List[Anime]:
-    """Group episodes by series and create Anime objects."""
+    """Group episodes by series and create Anime objects.
+
+    Special-cases: movie4k.sx watch URLs are treated as movies and returned as
+    `MovieAnime` wrappers rather than regular `Anime` objects so the download
+    pipeline uses the Movie API instead of HTML scraping.
+    """
     if not links:
         return []
 
@@ -125,38 +91,49 @@ def _group_episodes_by_series(links: List[str]) -> List[Anime]:
     current_anime = None
 
     for link in links:
-        if link:
-            series_slug = _extract_series_slug(link)
-            if series_slug is None:
-                logging.warning("Invalid episode link format: %s", link)
-                continue
+        if not link:
+            continue
 
-            site = _detect_site_from_url(link)
+        # If this is a movie4k link, flush any current grouped episodes and
+        # append a MovieAnime directly.
+        if is_movie4k_url(link):
+            # Flush any pending series episodes
+            if episode_list:
+                episode_site = (
+                    episode_list[0].site if episode_list else "aniworld.to"
+                )
+                anime_list.append(Anime(episode_list=episode_list, site=episode_site))
+                episode_list = []
+                current_anime = None
 
-            if series_slug != current_anime:
-                if episode_list:
-                    # Get the site from the first episode in the list
-                    episode_site = (
-                        episode_list[0].site if episode_list else "aniworld.to"
-                    )
-                    anime_list.append(
-                        Anime(episode_list=episode_list, site=episode_site)
-                    )
-                    episode_list = []
-                current_anime = series_slug
+            try:
+                movie = Movie(url=link)
+                anime_list.append(MovieAnime(movie))
+            except Exception as err:
+                logging.error("Failed to create Movie from '%s': %s", link, err)
+            continue
 
-            episode_list.append(Episode(link=link, site=site))
+        series_slug = _extract_series_slug(link)
+        if series_slug is None:
+            logging.warning("Invalid episode link format: %s", link)
+            continue
+
+        site = _detect_site_from_url(link)
+
+        if series_slug != current_anime:
+            if episode_list:
+                episode_site = (
+                    episode_list[0].site if episode_list else "aniworld.to"
+                )
+                anime_list.append(Anime(episode_list=episode_list, site=episode_site))
+                episode_list = []
+            current_anime = series_slug
+
+        episode_list.append(Episode(link=link, site=site))
 
     if episode_list:
-        # Get the site from the first episode in the list
         episode_site = episode_list[0].site if episode_list else "aniworld.to"
         anime_list.append(Anime(episode_list=episode_list, site=episode_site))
-
-    # Handle case when no links are provided but we need to create a default anime
-    if not anime_list and not links:
-        slug = arguments.slug or search_anime()
-        episode = Episode(slug=slug)
-        anime_list.append(Anime(episode_list=[episode]))
 
     return anime_list
 
@@ -165,19 +142,16 @@ def _handle_episode_mode() -> None:
     """Handle episode/file mode execution."""
     links = _collect_episode_links()
 
-    # If no links were collected, handle as interactive mode
     if not links:
         slug = arguments.slug or search_anime()
         episode = Episode(slug=slug)
         anime_list = [Anime(episode_list=[episode])]
     else:
-        # Separate movie4k links from aniworld/s.to links
         movie4k_links = [link for link in links if is_movie4k_url(link)]
         series_links = [link for link in links if not is_movie4k_url(link)]
 
         anime_list = []
 
-        # Handle movie4k.sx links
         for link in movie4k_links:
             try:
                 movie = Movie(url=link)
@@ -185,27 +159,10 @@ def _handle_episode_mode() -> None:
             except Exception as err:
                 logging.error("Failed to create Movie from '%s': %s", link, err)
 
-        # Handle aniworld/s.to links
         if series_links:
             anime_list.extend(_group_episodes_by_series(series_links))
 
     execute(anime_list=anime_list)
-
-
-def _handle_interactive_mode() -> None:
-    """Handle interactive menu mode."""
-    slug = arguments.slug
-
-    if not slug:
-        while True:
-            try:
-                slug = search_anime()
-                break
-            except ValueError:
-                continue
-
-    anime = menu(arguments=arguments, slug=slug)
-    execute(anime_list=[anime])
 
 
 def _handle_runtime_error(e: Exception) -> None:
@@ -213,29 +170,17 @@ def _handle_runtime_error(e: Exception) -> None:
     if arguments.debug:
         traceback.print_exc()
     else:
-        # hide traceback only show output
-        print(display_traceback_art())
         print(f"Error: {e}")
         print("\nFor more detailed information, use --debug and try again.")
-
-    # Detecting Nuitka at run time
-    if "__compiled__" in globals():
-        input("Press Enter to exit...")
 
 
 def aniworld() -> None:
     """
     Main entry point for the AniWorld downloader.
 
-    This function handles four main execution modes:
-    1. Web UI mode - starts Flask web interface
-    2. Local episodes mode - plays local video files
-    3. Episode/file mode - processes specific episodes or episode files
-    4. Interactive mode - presents a menu for anime selection
-
-    Raises:
-        KeyboardInterrupt: When user interrupts execution with Ctrl+C
-        Exception: Any other runtime errors are caught and handled gracefully
+    Execution modes:
+    1. Web UI mode (default) - starts Flask web interface
+    2. Episode/file mode - downloads specific episodes via CLI
     """
     try:
         # Handle web UI mode
@@ -247,18 +192,17 @@ def aniworld() -> None:
             )
             return
 
-        # Handle local episodes
-        if arguments.local_episodes:
-            _handle_local_episodes()
-            return
-
         # Handle episode/file mode
         if arguments.episode or arguments.episode_file:
             _handle_episode_mode()
             return
 
-        # Handle interactive mode (default)
-        _handle_interactive_mode()
+        # Default: start web UI
+        from .web.app import start_web_interface
+
+        start_web_interface(
+            arguments, port=arguments.web_port, debug=arguments.debug
+        )
 
     except KeyboardInterrupt:
         pass

@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('AniWorld Downloader Web Interface loaded');
 
     // Get UI elements
-    const versionDisplay = document.getElementById('version-display');
+    // const versionDisplay = document.getElementById('version-display');
     const navTitle = document.getElementById('nav-title');
     const searchInput = document.getElementById('search-input');
     const searchBtn = document.getElementById('search-btn');
@@ -17,6 +17,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const popularNewSections = document.getElementById('popular-new-sections');
     const popularAnimeGrid = document.getElementById('popular-anime-grid');
     const newAnimeGrid = document.getElementById('new-anime-grid');
+
+    // S.to and Movie4k grid elements
+    const popularStoGrid = document.getElementById('popular-sto-grid');
+    const newStoGrid = document.getElementById('new-sto-grid');
+    const popularMovie4kGrid = document.getElementById('popular-movie4k-grid');
+    const newMovie4kGrid = document.getElementById('new-movie4k-grid');
+
+    // Provider column loading elements
+    const aniworldLoading = document.getElementById('aniworld-loading');
+    const aniworldContent = document.getElementById('aniworld-content');
+    const stoLoading = document.getElementById('sto-loading');
+    const stoContent = document.getElementById('sto-content');
+    const movie4kLoading = document.getElementById('movie4k-loading');
+    const movie4kContent = document.getElementById('movie4k-content');
 
     // Theme toggle elements
     const themeToggle = document.getElementById('theme-toggle');
@@ -182,19 +196,21 @@ document.addEventListener('DOMContentLoaded', function() {
         populateProviderDropdown('aniworld.to');
     }
 
-    function populateProviderDropdown(site) {
+    function populateProviderDropdown(site, providers) {
         if (!providerSelect) {
             return;
         }
 
-        // Define site-specific providers
-        let siteProviders = [];
-        if (site === 'movie4k.sx') {
-            siteProviders = ['Filemoon', 'Doodstream', 'Streamtape', 'VOE', 'Vidoza'];
-        } else if (site === 's.to') {
-            siteProviders = ['VOE'];
-        } else { // aniworld.to or default
-            siteProviders = ['VOE', 'Filemoon', 'Vidmoly'];
+        // Use dynamic providers if available, otherwise fall back to site defaults
+        let siteProviders = providers || [];
+        if (siteProviders.length === 0) {
+            if (site === 'movie4k.sx') {
+                siteProviders = ['Filemoon', 'Doodstream', 'Streamtape', 'VOE', 'Vidoza'];
+            } else if (site === 's.to') {
+                siteProviders = ['VOE'];
+            } else {
+                siteProviders = ['VOE', 'Filemoon', 'Vidmoly'];
+            }
         }
 
         providerSelect.innerHTML = '';
@@ -210,14 +226,14 @@ document.addEventListener('DOMContentLoaded', function() {
         let defaultProvider = userPreferences.default_provider || '';
         if (defaultProvider && siteProviders.includes(defaultProvider)) {
             providerSelect.value = defaultProvider;
-        } else {
-            providerSelect.value = 'VOE';
+        } else if (siteProviders.length > 0) {
+            providerSelect.value = siteProviders[0];
         }
 
         console.log(`Populated providers for ${site}:`, siteProviders);
     }
 
-    function populateLanguageDropdown(site) {
+    function populateLanguageDropdown(site, languages) {
         if (!languageSelect) {
             console.error('Language select element not found!');
             return;
@@ -226,17 +242,29 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Populating language dropdown for site:', site);
         languageSelect.innerHTML = '';
 
-        let availableLanguages = [];
+        // Use dynamic languages if available, otherwise fall back to site defaults
+        let availableLanguages = languages || [];
         let defaultLanguage = '';
-        if (site === 'movie4k.sx') {
-            availableLanguages = ['Deutsch', 'English'];
-            defaultLanguage = 'Deutsch';
-        } else if (site === 's.to') {
-            availableLanguages = ['German Dub', 'English Dub'];
-            defaultLanguage = 'German Dub';
-        } else { // aniworld.to or default
-            availableLanguages = ['German Dub', 'English Sub', 'German Sub'];
-            defaultLanguage = 'German Sub';
+        if (availableLanguages.length === 0) {
+            if (site === 'movie4k.sx') {
+                availableLanguages = ['Deutsch', 'English'];
+                defaultLanguage = 'Deutsch';
+            } else if (site === 's.to') {
+                availableLanguages = ['German Dub', 'English Dub'];
+                defaultLanguage = 'German Dub';
+            } else {
+                availableLanguages = ['German Dub', 'English Sub', 'German Sub'];
+                defaultLanguage = 'German Sub';
+            }
+        } else {
+            // Set default from dynamic list
+            if (site === 'movie4k.sx') {
+                defaultLanguage = 'Deutsch';
+            } else if (site === 's.to') {
+                defaultLanguage = 'German Dub';
+            } else {
+                defaultLanguage = 'German Sub';
+            }
         }
 
         availableLanguages.forEach(language => {
@@ -249,13 +277,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set default based on saved preference, then site fallback
         setTimeout(() => {
             let defaultLang = userPreferences.default_language || '';
-            // Check if the saved preference is available for this site
             if (defaultLang && availableLanguages.includes(defaultLang)) {
                 languageSelect.value = defaultLang;
-            } else if (site === 's.to') {
-                languageSelect.value = 'German Dub';
-            } else {
-                languageSelect.value = 'German Sub';
+            } else if (defaultLanguage && availableLanguages.includes(defaultLanguage)) {
+                languageSelect.value = defaultLanguage;
+            } else if (availableLanguages.length > 0) {
+                languageSelect.value = availableLanguages[0];
             }
             console.log('Set default language to:', languageSelect.value);
         }, 0);
@@ -403,6 +430,15 @@ document.addEventListener('DOMContentLoaded', function() {
             coverStyle = `style="background-image: url('${coverUrl}')"`;
         }
 
+        // Build actions based on type (movie vs series)
+        let actionsHtml = `<button class="download-btn">Download</button>`;
+        if (anime.type === 'movie' || anime.is_movie || anime.site === 'movie4k.sx') {
+            actionsHtml = `
+                <button class="download-btn">Download Movie</button>
+                <button class="watch-btn">Open</button>
+            `;
+        }
+
         card.innerHTML = `
             <div class="anime-card-background" ${coverStyle}></div>
             <div class="anime-card-content">
@@ -413,18 +449,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${anime.description ? `<strong>Description:</strong> ${escapeHtml(anime.description)}<br>` : ''}
                 </div>
                 <div class="anime-actions">
-                    <button class="download-btn">
-                        Download
-                    </button>
+                    ${actionsHtml}
                 </div>
             </div>
         `;
 
         // Add event listener for the download button to avoid onclick string issues
         const downloadBtn = card.querySelector('.download-btn');
-        downloadBtn.addEventListener('click', () => {
-            showDownloadModal(anime.title, 'Series', anime.url);
-        });
+        if (downloadBtn) {
+            const episodeLabel = (anime.type === 'movie' || anime.is_movie) ? 'Movie' : 'Series';
+            downloadBtn.addEventListener('click', () => {
+                showDownloadModal(anime.title, episodeLabel, anime.url);
+            });
+        }
+
+        const watchBtn = card.querySelector('.watch-btn');
+        if (watchBtn) {
+            watchBtn.addEventListener('click', () => {
+                // Open movie page in a new tab
+                if (anime.url) window.open(anime.url, '_blank');
+            });
+        }
 
         return card;
     }
@@ -453,11 +498,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Populate modal
         document.getElementById('download-anime-title').textContent = animeTitle;
 
-        // Populate language dropdown based on site
-        populateLanguageDropdown(detectedSite);
-
-        // Populate provider dropdown based on site
-        populateProviderDropdown(detectedSite);
+        // Show loading state for provider and language dropdowns
+        // They will be populated dynamically when episodes are fetched
+        if (providerSelect) {
+            providerSelect.innerHTML = '<option value="">Loading providers...</option>';
+        }
+        if (languageSelect) {
+            languageSelect.innerHTML = '<option value="">Loading languages...</option>';
+        }
 
         // Show loading state for episodes
         episodeTreeLoading.style.display = 'flex';
@@ -492,13 +540,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 availableEpisodes = data.episodes;
                 availableMovies = data.movies || [];
                 renderEpisodeTree();
+
+                // Populate provider and language dropdowns with scanned data
+                populateProviderDropdown(
+                    currentDownloadData.site,
+                    data.available_providers || []
+                );
+                populateLanguageDropdown(
+                    currentDownloadData.site,
+                    data.available_languages || []
+                );
             } else {
                 showNotification(data.error || 'Failed to load episodes', 'error');
+                // Fall back to site defaults on error
+                populateProviderDropdown(currentDownloadData.site);
+                populateLanguageDropdown(currentDownloadData.site);
             }
         })
         .catch(error => {
             console.error('Failed to fetch episodes:', error);
             showNotification('Failed to load episodes', 'error');
+            // Fall back to site defaults on network error
+            populateProviderDropdown(currentDownloadData.site);
+            populateLanguageDropdown(currentDownloadData.site);
         })
         .finally(() => {
             episodeTreeLoading.style.display = 'none';
@@ -1054,59 +1118,110 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function loadPopularAndNewAnime() {
-        console.log('Loading popular and new anime...');
+        console.log('Loading popular and new content from all providers...');
 
         // Show loading state for home content
         homeLoading.style.display = 'block';
         popularNewSections.style.display = 'none';
 
+        let loadedCount = 0;
+        const totalProviders = 3;
+
+        function checkAllLoaded() {
+            loadedCount++;
+            if (loadedCount >= totalProviders) {
+                homeLoading.style.display = 'none';
+                popularNewSections.style.display = 'block';
+                showHomeContent();
+            }
+        }
+
+        // Load AniWorld
+        if (aniworldLoading) aniworldLoading.style.display = 'flex';
+        if (aniworldContent) aniworldContent.style.display = 'none';
         fetch('/api/popular-new')
             .then(response => {
-                if (response.status === 401) {
-                    window.location.href = '/login';
-                    return;
-                }
+                if (response.status === 401) { window.location.href = '/login'; return; }
                 return response.json();
             })
             .then(data => {
                 if (!data) return;
-
                 if (data.success) {
-                    displayPopularAndNewAnime(data.popular || [], data.new || []);
-                } else {
-                    console.error('Failed to load popular/new anime:', data.error);
-                    showEmptyState();
+                    displayProviderContent(
+                        data.popular || [], data.new || [],
+                        popularAnimeGrid, newAnimeGrid
+                    );
                 }
             })
-            .catch(error => {
-                console.error('Error loading popular/new anime:', error);
-                showEmptyState();
-            })
+            .catch(error => console.error('Error loading aniworld:', error))
             .finally(() => {
-                homeLoading.style.display = 'none';
+                if (aniworldLoading) aniworldLoading.style.display = 'none';
+                if (aniworldContent) aniworldContent.style.display = 'block';
+                checkAllLoaded();
+            });
+
+        // Load S.to
+        if (stoLoading) stoLoading.style.display = 'flex';
+        if (stoContent) stoContent.style.display = 'none';
+        fetch('/api/popular-new-sto')
+            .then(response => {
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                return response.json();
+            })
+            .then(data => {
+                if (!data) return;
+                if (data.success) {
+                    displayProviderContent(
+                        data.popular || [], data.new || [],
+                        popularStoGrid, newStoGrid
+                    );
+                }
+            })
+            .catch(error => console.error('Error loading s.to:', error))
+            .finally(() => {
+                if (stoLoading) stoLoading.style.display = 'none';
+                if (stoContent) stoContent.style.display = 'block';
+                checkAllLoaded();
+            });
+
+        // Load Movie4k
+        if (movie4kLoading) movie4kLoading.style.display = 'flex';
+        if (movie4kContent) movie4kContent.style.display = 'none';
+        fetch('/api/popular-new-movie4k')
+            .then(response => {
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                return response.json();
+            })
+            .then(data => {
+                if (!data) return;
+                if (data.success) {
+                    displayProviderContent(
+                        data.popular || [], data.new || [],
+                        popularMovie4kGrid, newMovie4kGrid
+                    );
+                }
+            })
+            .catch(error => console.error('Error loading movie4k:', error))
+            .finally(() => {
+                if (movie4kLoading) movie4kLoading.style.display = 'none';
+                if (movie4kContent) movie4kContent.style.display = 'block';
+                checkAllLoaded();
             });
     }
 
-    function displayPopularAndNewAnime(popularAnime, newAnime) {
-        // Clear existing content
-        popularAnimeGrid.innerHTML = '';
-        newAnimeGrid.innerHTML = '';
-
-        // Populate popular anime (limit to 8)
-        popularAnime.slice(0, 8).forEach(anime => {
-            const animeCard = createHomeAnimeCard(anime);
-            popularAnimeGrid.appendChild(animeCard);
-        });
-
-        // Populate new anime (limit to 8)
-        newAnime.slice(0, 8).forEach(anime => {
-            const animeCard = createHomeAnimeCard(anime);
-            newAnimeGrid.appendChild(animeCard);
-        });
-
-        // Show the sections
-        popularNewSections.style.display = 'block';
-        showHomeContent();
+    function displayProviderContent(popularItems, newItems, popularGrid, newGrid) {
+        if (popularGrid) {
+            popularGrid.innerHTML = '';
+            popularItems.slice(0, 8).forEach(item => {
+                popularGrid.appendChild(createHomeAnimeCard(item));
+            });
+        }
+        if (newGrid) {
+            newGrid.innerHTML = '';
+            newItems.slice(0, 8).forEach(item => {
+                newGrid.appendChild(createHomeAnimeCard(item));
+            });
+        }
     }
 
     function createHomeAnimeCard(anime) {

@@ -47,23 +47,47 @@ def _format_bytes(bytes_value: int) -> str:
 
 def _format_episode_title(anime: Anime, episode) -> str:
     """Format episode title for logging - matches the actual filename format."""
-    if episode.season == 0:
-        return f"{anime.title} - Movie {episode.episode:03} - ({anime.language}).mp4"
-    return f"{anime.title} - S{episode.season:02}E{episode.episode:03} - ({anime.language}).mp4"
+    season = getattr(episode, 'season', None)
+    episode_num = getattr(episode, 'episode', None)
+
+    # Movie case
+    if season == 0:
+        ep_str = f"{episode_num:03}" if isinstance(episode_num, int) else str(episode_num or '1')
+        return f"{anime.title} - Movie {ep_str} - ({anime.language}).mp4"
+
+    # If season/episode info missing, use a generic format
+    if season is None or episode_num is None:
+        season_str = str(season) if season is not None else 'Unknown'
+        ep_str = str(episode_num) if episode_num is not None else 'Unknown'
+        return f"{anime.title} - Episode {ep_str} (Season {season_str}) - ({anime.language}).mp4"
+
+    # Regular episode
+    return f"{anime.title} - S{season:02}E{episode_num:03} - ({anime.language}).mp4"
 
 
 def _get_season_folder(episode) -> str:
     """Generate season folder name based on episode type."""
-    if episode.season == 0:
+    season = getattr(episode, 'season', None)
+    if season == 0:
         return "Movies"
-    return f"Season {episode.season}"
+    if season is None:
+        return "Season Unknown"
+    return f"Season {season}"
 
 
 def _get_output_filename(anime: Anime, episode, sanitized_title: str) -> str:
     """Generate output filename based on episode type."""
-    if episode.season == 0:
-        return f"Movie {episode.episode:03}.mp4"
-    return f"Episode {episode.episode:03}.mp4"
+    season = getattr(episode, 'season', None)
+    episode_num = getattr(episode, 'episode', None)
+
+    if season == 0:
+        ep_str = f"{episode_num:03}" if isinstance(episode_num, int) else str(episode_num or '1')
+        return f"Movie {ep_str}.mp4"
+
+    if episode_num is None:
+        return "Episode Unknown.mp4"
+
+    return f"Episode {episode_num:03}.mp4"
 
 
 def _build_ytdl_options(

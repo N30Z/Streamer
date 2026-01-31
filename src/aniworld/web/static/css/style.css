@@ -2287,8 +2287,56 @@ body[data-theme="dark"] .episode-progress-text {
     text-align: center;
 }
 
+/* 3-Column Provider Layout */
+.provider-columns {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    max-width: 1800px;
+    margin: 0 auto;
+}
+
+.provider-column {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.provider-column-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--card-border);
+    background: var(--card-bg);
+}
+
+.provider-column-header h3 {
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0;
+    text-align: center;
+}
+
+.provider-column-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    color: var(--text-secondary);
+}
+
+.provider-column-content {
+    padding: 1rem;
+}
+
 .anime-section {
-    margin-bottom: 3rem;
+    margin-bottom: 1.5rem;
+}
+
+.anime-section:last-child {
+    margin-bottom: 0;
 }
 
 .anime-section h3 {
@@ -2302,16 +2350,27 @@ body[data-theme="dark"] .episode-progress-text {
     gap: 0.5rem;
 }
 
-.anime-section h3 i {
+.anime-section h4 {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+
+.anime-section h3 i,
+.anime-section h4 i {
     color: var(--accent-primary);
 }
 
 .anime-grid {
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    gap: 1rem;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.6rem;
     justify-content: center;
-    max-width: 1400px;
     margin: 0 auto;
 }
 
@@ -2333,7 +2392,7 @@ body[data-theme="dark"] .episode-progress-text {
 .home-anime-cover {
     position: relative;
     width: 100%;
-    height: 180px;
+    height: 150px;
     overflow: hidden;
 }
 
@@ -2349,13 +2408,13 @@ body[data-theme="dark"] .episode-progress-text {
 }
 
 .home-anime-title {
-    padding: 0.6rem 0.4rem;
+    padding: 0.4rem 0.3rem;
     color: var(--text-primary);
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 500;
     line-height: 1.2;
     text-align: center;
-    height: 3.5rem;
+    height: 3rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2368,19 +2427,19 @@ body[data-theme="dark"] .episode-progress-text {
 }
 
 /* Responsive adjustments for home content */
-@media (max-width: 1200px) {
+@media (max-width: 1400px) {
     .anime-grid {
-        grid-template-columns: repeat(6, 1fr);
-        max-width: 1100px;
-        gap: 0.8rem;
+        grid-template-columns: repeat(3, 1fr);
     }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
+    .provider-columns {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
     .anime-grid {
         grid-template-columns: repeat(4, 1fr);
-        max-width: 800px;
-        gap: 0.8rem;
     }
 }
 
@@ -2389,36 +2448,39 @@ body[data-theme="dark"] .episode-progress-text {
         padding: 1rem;
     }
 
+    .provider-columns {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
     .anime-grid {
-        grid-template-columns: repeat(3, 1fr);
-        max-width: 600px;
-        gap: 0.8rem;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
     }
 
     .home-anime-cover {
-        height: 150px;
+        height: 130px;
     }
 
-    .anime-section h3 {
-        font-size: 1.3rem;
+    .anime-section h4 {
+        font-size: 0.9rem;
     }
 }
 
 @media (max-width: 480px) {
     .anime-grid {
-        grid-template-columns: repeat(2, 1fr);
-        max-width: 400px;
-        gap: 0.8rem;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.4rem;
     }
 
     .home-anime-cover {
-        height: 140px;
+        height: 110px;
     }
 
     .home-anime-title {
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         height: 2.5rem;
-        padding: 0.4rem 0.3rem;
+        padding: 0.3rem 0.2rem;
     }
 }
 

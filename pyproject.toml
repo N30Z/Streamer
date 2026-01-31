@@ -14,17 +14,16 @@ authors = [
 maintainers = [
   { name="Phoenixthrush UwU", email="contact@phoenixthrush.com" }
 ]
-description = "AniWorld Downloader is a command-line tool for downloading and streaming anime, series and movies, compatible with Windows, macOS, and Linux."
+description = "Web-based downloader for anime, series and movies from aniworld.to, s.to and movie4k.sx."
 keywords = [
     "anime",
     "aniworld",
     "anime-downloader",
     "aniworld-downloader",
-    "streaming",
     "download",
     "video",
-    "multimedia",
-    "cli"
+    "web-ui",
+    "flask"
 ]
 readme = "README.md"
 license = { text = "MIT" }
@@ -33,19 +32,15 @@ dependencies = [
     'requests',
     'bs4',
     'yt-dlp',
-    'npyscreen',
-    'tqdm',
     'fake_useragent',
     'packaging',
     'jsbeautifier',
     'flask',
-    'py-cpuinfo; platform_system == "Windows"',
-    'windows-curses; platform_system == "Windows"',
-    'winfcntl; platform_system == "Windows"'
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
-    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: Flask",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
