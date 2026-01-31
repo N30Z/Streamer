@@ -2421,18 +2421,49 @@ class WebApp:
             seconds = seconds % 60
             return f"{hours}h {minutes}m {seconds}s"
 
-    def run(self):
-        """Run the Flask web application."""
+    def run(self, live: bool = False):
+        """Run the Flask web application. If `live` is True, start a livereload server that auto-refreshes the browser on template/static changes."""
         logging.info("Starting AniWorld Downloader Web Interface...")
         logging.info(f"Server running at http://{self.host}:{self.port}")
 
+        # If live reload is requested, import and configure livereload lazily so it is
+        # only required when explicitly requested via the CLI (--live).
+        if live:
+            logging.info("Live reload requested: attempting to start livereload server...")
+            try:
+                from livereload import Server
+            except Exception as e:
+                logging.error(
+                    "Live reload requested but 'livereload' package is not available. "
+                    "Install it with 'pip install livereload' or run without --live. "
+                    f"Import error: {e}"
+                )
+                logging.info("Falling back to normal Flask server...")
+                live = False
+
         try:
-            self.app.run(
-                host=self.host,
-                port=self.port,
-                debug=self.debug,
-                use_reloader=False,  # Disable reloader to avoid conflicts
-            )
+            if live:
+                server = Server(self.app.wsgi_app)
+
+                # Watch templates and static assets for changes
+                try:
+                    # Prefer watching the template folder directly (works recursively)
+                    server.watch(self.app.template_folder, delay=0.5)
+                except Exception:
+                    server.watch(os.path.join(self.app.template_folder, "*.html"), delay=0.5)
+
+                server.watch(os.path.join(self.app.static_folder, "css", "*.css"), delay=0.5)
+                server.watch(os.path.join(self.app.static_folder, "js", "*.js"), delay=0.5)
+
+                # Serve using livereload (this will auto-reload the browser when watched files change)
+                server.serve(host=self.host, port=self.port, debug=self.debug, root=self.app.static_folder)
+            else:
+                self.app.run(
+                    host=self.host,
+                    port=self.port,
+                    debug=self.debug,
+                    use_reloader=False,  # Disable reloader to avoid conflicts
+                )
         except KeyboardInterrupt:
             logging.info("Web interface stopped by user")
         except Exception as err:
@@ -2528,7 +2559,9 @@ def start_web_interface(arguments=None, port=5000, debug=False):
         browser_thread.daemon = True
         browser_thread.start()
 
-    web_app.run()
+    # Determine whether live reload was requested via CLI
+    live_enabled = getattr(arguments, "live", False)
+    web_app.run(live=live_enabled)
 
 
 if __name__ == "__main__":
