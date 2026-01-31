@@ -1258,10 +1258,16 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
 
-        // Add click handler to search for this anime
+        // Add click handler to open download modal directly if URL is available
         card.addEventListener('click', () => {
-            searchInput.value = anime.name;
-            performSearch();
+            if (anime.url) {
+                const isMovie = anime.url.includes('movie4k');
+                const episodeLabel = isMovie ? 'Movie' : 'Series';
+                showDownloadModal(anime.name, episodeLabel, anime.url);
+            } else {
+                searchInput.value = anime.name;
+                performSearch();
+            }
         });
 
         return card;

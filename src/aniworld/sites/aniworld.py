@@ -277,8 +277,21 @@ def extract_anime_from_carousel(carousel_div):
                 if cover and cover.startswith("/"):
                     cover = ANIWORLD_TO + cover
 
+            # Extract URL from the link tag
+            url = None
+            link = item.find("a", href=True)
+            if link:
+                href = link.get("href", "")
+                if href.startswith("/"):
+                    url = ANIWORLD_TO + href
+                elif href.startswith("http"):
+                    url = href
+
             if name and cover:
-                anime_list.append({"name": name, "cover": cover})
+                entry = {"name": name, "cover": cover}
+                if url:
+                    entry["url"] = url
+                anime_list.append(entry)
 
         except Exception:
             # Skip this item if extraction fails

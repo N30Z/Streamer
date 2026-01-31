@@ -262,8 +262,21 @@ def _extract_trending_series(trending_section) -> List[Dict[str, str]]:
 
             cover = _extract_picture_url(card)
 
+            # Extract URL from link
+            url = None
+            link = card.find("a", href=True)
+            if link:
+                href = link.get("href", "")
+                if href.startswith("/"):
+                    url = S_TO + href
+                elif href.startswith("http"):
+                    url = href
+
             if name and cover:
-                series_list.append({"name": name, "cover": cover})
+                entry = {"name": name, "cover": cover}
+                if url:
+                    entry["url"] = url
+                series_list.append(entry)
         except Exception:
             continue
 
@@ -304,8 +317,21 @@ def _extract_new_series(row_container) -> List[Dict[str, str]]:
 
             cover = _extract_picture_url(card)
 
+            # Extract URL from the card link
+            url = None
+            link = card if card.name == "a" else card.find("a", href=True)
+            if link:
+                href = link.get("href", "")
+                if href.startswith("/"):
+                    url = S_TO + href
+                elif href.startswith("http"):
+                    url = href
+
             if name and cover:
-                series_list.append({"name": name, "cover": cover})
+                entry = {"name": name, "cover": cover}
+                if url:
+                    entry["url"] = url
+                series_list.append(entry)
         except Exception:
             continue
 
