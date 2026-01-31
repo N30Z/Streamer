@@ -154,6 +154,11 @@ def _add_web_ui_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Bind web interface to 0.0.0.0 instead of localhost for external access.",
     )
+    web_opts.add_argument(
+        "--live",
+        action="store_true",
+        help="Enable live reload (auto browser refresh) when running the web UI. Requires 'livereload' package and is only active when specified.",
+    )
 
 
 def _add_miscellaneous_arguments(parser: argparse.ArgumentParser) -> None:

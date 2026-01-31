@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('AniWorld Downloader Web Interface loaded');
 
     // Get UI elements
-    const versionDisplay = document.getElementById('version-display');
+    // const versionDisplay = document.getElementById('version-display');
     const navTitle = document.getElementById('nav-title');
     const searchInput = document.getElementById('search-input');
     const searchBtn = document.getElementById('search-btn');
