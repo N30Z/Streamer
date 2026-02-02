@@ -47,9 +47,6 @@
                 <button id="file-browser-btn" class="nav-btn file-browser-btn" title="Downloaded Files">
                     <i class="fas fa-folder-open"></i>
                 </button>
-                <button id="cast-btn" class="nav-btn cast-nav-btn" title="Cast to Chromecast">
-                    <i class="fas fa-tv"></i>
-                </button>
                 <a href="https://github.com/N30Z/Streamer" target="_blank" class="nav-btn github-btn" title="View on GitHub">
                     <i class="fab fa-github"></i>
                 </a>
@@ -222,6 +219,142 @@
                 </div>
             </div>
 
+            <!-- Local Files Section (File Browser on Index) -->
+            <div class="local-files" id="local-files" style="display: none;">
+                <div class="local-files-header">
+                    <button class="local-files-back-btn" id="local-files-back-btn" title="Back to Home">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <h3><i class="fas fa-folder-open"></i> Downloaded Files</h3>
+                    <button class="local-files-refresh-btn" id="local-files-refresh-btn" title="Refresh">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="local-files-loading" id="local-files-loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading downloaded files...</p>
+                </div>
+                <div class="local-files-grid" id="local-files-grid" style="display: none;">
+                    <!-- Folder cards populated dynamically -->
+                </div>
+                <div class="local-files-empty" id="local-files-empty" style="display: none;">
+                    <i class="fas fa-inbox"></i>
+                    <p>No downloaded files found</p>
+                </div>
+            </div>
+
+            <!-- File Modal (like download-modal without download-info-row) -->
+            <div id="file-modal" class="modal-overlay" style="display: none;">
+                <div class="modal-content file-modal-content">
+                    <div class="modal-header download-info">
+                        <strong id="file-modal-title"></strong>
+                        <button id="close-file-modal" class="close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="file-modal-loading" id="file-modal-loading">
+                            <div class="loading-spinner-small"></div>
+                            <span>Loading episodes...</span>
+                        </div>
+                        <div class="file-modal-list" id="file-modal-list" style="display: none;">
+                            <!-- Episodes populated dynamically -->
+                        </div>
+                        <div class="file-modal-empty" id="file-modal-empty" style="display: none;">
+                            <i class="fas fa-inbox"></i>
+                            <p>No video files found</p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <div class="selected-count">
+                            <label class="file-modal-select-all-label">
+                                <input type="checkbox" id="file-modal-select-all">
+                                <span id="file-modal-selected-count">0 selected</span>
+                            </label>
+                        </div>
+                        <div class="modal-actions">
+                            <button id="file-modal-delete-selected" class="secondary-btn danger-btn" style="display: none;">
+                                <i class="fas fa-trash"></i> Delete Selected
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cast Modal (device selection + controls) -->
+            <div id="cast-modal" class="modal-overlay" style="display: none;">
+                <div class="modal-content cast-modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-tv"></i> Cast to Chromecast</h3>
+                        <button id="close-cast-modal" class="close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Device Selection -->
+                        <div class="cast-step" id="cast-modal-step-device">
+                            <div class="cast-devices-section">
+                                <div class="cast-devices-header">
+                                    <span class="cast-devices-label">Available Devices</span>
+                                    <button id="cast-modal-scan-btn" class="control-btn">
+                                        <i class="fas fa-search"></i> Scan
+                                    </button>
+                                </div>
+                                <div class="cast-devices-loading" id="cast-modal-devices-loading" style="display: none;">
+                                    <div class="loading-spinner-small"></div>
+                                    <span>Scanning for devices...</span>
+                                </div>
+                                <div class="cast-devices-list" id="cast-modal-devices-list">
+                                    <p class="cast-devices-empty">Click "Scan" to find Chromecast devices</p>
+                                </div>
+                            </div>
+                            <div class="cast-selected-device" id="cast-modal-selected-device" style="display: none;">
+                                <div class="cast-selected-device-info">
+                                    <i class="fas fa-tv"></i>
+                                    <span id="cast-modal-selected-device-name">No device selected</span>
+                                </div>
+                                <button id="cast-modal-change-device-btn" class="control-btn-small">Change</button>
+                            </div>
+                        </div>
+
+                        <!-- Playback Controls (shown when casting) -->
+                        <div class="cast-controls" id="cast-modal-controls" style="display: none;">
+                            <div class="cast-now-playing">
+                                <div class="cast-now-playing-info">
+                                    <i class="fas fa-film"></i>
+                                    <span id="cast-modal-now-playing-file">No file playing</span>
+                                </div>
+                                <span id="cast-modal-status">Not casting</span>
+                            </div>
+                            <div class="cast-progress">
+                                <div class="cast-progress-bar" id="cast-modal-progress-bar">
+                                    <div class="cast-progress-fill" id="cast-modal-progress-fill"></div>
+                                </div>
+                                <div class="cast-time">
+                                    <span id="cast-modal-current-time">0:00</span>
+                                    <span id="cast-modal-duration">0:00</span>
+                                </div>
+                            </div>
+                            <div class="cast-buttons">
+                                <button id="cast-modal-rewind-btn" class="cast-control-btn" title="Rewind 10s">
+                                    <i class="fas fa-backward"></i>
+                                </button>
+                                <button id="cast-modal-play-pause-btn" class="cast-control-btn cast-play-btn" title="Play/Pause">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                <button id="cast-modal-forward-btn" class="cast-control-btn" title="Forward 10s">
+                                    <i class="fas fa-forward"></i>
+                                </button>
+                                <button id="cast-modal-stop-btn" class="cast-control-btn cast-stop-btn" title="Stop">
+                                    <i class="fas fa-stop"></i>
+                                </button>
+                            </div>
+                            <div class="cast-volume">
+                                <i class="fas fa-volume-up" id="cast-modal-volume-icon"></i>
+                                <input type="range" id="cast-modal-volume-slider" min="0" max="100" value="100">
+                                <span id="cast-modal-volume-value">100%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="empty-state" id="empty-state" style="display: none;">
                 <div class="empty-icon">
                     <i class="fas fa-search"></i>
@@ -287,136 +420,6 @@
         </div>
     </div>
 
-    <!-- File Browser Modal -->
-    <div id="file-browser-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content file-browser-modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-folder-open"></i> Downloaded Files</h3>
-                <button id="close-file-browser-modal" class="close-btn">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="file-browser-path">
-                    <i class="fas fa-folder"></i>
-                    <span id="current-path">Loading...</span>
-                    <button id="refresh-files-btn" class="control-btn" title="Refresh">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
-                </div>
-                <div class="file-browser-loading" id="file-browser-loading">
-                    <div class="loading-spinner-small"></div>
-                    <span>Loading files...</span>
-                </div>
-                <div class="file-list" id="file-list" style="display: none;">
-                    <!-- Files will be populated here -->
-                </div>
-                <div class="file-empty" id="file-empty" style="display: none;">
-                    <i class="fas fa-inbox"></i>
-                    <p>No downloaded files found</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Cast Controller Modal -->
-    <div id="cast-controller-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content cast-controller-modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-tv"></i> Chromecast Controller</h3>
-                <button id="close-cast-controller-modal" class="close-btn">&times;</button>
-            </div>
-            <div class="modal-body">
-                <!-- Step 1: Device Selection -->
-                <div class="cast-step" id="cast-step-device">
-                    <div class="cast-step-header">
-                        <span class="cast-step-number">1</span>
-                        <h4>Select Cast Device</h4>
-                    </div>
-                    <div class="cast-devices-section">
-                        <div class="cast-devices-header">
-                            <span class="cast-devices-label">Available Devices</span>
-                            <button id="scan-devices-btn" class="control-btn">
-                                <i class="fas fa-search"></i> Scan
-                            </button>
-                        </div>
-                        <div class="cast-devices-loading" id="cast-devices-loading" style="display: none;">
-                            <div class="loading-spinner-small"></div>
-                            <span>Scanning for devices...</span>
-                        </div>
-                        <div class="cast-devices-list" id="cast-devices-list">
-                            <p class="cast-devices-empty">Click "Scan" to find Chromecast devices</p>
-                        </div>
-                    </div>
-                    <div class="cast-selected-device" id="cast-selected-device" style="display: none;">
-                        <div class="cast-selected-device-info">
-                            <i class="fas fa-tv"></i>
-                            <span id="cast-selected-device-name">No device selected</span>
-                        </div>
-                        <button id="change-device-btn" class="control-btn-small">Change</button>
-                    </div>
-                </div>
-
-                <!-- Step 2: Media Selection -->
-                <div class="cast-step" id="cast-step-media" style="display: none;">
-                    <div class="cast-step-header">
-                        <span class="cast-step-number">2</span>
-                        <h4>Select Media to Cast</h4>
-                    </div>
-                    <div class="cast-media-section">
-                        <div class="cast-media-loading" id="cast-media-loading" style="display: none;">
-                            <div class="loading-spinner-small"></div>
-                            <span>Loading files...</span>
-                        </div>
-                        <div class="cast-media-list" id="cast-media-list">
-                            <!-- Media files will be populated here -->
-                        </div>
-                        <div class="cast-media-empty" id="cast-media-empty" style="display: none;">
-                            <i class="fas fa-inbox"></i>
-                            <p>No media files found</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Playback Controls (shown when casting) -->
-                <div class="cast-controls" id="cast-controls" style="display: none;">
-                    <div class="cast-now-playing">
-                        <div class="cast-now-playing-info">
-                            <i class="fas fa-film"></i>
-                            <span id="cast-now-playing-file">No file playing</span>
-                        </div>
-                        <span id="cast-status">Not casting</span>
-                    </div>
-                    <div class="cast-progress">
-                        <div class="cast-progress-bar" id="cast-progress-bar-clickable">
-                            <div class="cast-progress-fill" id="cast-progress-fill"></div>
-                        </div>
-                        <div class="cast-time">
-                            <span id="cast-current-time">0:00</span>
-                            <span id="cast-duration">0:00</span>
-                        </div>
-                    </div>
-                    <div class="cast-buttons">
-                        <button id="cast-rewind-btn" class="cast-control-btn" title="Rewind 10s">
-                            <i class="fas fa-backward"></i>
-                        </button>
-                        <button id="cast-play-pause-btn" class="cast-control-btn cast-play-btn" title="Play/Pause">
-                            <i class="fas fa-play"></i>
-                        </button>
-                        <button id="cast-forward-btn" class="cast-control-btn" title="Forward 10s">
-                            <i class="fas fa-forward"></i>
-                        </button>
-                        <button id="cast-stop-btn" class="cast-control-btn cast-stop-btn" title="Stop">
-                            <i class="fas fa-stop"></i>
-                        </button>
-                    </div>
-                    <div class="cast-volume">
-                        <i class="fas fa-volume-up" id="cast-volume-icon"></i>
-                        <input type="range" id="cast-volume-slider" min="0" max="100" value="100">
-                        <span id="cast-volume-value">100%</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% if auth_enabled and user %}

@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const loadingSection = document.getElementById('loading-section');
     const emptyState = document.getElementById('empty-state');
     const homeContent = document.getElementById('home-content');
+    const localFiles = document.getElementById('local-files');
     const homeLoading = document.getElementById('home-loading');
     const popularNewSections = document.getElementById('popular-new-sections');
     const popularAnimeGrid = document.getElementById('popular-anime-grid');
@@ -1040,6 +1041,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function showLoadingState() {
         homeContent.style.display = 'none';
+        localFiles.style.display = 'none';
         emptyState.style.display = 'none';
         resultsSection.style.display = 'none';
         loadingSection.style.display = 'block';
@@ -1051,6 +1053,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function showResultsSection() {
         homeContent.style.display = 'none';
+        localFiles.style.display = 'none';
         emptyState.style.display = 'none';
         loadingSection.style.display = 'none';
         resultsSection.style.display = 'block';
@@ -1058,6 +1061,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function showEmptyState() {
         homeContent.style.display = 'none';
+        localFiles.style.display = 'none';
         resultsSection.style.display = 'none';
         loadingSection.style.display = 'none';
         emptyState.style.display = 'block';
@@ -1065,9 +1069,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function showHomeContent() {
         resultsSection.style.display = 'none';
+        localFiles.style.display = 'none';
         loadingSection.style.display = 'none';
         emptyState.style.display = 'none';
         homeContent.style.display = 'block';
+    }
+
+    function showLocalFiles() {
+        homeContent.style.display = 'none';
+        resultsSection.style.display = 'none';
+        loadingSection.style.display = 'none';
+        emptyState.style.display = 'none';
+        localFiles.style.display = 'block';
     }
 
     function escapeHtml(text) {
@@ -1443,8 +1456,10 @@ document.addEventListener('DOMContentLoaded', function() {
         localStorage.setItem('theme', theme);
     }
 
-    // Make showDownloadModal globally accessible
+    // Make functions globally accessible
     window.showDownloadModal = showDownloadModal;
+    window.showLocalFiles = showLocalFiles;
+    window.showHomeContent = showHomeContent;
 });
 
 // Show notification function
@@ -1619,133 +1634,143 @@ style.textContent = `
 document.head.appendChild(style);
 
 // ========================================
-// File Browser Functionality
+// File Browser on Index + File Modal + Cast Modal
 // ========================================
 
 (function() {
-    // File browser elements
+    // Local files section elements
     const fileBrowserBtn = document.getElementById('file-browser-btn');
-    const fileBrowserModal = document.getElementById('file-browser-modal');
-    const closeFileBrowserModal = document.getElementById('close-file-browser-modal');
-    const refreshFilesBtn = document.getElementById('refresh-files-btn');
-    const currentPathEl = document.getElementById('current-path');
-    const fileBrowserLoading = document.getElementById('file-browser-loading');
-    const fileList = document.getElementById('file-list');
-    const fileEmpty = document.getElementById('file-empty');
+    const localFilesSection = document.getElementById('local-files');
+    const localFilesLoading = document.getElementById('local-files-loading');
+    const localFilesGrid = document.getElementById('local-files-grid');
+    const localFilesEmpty = document.getElementById('local-files-empty');
+    const localFilesBackBtn = document.getElementById('local-files-back-btn');
+    const localFilesRefreshBtn = document.getElementById('local-files-refresh-btn');
 
-    // Cast controller elements
-    const castControllerModal = document.getElementById('cast-controller-modal');
-    const closeCastControllerModal = document.getElementById('close-cast-controller-modal');
-    const scanDevicesBtn = document.getElementById('scan-devices-btn');
-    const castDevicesLoading = document.getElementById('cast-devices-loading');
-    const castDevicesList = document.getElementById('cast-devices-list');
-    const castControls = document.getElementById('cast-controls');
-    const castStatus = document.getElementById('cast-status');
-    const castProgressFill = document.getElementById('cast-progress-fill');
-    const castCurrentTime = document.getElementById('cast-current-time');
-    const castDuration = document.getElementById('cast-duration');
-    const castPlayPauseBtn = document.getElementById('cast-play-pause-btn');
-    const castStopBtn = document.getElementById('cast-stop-btn');
-    const castRewindBtn = document.getElementById('cast-rewind-btn');
-    const castForwardBtn = document.getElementById('cast-forward-btn');
-    const castVolumeSlider = document.getElementById('cast-volume-slider');
+    // File modal elements
+    const fileModal = document.getElementById('file-modal');
+    const closeFileModal = document.getElementById('close-file-modal');
+    const fileModalTitle = document.getElementById('file-modal-title');
+    const fileModalLoading = document.getElementById('file-modal-loading');
+    const fileModalList = document.getElementById('file-modal-list');
+    const fileModalEmpty = document.getElementById('file-modal-empty');
+    const fileModalSelectAll = document.getElementById('file-modal-select-all');
+    const fileModalSelectedCount = document.getElementById('file-modal-selected-count');
+    const fileModalDeleteSelected = document.getElementById('file-modal-delete-selected');
 
-    // New cast controller elements
-    const castNavBtn = document.getElementById('cast-btn');
-    const castStepDevice = document.getElementById('cast-step-device');
-    const castStepMedia = document.getElementById('cast-step-media');
-    const castSelectedDevice = document.getElementById('cast-selected-device');
-    const castSelectedDeviceName = document.getElementById('cast-selected-device-name');
-    const changeDeviceBtn = document.getElementById('change-device-btn');
-    const castMediaList = document.getElementById('cast-media-list');
-    const castMediaLoading = document.getElementById('cast-media-loading');
-    const castMediaEmpty = document.getElementById('cast-media-empty');
-    const castNowPlayingFile = document.getElementById('cast-now-playing-file');
-    const castProgressBarClickable = document.getElementById('cast-progress-bar-clickable');
-    const castVolumeIcon = document.getElementById('cast-volume-icon');
-    const castVolumeValue = document.getElementById('cast-volume-value');
+    // Cast modal elements
+    const castModal = document.getElementById('cast-modal');
+    const closeCastModalBtn = document.getElementById('close-cast-modal');
+    const castModalScanBtn = document.getElementById('cast-modal-scan-btn');
+    const castModalDevicesLoading = document.getElementById('cast-modal-devices-loading');
+    const castModalDevicesList = document.getElementById('cast-modal-devices-list');
+    const castModalSelectedDevice = document.getElementById('cast-modal-selected-device');
+    const castModalSelectedDeviceName = document.getElementById('cast-modal-selected-device-name');
+    const castModalChangeDeviceBtn = document.getElementById('cast-modal-change-device-btn');
+    const castModalControls = document.getElementById('cast-modal-controls');
+    const castModalStatus = document.getElementById('cast-modal-status');
+    const castModalProgressFill = document.getElementById('cast-modal-progress-fill');
+    const castModalCurrentTime = document.getElementById('cast-modal-current-time');
+    const castModalDuration = document.getElementById('cast-modal-duration');
+    const castModalPlayPauseBtn = document.getElementById('cast-modal-play-pause-btn');
+    const castModalStopBtn = document.getElementById('cast-modal-stop-btn');
+    const castModalRewindBtn = document.getElementById('cast-modal-rewind-btn');
+    const castModalForwardBtn = document.getElementById('cast-modal-forward-btn');
+    const castModalVolumeSlider = document.getElementById('cast-modal-volume-slider');
+    const castModalProgressBar = document.getElementById('cast-modal-progress-bar');
+    const castModalVolumeIcon = document.getElementById('cast-modal-volume-icon');
+    const castModalVolumeValue = document.getElementById('cast-modal-volume-value');
+    const castModalNowPlayingFile = document.getElementById('cast-modal-now-playing-file');
 
     // State
-    let currentCastFile = null;
-    let currentCastDevice = null;
-    let castStatusInterval = null;
-    let castMediaFiles = [];
-    let castDurationValue = 0;
-
-    // Folder navigation state
-    let currentFolderPath = '';
     let watchProgress = {};
+    let selectedFiles = new Set();
+    let currentFileModalFolder = '';
+    let currentCastDevice = null;
+    let currentCastFile = null;
+    let castStatusInterval = null;
+    let castDurationValue = 0;
+    let castStartTime = 0;
+    let lastSavedCastTime = 0;
 
-    // Initialize file browser
+    // ---- File Browser Button -> show local-files on index ----
     if (fileBrowserBtn) {
-        fileBrowserBtn.addEventListener('click', openFileBrowser);
-    }
-
-    if (closeFileBrowserModal) {
-        closeFileBrowserModal.addEventListener('click', closeFileBrowserModalFn);
-    }
-
-    if (refreshFilesBtn) {
-        refreshFilesBtn.addEventListener('click', loadFiles);
-    }
-
-    if (fileBrowserModal) {
-        fileBrowserModal.addEventListener('click', function(e) {
-            if (e.target === fileBrowserModal) {
-                closeFileBrowserModalFn();
-            }
+        fileBrowserBtn.addEventListener('click', () => {
+            window.showLocalFiles();
+            loadLocalFiles();
         });
     }
 
-    // Initialize cast controller
-    if (castNavBtn) {
-        castNavBtn.addEventListener('click', openCastController);
-    }
-
-    if (closeCastControllerModal) {
-        closeCastControllerModal.addEventListener('click', closeCastController);
-    }
-
-    if (castControllerModal) {
-        castControllerModal.addEventListener('click', function(e) {
-            if (e.target === castControllerModal) {
-                closeCastController();
-            }
+    if (localFilesBackBtn) {
+        localFilesBackBtn.addEventListener('click', () => {
+            window.showHomeContent();
         });
     }
 
-    if (scanDevicesBtn) {
-        scanDevicesBtn.addEventListener('click', scanChromecastDevices);
+    if (localFilesRefreshBtn) {
+        localFilesRefreshBtn.addEventListener('click', () => {
+            loadLocalFiles();
+        });
     }
 
-    if (changeDeviceBtn) {
-        changeDeviceBtn.addEventListener('click', changeDevice);
+    // ---- File Modal events ----
+    if (closeFileModal) {
+        closeFileModal.addEventListener('click', closeFileModalFn);
+    }
+    if (fileModal) {
+        fileModal.addEventListener('click', (e) => {
+            if (e.target === fileModal) closeFileModalFn();
+        });
+    }
+    if (fileModalSelectAll) {
+        fileModalSelectAll.addEventListener('change', () => {
+            const checkboxes = fileModalList.querySelectorAll('.file-checkbox');
+            checkboxes.forEach(cb => { cb.checked = fileModalSelectAll.checked; });
+            updateFileModalSelection();
+        });
+    }
+    if (fileModalDeleteSelected) {
+        fileModalDeleteSelected.addEventListener('click', deleteSelectedFiles);
     }
 
-    // Cast control buttons
-    if (castPlayPauseBtn) {
-        castPlayPauseBtn.addEventListener('click', toggleCastPlayPause);
+    // ---- Cast Modal events ----
+    if (closeCastModalBtn) {
+        closeCastModalBtn.addEventListener('click', closeCastModal);
     }
-    if (castStopBtn) {
-        castStopBtn.addEventListener('click', stopCasting);
+    if (castModal) {
+        castModal.addEventListener('click', (e) => {
+            if (e.target === castModal) closeCastModal();
+        });
     }
-    if (castRewindBtn) {
-        castRewindBtn.addEventListener('click', () => castControl('rewind'));
+    if (castModalScanBtn) {
+        castModalScanBtn.addEventListener('click', scanChromecastDevices);
     }
-    if (castForwardBtn) {
-        castForwardBtn.addEventListener('click', () => castControl('forward'));
+    if (castModalChangeDeviceBtn) {
+        castModalChangeDeviceBtn.addEventListener('click', changeDevice);
     }
-    if (castVolumeSlider) {
-        castVolumeSlider.addEventListener('input', (e) => {
+    if (castModalPlayPauseBtn) {
+        castModalPlayPauseBtn.addEventListener('click', toggleCastPlayPause);
+    }
+    if (castModalStopBtn) {
+        castModalStopBtn.addEventListener('click', stopCasting);
+    }
+    if (castModalRewindBtn) {
+        castModalRewindBtn.addEventListener('click', () => castControl('rewind'));
+    }
+    if (castModalForwardBtn) {
+        castModalForwardBtn.addEventListener('click', () => castControl('forward'));
+    }
+    if (castModalVolumeSlider) {
+        castModalVolumeSlider.addEventListener('input', (e) => {
             const value = parseInt(e.target.value);
             castControl('volume', value);
             updateVolumeDisplay(value);
         });
     }
-    if (castProgressBarClickable) {
-        castProgressBarClickable.addEventListener('click', (e) => {
+    if (castModalProgressBar) {
+        castModalProgressBar.addEventListener('click', (e) => {
             if (castDurationValue > 0) {
-                const rect = castProgressBarClickable.getBoundingClientRect();
+                const rect = castModalProgressBar.getBoundingClientRect();
                 const percentage = (e.clientX - rect.left) / rect.width;
                 const seekTime = Math.floor(percentage * castDurationValue);
                 castControl('seek', seekTime);
@@ -1753,138 +1778,201 @@ document.head.appendChild(style);
         });
     }
 
-    function openFileBrowser() {
-        fileBrowserModal.style.display = 'flex';
-        loadFiles();
+    // ========================================
+    // Local Files (card view on index)
+    // ========================================
+
+    function loadLocalFiles() {
+        localFilesLoading.style.display = 'block';
+        localFilesGrid.style.display = 'none';
+        localFilesEmpty.style.display = 'none';
+
+        fetch('/api/files')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    renderLocalFilesGrid(data.folders, data.files);
+                } else {
+                    showNotification(data.error || 'Failed to load files', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Failed to load local files:', error);
+                showNotification('Failed to load files', 'error');
+            })
+            .finally(() => {
+                localFilesLoading.style.display = 'none';
+            });
     }
 
-    function closeFileBrowserModalFn() {
-        fileBrowserModal.style.display = 'none';
+    function renderLocalFilesGrid(folders, files) {
+        const hasContent = (folders && folders.length > 0) || (files && files.length > 0);
+
+        if (!hasContent) {
+            localFilesEmpty.style.display = 'block';
+            localFilesGrid.style.display = 'none';
+            return;
+        }
+
+        localFilesGrid.innerHTML = '';
+        localFilesGrid.style.display = 'grid';
+
+        // Render folders as cards
+        if (folders && folders.length > 0) {
+            folders.forEach(folder => {
+                const card = document.createElement('div');
+                card.className = 'local-file-card';
+                card.innerHTML = `
+                    <div class="local-file-card-cover">
+                        <i class="fas fa-folder"></i>
+                        <span class="video-count-badge">${folder.video_count} video${folder.video_count !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="local-file-card-title" title="${escapeHtmlFB(folder.name)}">
+                        ${escapeHtmlFB(folder.name)}
+                    </div>
+                `;
+                card.addEventListener('click', () => {
+                    openFileModal(folder.name, folder.path);
+                });
+                localFilesGrid.appendChild(card);
+            });
+        }
+
+        // Render loose files (root-level videos) as a single card if present
+        if (files && files.length > 0) {
+            const card = document.createElement('div');
+            card.className = 'local-file-card';
+            card.innerHTML = `
+                <div class="local-file-card-cover">
+                    <i class="fas fa-video"></i>
+                    <span class="video-count-badge">${files.length} video${files.length !== 1 ? 's' : ''}</span>
+                </div>
+                <div class="local-file-card-title" title="Unsorted Files">
+                    Unsorted Files
+                </div>
+            `;
+            card.addEventListener('click', () => {
+                openFileModal('Unsorted Files', '');
+            });
+            localFilesGrid.appendChild(card);
+        }
     }
 
-    function loadFiles(folderPath = '') {
-        fileBrowserLoading.style.display = 'flex';
-        fileList.style.display = 'none';
-        fileEmpty.style.display = 'none';
+    // ========================================
+    // File Modal
+    // ========================================
 
-        currentFolderPath = folderPath;
+    function openFileModal(title, folderPath) {
+        fileModalTitle.textContent = title;
+        currentFileModalFolder = folderPath;
+        selectedFiles.clear();
+        fileModalSelectAll.checked = false;
+        updateFileModalSelectionCount();
 
-        // Build URL with optional path parameter
+        fileModalLoading.style.display = 'flex';
+        fileModalList.style.display = 'none';
+        fileModalEmpty.style.display = 'none';
+
+        fileModal.style.display = 'flex';
+
+        // Load files for this folder
         let url = '/api/files';
         if (folderPath) {
             url += `?path=${encodeURIComponent(folderPath)}`;
         }
 
-        // Also load watch progress
         Promise.all([
             fetch(url).then(r => r.json()),
             fetch('/api/watch-progress').then(r => r.json())
         ])
-            .then(([filesData, progressData]) => {
-                if (filesData.success) {
-                    watchProgress = progressData.success ? progressData.progress : {};
-                    updateBreadcrumb(filesData.current_path, filesData.path);
-                    renderFileList(filesData.folders, filesData.files, filesData.parent_path);
-                } else {
-                    showNotification(filesData.error || 'Failed to load files', 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Failed to load files:', error);
-                showNotification('Failed to load files', 'error');
-            })
-            .finally(() => {
-                fileBrowserLoading.style.display = 'none';
-            });
+        .then(([filesData, progressData]) => {
+            if (filesData.success) {
+                watchProgress = progressData.success ? progressData.progress : {};
+                renderFileModalList(filesData.files || [], filesData.folders || [], filesData.parent_path);
+            } else {
+                showNotification(filesData.error || 'Failed to load files', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Failed to load files for modal:', error);
+            showNotification('Failed to load files', 'error');
+        })
+        .finally(() => {
+            fileModalLoading.style.display = 'none';
+        });
     }
 
-    function updateBreadcrumb(currentPath, basePath) {
-        // Update the path display with breadcrumb navigation
-        if (!currentPath) {
-            currentPathEl.innerHTML = `<i class="fas fa-home"></i> ${escapeHtmlFB(basePath)}`;
-        } else {
-            const parts = currentPath.split(/[\/\\]/);
-            let breadcrumb = `<span class="breadcrumb-link" onclick="window.navigateToFolder('')"><i class="fas fa-home"></i> Root</span>`;
-
-            let pathSoFar = '';
-            parts.forEach((part, index) => {
-                pathSoFar += (pathSoFar ? '/' : '') + part;
-                const isLast = index === parts.length - 1;
-
-                breadcrumb += ` <span class="breadcrumb-separator">/</span> `;
-                if (isLast) {
-                    breadcrumb += `<span class="breadcrumb-current">${escapeHtmlFB(part)}</span>`;
-                } else {
-                    const folderPathForClick = pathSoFar;
-                    breadcrumb += `<span class="breadcrumb-link" onclick="window.navigateToFolder('${escapeHtmlFB(folderPathForClick)}')">${escapeHtmlFB(part)}</span>`;
-                }
-            });
-
-            currentPathEl.innerHTML = breadcrumb;
-        }
+    function closeFileModalFn() {
+        fileModal.style.display = 'none';
+        selectedFiles.clear();
+        // Refresh the local files grid in case deletions happened
+        loadLocalFiles();
     }
 
-    // Make navigateToFolder globally accessible
-    window.navigateToFolder = function(path) {
-        loadFiles(path);
-    };
+    function renderFileModalList(files, folders, parentPath) {
+        // For the file modal, show subfolders (navigate into them) and files
+        const hasFiles = files && files.length > 0;
+        const hasFolders = folders && folders.length > 0;
 
-    function renderFileList(folders, files, parentPath) {
-        const hasContent = (folders && folders.length > 0) || (files && files.length > 0);
-
-        if (!hasContent && !currentFolderPath) {
-            fileEmpty.style.display = 'block';
-            fileList.style.display = 'none';
+        if (!hasFiles && !hasFolders) {
+            fileModalEmpty.style.display = 'block';
+            fileModalList.style.display = 'none';
             return;
         }
 
-        fileList.innerHTML = '';
-        fileList.style.display = 'block';
+        fileModalList.innerHTML = '';
+        fileModalList.style.display = 'block';
+        fileModalEmpty.style.display = 'none';
 
-        // Add back button if we're in a subfolder
-        if (currentFolderPath) {
-            const backItem = document.createElement('div');
-            backItem.className = 'folder-item back-folder-item';
-            backItem.innerHTML = `
-                <div class="folder-icon">
-                    <i class="fas fa-arrow-left"></i>
-                </div>
-                <div class="folder-info">
-                    <div class="folder-name">.. Back</div>
-                    <div class="folder-meta">Go to parent folder</div>
-                </div>
-            `;
-            backItem.addEventListener('click', () => loadFiles(parentPath || ''));
-            fileList.appendChild(backItem);
-        }
-
-        // Render folders
-        if (folders && folders.length > 0) {
+        // Render subfolders (navigable)
+        if (hasFolders) {
             folders.forEach(folder => {
-                const folderItem = document.createElement('div');
-                folderItem.className = 'folder-item';
-                folderItem.innerHTML = `
-                    <div class="folder-icon">
+                const item = document.createElement('div');
+                item.className = 'file-modal-item';
+                item.style.cursor = 'pointer';
+                item.innerHTML = `
+                    <div class="file-icon" style="color: #ed8936;">
                         <i class="fas fa-folder"></i>
                     </div>
-                    <div class="folder-info">
-                        <div class="folder-name">${escapeHtmlFB(folder.name)}</div>
-                        <div class="folder-meta">${folder.video_count} video${folder.video_count !== 1 ? 's' : ''}</div>
+                    <div class="file-info">
+                        <div class="file-name">${escapeHtmlFB(folder.name)}</div>
+                        <div class="file-meta">${folder.video_count} video${folder.video_count !== 1 ? 's' : ''}</div>
                     </div>
-                    <div class="folder-arrow">
-                        <i class="fas fa-chevron-right"></i>
-                    </div>
+                    <div style="color: var(--text-tertiary);"><i class="fas fa-chevron-right"></i></div>
                 `;
-                folderItem.addEventListener('click', () => loadFiles(folder.path));
-                fileList.appendChild(folderItem);
+                item.addEventListener('click', () => {
+                    fileModalTitle.textContent = folder.name;
+                    currentFileModalFolder = folder.path;
+                    selectedFiles.clear();
+                    fileModalSelectAll.checked = false;
+                    updateFileModalSelectionCount();
+
+                    fileModalLoading.style.display = 'flex';
+                    fileModalList.style.display = 'none';
+                    fileModalEmpty.style.display = 'none';
+
+                    let url = `/api/files?path=${encodeURIComponent(folder.path)}`;
+                    Promise.all([
+                        fetch(url).then(r => r.json()),
+                        fetch('/api/watch-progress').then(r => r.json())
+                    ]).then(([fd, pd]) => {
+                        if (fd.success) {
+                            watchProgress = pd.success ? pd.progress : {};
+                            renderFileModalList(fd.files || [], fd.folders || [], fd.parent_path);
+                        }
+                    }).finally(() => {
+                        fileModalLoading.style.display = 'none';
+                    });
+                });
+                fileModalList.appendChild(item);
             });
         }
 
-        // Render files
-        if (files && files.length > 0) {
+        // Render files with checkboxes
+        if (hasFiles) {
             files.forEach(file => {
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
+                const item = document.createElement('div');
+                item.className = 'file-modal-item';
 
                 const extension = file.name.split('.').pop().toLowerCase();
                 let iconClass = 'fas fa-video';
@@ -1892,14 +1980,13 @@ document.head.appendChild(style);
                     iconClass = 'fas fa-film';
                 }
 
-                // Check watch progress for this file
+                // Watch progress
                 const progress = watchProgress[file.path] || null;
                 let progressHtml = '';
-                let continueBtn = '';
 
                 if (progress) {
                     const percentage = progress.percentage || 0;
-                    const isWatched = percentage > 95; // Consider watched if > 95%
+                    const isWatched = percentage > 95;
 
                     if (isWatched) {
                         progressHtml = `
@@ -1916,15 +2003,11 @@ document.head.appendChild(style);
                                 <span class="file-progress-text">${Math.round(percentage)}%</span>
                             </div>
                         `;
-                        continueBtn = `
-                            <button class="file-action-btn continue-btn" title="Continue watching from ${formatTime(progress.current_time)}">
-                                <i class="fas fa-play-circle"></i> Continue
-                            </button>
-                        `;
                     }
                 }
 
-                fileItem.innerHTML = `
+                item.innerHTML = `
+                    <input type="checkbox" class="file-checkbox" data-path="${escapeHtmlFB(file.path)}">
                     <div class="file-icon">
                         <i class="${iconClass}"></i>
                     </div>
@@ -1937,49 +2020,96 @@ document.head.appendChild(style);
                         ${progressHtml}
                     </div>
                     <div class="file-actions">
-                        ${continueBtn}
                         <button class="file-action-btn stream-btn" title="Stream in browser">
-                            <i class="fas fa-play"></i> Stream
+                            <i class="fas fa-play"></i>
                         </button>
-                        <button class="file-action-btn download-btn" title="Download file">
-                            <i class="fas fa-download"></i> Download
-                        </button>
-                        <button class="file-action-btn delete-btn" title="Delete file">
-                            <i class="fas fa-trash"></i>
+                        <button class="file-action-btn cast-file-btn" title="Cast to Chromecast">
+                            <i class="fas fa-tv"></i>
                         </button>
                     </div>
                 `;
 
-                // Add event listeners
-                const streamBtn = fileItem.querySelector('.stream-btn');
-                const downloadBtn = fileItem.querySelector('.download-btn');
-                const deleteBtn = fileItem.querySelector('.delete-btn');
-                const continueBtnEl = fileItem.querySelector('.continue-btn');
+                // Checkbox change
+                const checkbox = item.querySelector('.file-checkbox');
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) {
+                        selectedFiles.add(file.path);
+                    } else {
+                        selectedFiles.delete(file.path);
+                    }
+                    updateFileModalSelectionCount();
+                });
 
-                streamBtn.addEventListener('click', () => streamFile(file));
-                downloadBtn.addEventListener('click', () => downloadFile(file));
-                deleteBtn.addEventListener('click', () => deleteFile(file));
-                if (continueBtnEl && progress) {
-                    continueBtnEl.addEventListener('click', () => streamFile(file, progress.current_time));
-                }
+                // Stream button
+                const streamBtn = item.querySelector('.stream-btn');
+                streamBtn.addEventListener('click', () => {
+                    const startTime = (progress && progress.percentage > 0 && progress.percentage < 95) ? progress.current_time : 0;
+                    streamFile(file, startTime);
+                });
 
-                fileList.appendChild(fileItem);
+                // Cast button
+                const castBtn = item.querySelector('.cast-file-btn');
+                castBtn.addEventListener('click', () => {
+                    openCastModalForFile(file);
+                });
+
+                fileModalList.appendChild(item);
             });
-        }
-
-        // Show empty state if no content (but we are in a subfolder)
-        if (!hasContent) {
-            fileEmpty.style.display = 'block';
-        } else {
-            fileEmpty.style.display = 'none';
         }
     }
 
+    function updateFileModalSelection() {
+        const checkboxes = fileModalList.querySelectorAll('.file-checkbox');
+        selectedFiles.clear();
+        checkboxes.forEach(cb => {
+            if (cb.checked) {
+                selectedFiles.add(cb.dataset.path);
+            }
+        });
+        updateFileModalSelectionCount();
+    }
+
+    function updateFileModalSelectionCount() {
+        const count = selectedFiles.size;
+        fileModalSelectedCount.textContent = `${count} selected`;
+        fileModalDeleteSelected.style.display = count > 0 ? 'inline-flex' : 'none';
+    }
+
+    function deleteSelectedFiles() {
+        if (selectedFiles.size === 0) return;
+        if (!confirm(`Delete ${selectedFiles.size} selected file(s)?`)) return;
+
+        const deletions = Array.from(selectedFiles).map(path =>
+            fetch('/api/files/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path })
+            }).then(r => r.json())
+        );
+
+        Promise.all(deletions)
+            .then(results => {
+                const successCount = results.filter(r => r.success).length;
+                showNotification(`${successCount} file(s) deleted`, 'success');
+                selectedFiles.clear();
+                fileModalSelectAll.checked = false;
+                updateFileModalSelectionCount();
+                // Reload the file modal content
+                openFileModal(fileModalTitle.textContent, currentFileModalFolder);
+            })
+            .catch(error => {
+                console.error('Delete error:', error);
+                showNotification('Failed to delete some files', 'error');
+            });
+    }
+
+    // ========================================
+    // Stream file (video player modal)
+    // ========================================
+
     function streamFile(file, startTime = 0) {
-        // Open video in new tab or modal
         const streamUrl = `/api/files/stream/${encodeURIComponent(file.path)}`;
 
-        // Create a video player modal
         const videoModal = document.createElement('div');
         videoModal.className = 'modal-overlay';
         videoModal.id = 'video-player-modal';
@@ -2006,18 +2136,16 @@ document.head.appendChild(style);
         const video = videoModal.querySelector('video');
         let progressSaveInterval = null;
 
-        // Set start time once video is ready
         video.addEventListener('loadedmetadata', () => {
             if (startTime > 0) {
                 video.currentTime = startTime;
             }
         });
 
-        // Save progress periodically
         video.addEventListener('play', () => {
             progressSaveInterval = setInterval(() => {
                 saveWatchProgress(file.path, video.currentTime, video.duration);
-            }, 5000); // Save every 5 seconds
+            }, 5000);
         });
 
         video.addEventListener('pause', () => {
@@ -2025,15 +2153,11 @@ document.head.appendChild(style);
                 clearInterval(progressSaveInterval);
                 progressSaveInterval = null;
             }
-            // Save immediately on pause
             saveWatchProgress(file.path, video.currentTime, video.duration);
         });
 
         const closeModal = () => {
-            if (progressSaveInterval) {
-                clearInterval(progressSaveInterval);
-            }
-            // Save final progress
+            if (progressSaveInterval) clearInterval(progressSaveInterval);
             if (video.currentTime > 0) {
                 saveWatchProgress(file.path, video.currentTime, video.duration);
             }
@@ -2041,72 +2165,61 @@ document.head.appendChild(style);
             videoModal.remove();
         };
 
-        const closeBtn = videoModal.querySelector('#close-video-player');
-        closeBtn.addEventListener('click', closeModal);
-
+        videoModal.querySelector('#close-video-player').addEventListener('click', closeModal);
         videoModal.addEventListener('click', (e) => {
-            if (e.target === videoModal) {
-                closeModal();
-            }
+            if (e.target === videoModal) closeModal();
         });
     }
 
     function saveWatchProgress(filePath, currentTime, duration) {
         fetch('/api/watch-progress', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                file: filePath,
-                current_time: currentTime,
-                duration: duration
-            })
-        })
-        .catch(error => {
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: filePath, current_time: currentTime, duration: duration })
+        }).catch(error => {
             console.error('Failed to save watch progress:', error);
         });
     }
 
-    function openCastController() {
-        castControllerModal.style.display = 'flex';
+    // ========================================
+    // Cast Modal
+    // ========================================
 
-        // Reset to initial state
-        resetCastController();
+    // File that triggered the cast modal
+    let pendingCastFile = null;
 
-        // If we have a device already selected from a previous session, show it
+    function openCastModalForFile(file) {
+        pendingCastFile = file;
+        castModal.style.display = 'flex';
+
+        // If device already selected, show it and auto-cast
         if (currentCastDevice) {
-            showSelectedDevice();
-            loadCastMediaFiles();
+            castModalDevicesList.style.display = 'none';
+            castModalSelectedDevice.style.display = 'flex';
+            castModalSelectedDeviceName.textContent = currentCastDevice.name;
+
+            // Auto-cast the file
+            castFile(file, 0);
+        } else {
+            castModalDevicesList.style.display = 'block';
+            castModalSelectedDevice.style.display = 'none';
+        }
+
+        // Show controls if already casting
+        if (currentCastFile) {
+            castModalControls.style.display = 'block';
         }
     }
 
-    function resetCastController() {
-        // Show device selection step
-        castStepDevice.style.display = 'block';
-        castSelectedDevice.style.display = 'none';
-        castDevicesList.innerHTML = '<p class="cast-devices-empty">Click "Scan" to find Chromecast devices</p>';
-
-        // Hide media step if no device
-        if (!currentCastDevice) {
-            castStepMedia.style.display = 'none';
-        }
-
-        // Hide controls if not casting
-        if (!currentCastFile) {
-            castControls.style.display = 'none';
-        }
-    }
-
-    function closeCastController() {
-        castControllerModal.style.display = 'none';
-        // Don't reset device/file - keep casting in background
+    function closeCastModal() {
+        castModal.style.display = 'none';
+        // Don't reset device - keep casting in background
     }
 
     function scanChromecastDevices() {
-        castDevicesLoading.style.display = 'flex';
-        castDevicesList.innerHTML = '';
-        scanDevicesBtn.disabled = true;
+        castModalDevicesLoading.style.display = 'flex';
+        castModalDevicesList.innerHTML = '';
+        castModalScanBtn.disabled = true;
 
         fetch('/api/chromecast/discover')
             .then(response => response.json())
@@ -2114,23 +2227,23 @@ document.head.appendChild(style);
                 if (data.success && data.devices.length > 0) {
                     renderDeviceList(data.devices);
                 } else if (data.error) {
-                    castDevicesList.innerHTML = `<p class="cast-devices-empty">${escapeHtmlFB(data.error)}</p>`;
+                    castModalDevicesList.innerHTML = `<p class="cast-devices-empty">${escapeHtmlFB(data.error)}</p>`;
                 } else {
-                    castDevicesList.innerHTML = '<p class="cast-devices-empty">No Chromecast devices found</p>';
+                    castModalDevicesList.innerHTML = '<p class="cast-devices-empty">No Chromecast devices found</p>';
                 }
             })
             .catch(error => {
                 console.error('Failed to scan devices:', error);
-                castDevicesList.innerHTML = '<p class="cast-devices-empty">Failed to scan for devices</p>';
+                castModalDevicesList.innerHTML = '<p class="cast-devices-empty">Failed to scan for devices</p>';
             })
             .finally(() => {
-                castDevicesLoading.style.display = 'none';
-                scanDevicesBtn.disabled = false;
+                castModalDevicesLoading.style.display = 'none';
+                castModalScanBtn.disabled = false;
             });
     }
 
     function renderDeviceList(devices) {
-        castDevicesList.innerHTML = '';
+        castModalDevicesList.innerHTML = '';
 
         devices.forEach(device => {
             const deviceItem = document.createElement('div');
@@ -2146,275 +2259,31 @@ document.head.appendChild(style);
                 <button class="cast-device-select-btn">Select</button>
             `;
 
-            const selectBtn = deviceItem.querySelector('.cast-device-select-btn');
-            selectBtn.addEventListener('click', () => selectDevice(device));
+            deviceItem.querySelector('.cast-device-select-btn').addEventListener('click', () => {
+                selectDevice(device);
+            });
 
-            castDevicesList.appendChild(deviceItem);
+            castModalDevicesList.appendChild(deviceItem);
         });
     }
 
     function selectDevice(device) {
         currentCastDevice = device;
-        showSelectedDevice();
-        loadCastMediaFiles();
-    }
+        castModalDevicesList.style.display = 'none';
+        castModalSelectedDevice.style.display = 'flex';
+        castModalSelectedDeviceName.textContent = device.name;
 
-    function showSelectedDevice() {
-        // Hide device list, show selected device
-        castDevicesList.style.display = 'none';
-        castSelectedDevice.style.display = 'flex';
-        castSelectedDeviceName.textContent = currentCastDevice.name;
-
-        // Show media selection step
-        castStepMedia.style.display = 'block';
+        // If we had a pending file to cast, cast it now
+        if (pendingCastFile) {
+            castFile(pendingCastFile, 0);
+            pendingCastFile = null;
+        }
     }
 
     function changeDevice() {
-        // Show device list again
-        castDevicesList.style.display = 'block';
-        castSelectedDevice.style.display = 'none';
-
-        // Hide media step
-        castStepMedia.style.display = 'none';
-
-        // Scan for devices
+        castModalDevicesList.style.display = 'block';
+        castModalSelectedDevice.style.display = 'none';
         scanChromecastDevices();
-    }
-
-    function loadCastMediaFiles(folderPath = '') {
-        castMediaLoading.style.display = 'flex';
-        castMediaList.innerHTML = '';
-        castMediaEmpty.style.display = 'none';
-
-        // Build URL with optional path parameter
-        let url = '/api/files';
-        if (folderPath) {
-            url += `?path=${encodeURIComponent(folderPath)}`;
-        }
-
-        // Also load watch progress
-        Promise.all([
-            fetch(url).then(r => r.json()),
-            fetch('/api/watch-progress').then(r => r.json())
-        ])
-            .then(([data, progressData]) => {
-                const allProgress = progressData.success ? progressData.progress : {};
-                if (data.success) {
-                    // Combine folders and files
-                    const folders = data.folders || [];
-                    const files = data.files || [];
-                    castMediaFiles = files;
-                    renderCastMediaList(folders, files, allProgress, data.parent_path, folderPath);
-                } else {
-                    castMediaEmpty.style.display = 'block';
-                }
-            })
-            .catch(error => {
-                console.error('Failed to load media files:', error);
-                castMediaEmpty.style.display = 'block';
-            })
-            .finally(() => {
-                castMediaLoading.style.display = 'none';
-            });
-    }
-
-    // Track current cast folder path
-    let currentCastFolderPath = '';
-
-    function renderCastMediaList(folders, files, allProgress, parentPath, currentPath) {
-        castMediaList.innerHTML = '';
-        currentCastFolderPath = currentPath || '';
-
-        const hasContent = (folders && folders.length > 0) || (files && files.length > 0);
-
-        if (!hasContent && !currentCastFolderPath) {
-            castMediaEmpty.style.display = 'block';
-            return;
-        }
-
-        castMediaEmpty.style.display = 'none';
-
-        // Add back button if in subfolder
-        if (currentCastFolderPath) {
-            const backItem = document.createElement('div');
-            backItem.className = 'cast-media-item back-folder-item';
-            backItem.style.cursor = 'pointer';
-            backItem.innerHTML = `
-                <div class="cast-media-icon">
-                    <i class="fas fa-arrow-left" style="color: #4299e1;"></i>
-                </div>
-                <div class="cast-media-info">
-                    <div class="cast-media-name">.. Back</div>
-                    <div class="cast-media-meta">Go to parent folder</div>
-                </div>
-            `;
-            backItem.addEventListener('click', () => loadCastMediaFiles(parentPath || ''));
-            castMediaList.appendChild(backItem);
-        }
-
-        // Render folders
-        if (folders && folders.length > 0) {
-            folders.forEach(folder => {
-                const folderItem = document.createElement('div');
-                folderItem.className = 'cast-media-item';
-                folderItem.style.cursor = 'pointer';
-                folderItem.innerHTML = `
-                    <div class="cast-media-icon">
-                        <i class="fas fa-folder" style="color: #ed8936;"></i>
-                    </div>
-                    <div class="cast-media-info">
-                        <div class="cast-media-name">${escapeHtmlFB(folder.name)}</div>
-                        <div class="cast-media-meta">${folder.video_count} video${folder.video_count !== 1 ? 's' : ''}</div>
-                    </div>
-                    <div style="color: var(--text-tertiary);">
-                        <i class="fas fa-chevron-right"></i>
-                    </div>
-                `;
-                folderItem.addEventListener('click', () => loadCastMediaFiles(folder.path));
-                castMediaList.appendChild(folderItem);
-            });
-        }
-
-        // Render files
-        if (files && files.length > 0) {
-            files.forEach(file => {
-                const mediaItem = document.createElement('div');
-                mediaItem.className = 'cast-media-item';
-
-                const extension = file.name.split('.').pop().toLowerCase();
-                let iconClass = 'fas fa-video';
-                if (['mkv', 'avi'].includes(extension)) {
-                    iconClass = 'fas fa-film';
-                }
-
-                const isCurrentlyPlaying = currentCastFile && currentCastFile.path === file.path;
-
-                // Check watch progress
-                const progress = allProgress[file.path] || null;
-                let progressHtml = '';
-                let actionButtons = '';
-
-                // Credit time: 2 minutes = 120 seconds
-                const CREDIT_TIME = 120;
-
-                if (progress) {
-                    const percentage = progress.percentage || 0;
-                    const duration = progress.duration || 0;
-                    const timeRemaining = duration - progress.current_time;
-                    const isWatched = percentage > 95 || timeRemaining < CREDIT_TIME;
-
-                    if (isWatched) {
-                        progressHtml = `
-                            <div class="cast-media-progress">
-                                <span class="cast-media-watched"><i class="fas fa-check-circle"></i> Watched</span>
-                            </div>
-                        `;
-                        // Add delete button for watched episodes
-                        actionButtons = `
-                            <button class="cast-delete-watched-btn" title="Delete watched episode">
-                                <i class="fas fa-trash"></i> Delete
-                            </button>
-                        `;
-                    } else if (percentage > 0) {
-                        progressHtml = `
-                            <div class="cast-media-progress">
-                                <div class="cast-media-progress-bar">
-                                    <div class="cast-media-progress-fill" style="width: ${percentage}%"></div>
-                                </div>
-                                <span class="cast-media-progress-text">${Math.round(percentage)}%</span>
-                            </div>
-                        `;
-                    }
-                }
-
-                mediaItem.innerHTML = `
-                    <div class="cast-media-icon">
-                        <i class="${iconClass}"></i>
-                    </div>
-                    <div class="cast-media-info">
-                        <div class="cast-media-name">${escapeHtmlFB(file.name)}</div>
-                        <div class="cast-media-meta">
-                            <span class="cast-media-size">${file.size_human}</span>
-                        </div>
-                        ${progressHtml}
-                    </div>
-                    ${actionButtons}
-                    ${progress && progress.percentage > 0 && progress.percentage < 95 ? `
-                        <button class="cast-media-btn" style="background: #ed8936; margin-right: 0.25rem;" title="Continue from ${formatTime(progress.current_time)}">
-                            <i class="fas fa-play-circle"></i> Resume
-                        </button>
-                    ` : ''}
-                    <button class="cast-media-btn ${isCurrentlyPlaying ? 'playing' : ''}" title="${isCurrentlyPlaying ? 'Currently Playing' : 'Cast this file'}">
-                        <i class="fas ${isCurrentlyPlaying ? 'fa-broadcast-tower' : 'fa-play'}"></i>
-                        ${isCurrentlyPlaying ? 'Playing' : 'Cast'}
-                    </button>
-                `;
-
-                // Add event listeners
-                const castBtns = mediaItem.querySelectorAll('.cast-media-btn');
-                if (castBtns.length > 1 && progress && progress.percentage > 0 && progress.percentage < 95) {
-                    // Resume button
-                    castBtns[0].addEventListener('click', () => castFile(file, progress.current_time));
-                    // Cast from start button
-                    if (!isCurrentlyPlaying) {
-                        castBtns[1].addEventListener('click', () => castFile(file, 0));
-                    }
-                } else if (castBtns.length > 0 && !isCurrentlyPlaying) {
-                    castBtns[castBtns.length - 1].addEventListener('click', () => castFile(file, 0));
-                }
-
-                // Delete watched button
-                const deleteWatchedBtn = mediaItem.querySelector('.cast-delete-watched-btn');
-                if (deleteWatchedBtn) {
-                    deleteWatchedBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        deleteWatchedFile(file);
-                    });
-                }
-
-                castMediaList.appendChild(mediaItem);
-            });
-        }
-    }
-
-    function deleteWatchedFile(file) {
-        if (!confirm(`Delete "${file.name}"?\n\nThis file appears to be fully watched.`)) {
-            return;
-        }
-
-        fetch('/api/files/delete', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                path: file.path
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showNotification('Watched episode deleted', 'success');
-                // Also delete watch progress
-                fetch('/api/watch-progress', {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        file: file.path
-                    })
-                });
-                // Refresh the list
-                loadCastMediaFiles(currentCastFolderPath);
-            } else {
-                showNotification(data.error || 'Failed to delete file', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Delete error:', error);
-            showNotification('Failed to delete file', 'error');
-        });
     }
 
     function castFile(file, startTime = 0) {
@@ -2426,15 +2295,12 @@ document.head.appendChild(style);
         currentCastFile = file;
         castStartTime = startTime;
 
-        // Show loading state
         const startMsg = startTime > 0 ? ` (resuming from ${formatTime(startTime)})` : '';
         showNotification(`Casting "${file.name}" to ${currentCastDevice.name}${startMsg}...`, 'info');
 
         fetch('/api/chromecast/cast', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 device_uuid: currentCastDevice.uuid,
                 file_path: file.path
@@ -2445,22 +2311,14 @@ document.head.appendChild(style);
             if (data.success) {
                 showNotification(`Now casting to ${currentCastDevice.name}`, 'success');
 
-                // Show playback controls
-                castControls.style.display = 'block';
-                castStatus.textContent = `Casting to ${currentCastDevice.name}`;
-                castNowPlayingFile.textContent = file.name;
+                castModalControls.style.display = 'block';
+                castModalStatus.textContent = `Casting to ${currentCastDevice.name}`;
+                castModalNowPlayingFile.textContent = file.name;
 
-                // If we have a start time, seek to it after a brief delay
                 if (startTime > 0) {
-                    setTimeout(() => {
-                        castControl('seek', startTime);
-                    }, 2000);
+                    setTimeout(() => castControl('seek', startTime), 2000);
                 }
 
-                // Refresh media list to show current playing
-                loadCastMediaFiles(currentCastFolderPath);
-
-                // Start polling for status (which will also save progress)
                 startCastStatusPolling();
             } else {
                 showNotification(data.error || 'Failed to cast', 'error');
@@ -2472,20 +2330,11 @@ document.head.appendChild(style);
         });
     }
 
-    // Track cast start time for resume functionality
-    let castStartTime = 0;
-
     function startCastStatusPolling() {
-        if (castStatusInterval) {
-            clearInterval(castStatusInterval);
-        }
-
+        if (castStatusInterval) clearInterval(castStatusInterval);
         castStatusInterval = setInterval(updateCastStatus, 1000);
         updateCastStatus();
     }
-
-    // Track last saved progress time to avoid excessive saves
-    let lastSavedCastTime = 0;
 
     function updateCastStatus() {
         if (!currentCastDevice) return;
@@ -2495,35 +2344,24 @@ document.head.appendChild(style);
             .then(data => {
                 if (data.success && data.status) {
                     const status = data.status;
-
-                    // Store duration for seek calculations
                     castDurationValue = status.duration || 0;
 
-                    // Update progress
                     if (status.duration > 0) {
                         const progress = (status.current_time / status.duration) * 100;
-                        castProgressFill.style.width = `${progress}%`;
+                        castModalProgressFill.style.width = `${progress}%`;
                     }
 
-                    // Update time display
-                    castCurrentTime.textContent = formatTime(status.current_time);
-                    castDuration.textContent = formatTime(status.duration);
+                    castModalCurrentTime.textContent = formatTime(status.current_time);
+                    castModalDuration.textContent = formatTime(status.duration);
 
-                    // Update play/pause button
-                    const icon = castPlayPauseBtn.querySelector('i');
-                    if (status.is_playing) {
-                        icon.className = 'fas fa-pause';
-                    } else {
-                        icon.className = 'fas fa-play';
-                    }
+                    const icon = castModalPlayPauseBtn.querySelector('i');
+                    icon.className = status.is_playing ? 'fas fa-pause' : 'fas fa-play';
 
-                    // Update volume (only if not being dragged)
-                    if (document.activeElement !== castVolumeSlider) {
-                        castVolumeSlider.value = status.volume;
+                    if (document.activeElement !== castModalVolumeSlider) {
+                        castModalVolumeSlider.value = status.volume;
                         updateVolumeDisplay(status.volume);
                     }
 
-                    // Save watch progress periodically (every 10 seconds of playback)
                     if (currentCastFile && status.current_time > 0 && status.duration > 0) {
                         if (Math.abs(status.current_time - lastSavedCastTime) >= 10) {
                             lastSavedCastTime = status.current_time;
@@ -2538,24 +2376,17 @@ document.head.appendChild(style);
     }
 
     function updateVolumeDisplay(value) {
-        if (castVolumeValue) {
-            castVolumeValue.textContent = `${value}%`;
-        }
-        if (castVolumeIcon) {
-            if (value === 0) {
-                castVolumeIcon.className = 'fas fa-volume-mute';
-            } else if (value < 50) {
-                castVolumeIcon.className = 'fas fa-volume-down';
-            } else {
-                castVolumeIcon.className = 'fas fa-volume-up';
-            }
+        if (castModalVolumeValue) castModalVolumeValue.textContent = `${value}%`;
+        if (castModalVolumeIcon) {
+            if (value === 0) castModalVolumeIcon.className = 'fas fa-volume-mute';
+            else if (value < 50) castModalVolumeIcon.className = 'fas fa-volume-down';
+            else castModalVolumeIcon.className = 'fas fa-volume-up';
         }
     }
 
     function toggleCastPlayPause() {
         if (!currentCastDevice) return;
-
-        const icon = castPlayPauseBtn.querySelector('i');
+        const icon = castModalPlayPauseBtn.querySelector('i');
         const action = icon.className.includes('fa-play') ? 'play' : 'pause';
         castControl(action);
     }
@@ -2563,10 +2394,8 @@ document.head.appendChild(style);
     function stopCasting() {
         if (!currentCastDevice) return;
 
-        // Save final progress before stopping
         if (currentCastFile && castDurationValue > 0) {
-            const progressBar = castProgressFill;
-            const widthPercent = parseFloat(progressBar.style.width) || 0;
+            const widthPercent = parseFloat(castModalProgressFill.style.width) || 0;
             const currentTime = (widthPercent / 100) * castDurationValue;
             if (currentTime > 0) {
                 saveWatchProgress(currentCastFile.path, currentTime, castDurationValue);
@@ -2575,12 +2404,11 @@ document.head.appendChild(style);
 
         castControl('stop');
 
-        // Reset UI
-        castControls.style.display = 'none';
-        castStatus.textContent = 'Not casting';
-        castProgressFill.style.width = '0%';
-        castCurrentTime.textContent = '0:00';
-        castDuration.textContent = '0:00';
+        castModalControls.style.display = 'none';
+        castModalStatus.textContent = 'Not casting';
+        castModalProgressFill.style.width = '0%';
+        castModalCurrentTime.textContent = '0:00';
+        castModalDuration.textContent = '0:00';
 
         currentCastFile = null;
         castDurationValue = 0;
@@ -2591,86 +2419,35 @@ document.head.appendChild(style);
             castStatusInterval = null;
         }
 
-        // Refresh media list to show updated progress
-        loadCastMediaFiles(currentCastFolderPath);
-
         showNotification('Stopped casting', 'info');
     }
 
     function castControl(action, value = null) {
         if (!currentCastDevice) return;
 
-        const body = {
-            device_uuid: currentCastDevice.uuid,
-            action: action
-        };
-
-        if (value !== null) {
-            body.value = value;
-        }
+        const body = { device_uuid: currentCastDevice.uuid, action: action };
+        if (value !== null) body.value = value;
 
         fetch('/api/chromecast/control', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         })
         .then(response => response.json())
         .then(data => {
-            if (!data.success) {
-                console.error('Cast control error:', data.error);
-            }
+            if (!data.success) console.error('Cast control error:', data.error);
         })
         .catch(error => {
             console.error('Cast control error:', error);
         });
     }
 
-    function downloadFile(file) {
-        // Create a download link and trigger it
-        const downloadUrl = `/api/files/download/${encodeURIComponent(file.path)}`;
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = file.name;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showNotification(`Downloading "${file.name}"...`, 'info');
-    }
-
-    function deleteFile(file) {
-        if (!confirm(`Are you sure you want to delete "${file.name}"?`)) {
-            return;
-        }
-
-        fetch('/api/files/delete', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                path: file.path
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showNotification('File deleted successfully', 'success');
-                loadFiles(); // Refresh the file list
-            } else {
-                showNotification(data.error || 'Failed to delete file', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Delete error:', error);
-            showNotification('Failed to delete file', 'error');
-        });
-    }
+    // ========================================
+    // Utility functions
+    // ========================================
 
     function formatTime(seconds) {
         if (!seconds || isNaN(seconds)) return '0:00';
-
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
         return `${mins}:${secs.toString().padStart(2, '0')}`;
