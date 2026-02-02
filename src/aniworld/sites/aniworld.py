@@ -463,8 +463,8 @@ def _parse_episode_titles(soup: BeautifulSoup, season: int) -> Dict[int, str]:
         row = link.find_parent("tr") or link.find_parent("li") or link.parent
 
         if row:
-            german = row.find("span", class_="episodeGermanTitle")
-            english = row.find("small", class_="episodeEnglishTitle")
+            german = row.find("strong", class_="seasonEpisodeTitle")
+            english = row.find("span", class_="seasonEpisodeTitle")
             if german:
                 g_text = german.get_text(strip=True)
                 e_text = english.get_text(strip=True) if english else ""

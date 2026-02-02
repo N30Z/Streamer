@@ -587,6 +587,21 @@ class WebApp:
                 providers=providers
             )
 
+        @self.app.route("/api/preferences/modal")
+        def api_preferences_modal():
+            """Get preferences modal HTML."""
+            # Load current preferences
+            preferences_data = self._load_preferences()
+
+            # Get list of providers
+            providers = list(config.SUPPORTED_PROVIDERS)
+
+            return render_template(
+                "preferences_modal.html",
+                preferences=preferences_data,
+                providers=providers
+            )
+
         @self.app.route("/api/preferences", methods=["GET"])
         def api_get_preferences():
             """Get current preferences."""
