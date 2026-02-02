@@ -1413,6 +1413,9 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.style.setProperty('--accent-primary-rgb', selected.rgb);
     }
 
+    // Export applyAccentColor to window so preferences modal can use it
+    window.applyAccentColor = applyAccentColor;
+
     function toggleTheme() {
         console.log('Toggle theme clicked'); // Debug log
         const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -2687,32 +2690,15 @@ document.head.appendChild(style);
 (function() {
     // Find all preferences links/buttons
     const preferencesLinks = document.querySelectorAll('a[href*="preferences"], .dropdown-item[href*="preferences"]');
-    let preferencesModalContainer = null;
 
-    // Load and show preferences modal
-    async function loadPreferencesModal() {
-        try {
-            // Check if modal is already loaded
-            if (!preferencesModalContainer) {
-                const response = await fetch('/api/preferences/modal');
-                const html = await response.text();
-
-                // Create a container for the modal
-                preferencesModalContainer = document.createElement('div');
-                preferencesModalContainer.innerHTML = html;
-                document.body.appendChild(preferencesModalContainer);
-            }
-
-            // Show the modal
-            const modal = document.getElementById('preferences-modal-overlay');
-            if (modal) {
-                modal.style.display = 'flex';
-            }
-        } catch (error) {
-            console.error('Failed to load preferences modal:', error);
-            if (window.showNotification) {
-                showNotification('Failed to load preferences', 'error');
-            }
+    // Show preferences modal (modal is already embedded in page)
+    function showPreferencesModal() {
+        const modal = document.getElementById('preferences-modal-overlay');
+        if (modal) {
+            console.log('Showing preferences modal');
+            modal.style.display = 'flex';
+        } else {
+            console.error('Preferences modal not found in DOM');
         }
     }
 
@@ -2720,7 +2706,7 @@ document.head.appendChild(style);
     preferencesLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            loadPreferencesModal();
+            showPreferencesModal();
         });
     });
 
@@ -2729,7 +2715,7 @@ document.head.appendChild(style);
     if (preferencesBtn) {
         preferencesBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            loadPreferencesModal();
+            showPreferencesModal();
         });
     }
 })();

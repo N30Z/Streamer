@@ -12,23 +12,26 @@
 <body>
     <!-- Animated Background -->
     <div class="background-container">
-        <div class="cloud"></div>
-        <div class="cloud"></div>
-        <div class="cloud"></div>
-        <div class="cloud"></div>
-        <div class="cloud"></div>
-        <!-- Particle System -->
-        <div class="particles">
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
-            <div class="particle"></div>
+        <div class="background">
+            <!-- Clouds -->
+            <div class="cloud"></div>
+            <div class="cloud"></div>
+            <div class="cloud"></div>
+            <div class="cloud"></div>
+            <div class="cloud"></div>
+            <!-- Particle System -->
+            <div class="particles">
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+            </div>
         </div>
     </div>
 
@@ -85,6 +88,7 @@
         </div>
     </nav>
 
+    <!-- Search Modal -->
     <div class="container">
         <main>
             <div id="search-modal-section" class="search-modal-section hidden">
@@ -491,41 +495,50 @@
     </script>
     {% endif %}
     <script>
-  const modalOverlay = document.getElementById("search-modal-section");
-  const modalContent = modalOverlay.querySelector(".search-section");
-  const toggleBtn = document.getElementById("search-modal");
+        const modalOverlay = document.getElementById("search-modal-section");
+        const modalContent = modalOverlay.querySelector(".search-section");
+        const toggleBtn = document.getElementById("search-modal");
+        const searchButton = document.getElementById("search-btn");
 
-  let isModalOpen = false;
+        let isModalOpen = false;
 
-  function openModal() {
-    isModalOpen = true;
-    modalOverlay.classList.remove("hidden");
-  }
+        function openModal() {
+            isModalOpen = true;
+            modalOverlay.classList.remove("hidden");
+        }
 
-  function closeModal() {
-    isModalOpen = false;
-    modalOverlay.classList.add("hidden");
-  }
+        function closeModal() {
+            isModalOpen = false;
+            modalOverlay.classList.add("hidden");
+        }
 
-  // Button toggelt Modal
-  toggleBtn.addEventListener("click", () => {
-    isModalOpen ? closeModal() : openModal();
-  });
+        // Button toggelt Modal
+        toggleBtn.addEventListener("click", () => {
+            isModalOpen ? closeModal() : openModal();
+        });
 
-  // 🔥 Outside-Click – robust
-  modalOverlay.addEventListener("click", (event) => {
-    if (!modalContent.contains(event.target)) {
-      closeModal();
-    }
-  });
+        // Close with Search Button
+        searchButton.addEventListener("click", () => {
+            closeModal();
+        });
 
-  // ESC schließt Modal
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && isModalOpen) {
-      closeModal();
-    }
-  });
-</script>
+        // 🔥 Outside-Click – robust
+        modalOverlay.addEventListener("click", (event) => {
+            if (!modalContent.contains(event.target)) {
+            closeModal();
+            }
+        });
+
+        // ESC schließt Modal
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && isModalOpen) {
+            closeModal();
+            }
+        });
+    </script>
+
+    <!-- Preferences Modal -->
+    {% include 'preferences_modal.html' %}
 
 </body>
 </html>

@@ -1,5 +1,5 @@
 <!-- Preferences Modal -->
-<div class="modal-overlay" id="preferences-modal-overlay">
+<div class="modal-overlay" id="preferences-modal-overlay" style="display: none;">
     <div class="modal-container preferences-modal">
         <div class="modal-header">
             <h2><i class="fas fa-sliders-h"></i> Preferences</h2>
@@ -381,18 +381,30 @@
 </style>
 
 <script>
-(function() {
+// Wait for DOM to be ready
+setTimeout(function() {
+    console.log('Initializing preferences modal...');
+
     // Preferences Modal JavaScript
     const modal = document.getElementById('preferences-modal-overlay');
     const closeBtn = document.getElementById('preferences-modal-close');
 
+    if (!modal || !closeBtn) {
+        console.error('Modal elements not found');
+        return;
+    }
+
+    console.log('Modal elements found, attaching listeners...');
+
     // Close modal handlers
-    closeBtn.addEventListener('click', () => {
+    closeBtn.addEventListener('click', function() {
+        console.log('Close button clicked');
         modal.style.display = 'none';
     });
 
-    modal.addEventListener('click', (e) => {
+    modal.addEventListener('click', function(e) {
         if (e.target === modal) {
+            console.log('Overlay clicked');
             modal.style.display = 'none';
         }
     });
@@ -440,7 +452,7 @@
     const animationsToggle = document.getElementById('modal-animations-enabled');
     if (animationsToggle) {
         animationsToggle.addEventListener('change', function() {
-            const bgContainer = document.querySelector('.background-container');
+            const bgContainer = document.querySelector('.background');
             if (bgContainer) {
                 bgContainer.style.display = this.checked ? 'block' : 'none';
             }
@@ -559,5 +571,5 @@
             }
         });
     }
-})();
+}, 100); // Wait 100ms for DOM to be ready
 </script>

@@ -442,6 +442,10 @@ class WebApp:
         @self._require_auth
         def index():
             """Main page route."""
+            # Load preferences for the modal
+            preferences_data = self._load_preferences()
+            providers = list(config.SUPPORTED_PROVIDERS)
+
             if self.auth_enabled and self.db:
                 # Check if this is first-time setup
                 if not self.db.has_users():
@@ -450,9 +454,9 @@ class WebApp:
                 # Get current user info for template
                 session_token = request.cookies.get("session_token")
                 user = self.db.get_user_by_session(session_token)
-                return render_template("index.html", user=user, auth_enabled=True)
+                return render_template("index.html", user=user, auth_enabled=True, preferences=preferences_data, providers=providers)
             else:
-                return render_template("index.html", auth_enabled=False)
+                return render_template("index.html", auth_enabled=False, preferences=preferences_data, providers=providers)
 
         @self.app.route("/login", methods=["GET", "POST"])
         def login():
