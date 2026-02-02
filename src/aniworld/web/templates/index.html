@@ -38,6 +38,9 @@
                 <h1 id="nav-title" style="cursor: pointer;">AniWorld Downloader</h1>
             </div>
             <div class="nav-actions">
+                <button id="search-modal" class="search-modal nav-btn" title="Search">
+                    <i class="fas fa-search"></i>
+                </button>
                 <button id="file-browser-btn" class="nav-btn file-browser-btn" title="Downloaded Files">
                     <i class="fas fa-folder-open"></i>
                 </button>
@@ -84,25 +87,27 @@
 
     <div class="container">
         <main>
-            <div class="search-section">
-                <h2>Search Anime, Series or Movies</h2>
-                <div class="site-selection">
-                    <label class="site-option">
-                        <input type="checkbox" name="site" value="aniworld.to" id="site-aniworld" checked>
-                        <span class="checkbox-label">AniWorld.to</span>
-                    </label>
-                    <label class="site-option">
-                        <input type="checkbox" name="site" value="s.to" id="site-sto" checked>
-                        <span class="checkbox-label">S.to</span>
-                    </label>
-                    <label class="site-option">
-                        <input type="checkbox" name="site" value="movie4k.sx" id="site-movie4k">
-                        <span class="checkbox-label">Movie4k.sx</span>
-                    </label>
-                </div>
-                <div class="search-container">
-                    <input type="text" id="search-input" placeholder="Search or paste a direct URL..." class="search-input">
-                    <button id="search-btn" class="search-btn">Search</button>
+            <div id="search-modal-section" class="search-modal-section hidden">
+                <div class="search-section">
+                    <h2>Search Anime, Series or Movies</h2>
+                    <div class="search-container">
+                        <input type="text" id="search-input" placeholder="Search or paste a direct URL..." class="search-input">
+                        <button id="search-btn" class="search-btn">Search</button>
+                    </div>
+                    <div class="site-selection">
+                        <label class="site-option">
+                            <input type="checkbox" name="site" value="aniworld.to" id="site-aniworld" checked>
+                            <span class="checkbox-label">AniWorld.to</span>
+                        </label>
+                        <label class="site-option">
+                            <input type="checkbox" name="site" value="s.to" id="site-sto" checked>
+                            <span class="checkbox-label">S.to</span>
+                        </label>
+                        <label class="site-option">
+                            <input type="checkbox" name="site" value="movie4k.sx" id="site-movie4k">
+                            <span class="checkbox-label">Movie4k.sx</span>
+                        </label>
+                    </div>
                 </div>
             </div>
 
@@ -485,5 +490,42 @@
         });
     </script>
     {% endif %}
+    <script>
+  const modalOverlay = document.getElementById("search-modal-section");
+  const modalContent = modalOverlay.querySelector(".search-section");
+  const toggleBtn = document.getElementById("search-modal");
+
+  let isModalOpen = false;
+
+  function openModal() {
+    isModalOpen = true;
+    modalOverlay.classList.remove("hidden");
+  }
+
+  function closeModal() {
+    isModalOpen = false;
+    modalOverlay.classList.add("hidden");
+  }
+
+  // Button toggelt Modal
+  toggleBtn.addEventListener("click", () => {
+    isModalOpen ? closeModal() : openModal();
+  });
+
+  // 🔥 Outside-Click – robust
+  modalOverlay.addEventListener("click", (event) => {
+    if (!modalContent.contains(event.target)) {
+      closeModal();
+    }
+  });
+
+  // ESC schließt Modal
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && isModalOpen) {
+      closeModal();
+    }
+  });
+</script>
+
 </body>
 </html>

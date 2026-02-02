@@ -1,0 +1,563 @@
+<!-- Preferences Modal -->
+<div class="modal-overlay" id="preferences-modal-overlay">
+    <div class="modal-container preferences-modal">
+        <div class="modal-header">
+            <h2><i class="fas fa-sliders-h"></i> Preferences</h2>
+            <button class="modal-close" id="preferences-modal-close">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="settings-container">
+                <!-- Download Settings Section -->
+                <div class="settings-section">
+                    <h3><i class="fas fa-download"></i> Download Settings</h3>
+
+                    <div class="preference-group">
+                        <label for="modal-max-concurrent-downloads">Parallel Downloads</label>
+                        <input type="number" id="modal-max-concurrent-downloads" min="1" max="10" value="{{ preferences.max_concurrent_downloads }}">
+                        <small>Number of episodes to download simultaneously (1-10). Higher values may increase bandwidth usage.</small>
+                    </div>
+
+                    <div class="preference-group">
+                        <label for="modal-download-directory">Download Directory</label>
+                        <div class="input-with-button">
+                            <input type="text" id="modal-download-directory" value="{{ preferences.download_directory }}" placeholder="/path/to/downloads">
+                            <button type="button" class="btn btn-primary" id="modal-browse-directory-btn">
+                                <i class="fas fa-folder-open"></i> Browse
+                            </button>
+                        </div>
+                        <small>Directory where downloaded files will be saved.</small>
+                    </div>
+
+                    <div class="preference-group">
+                        <label for="modal-default-language">Default Language</label>
+                        <select id="modal-default-language">
+                            <option value="German Dub" {{ 'selected' if preferences.default_language == 'German Dub' else '' }}>German Dub</option>
+                            <option value="English Sub" {{ 'selected' if preferences.default_language == 'English Sub' else '' }}>English Sub</option>
+                            <option value="German Sub" {{ 'selected' if preferences.default_language == 'German Sub' else '' }}>German Sub</option>
+                        </select>
+                        <small>Default language preference for downloads.</small>
+                    </div>
+
+                    <div class="preference-group">
+                        <label for="modal-default-provider">Default Provider</label>
+                        <select id="modal-default-provider">
+                            {% for provider in providers %}
+                            <option value="{{ provider }}" {{ 'selected' if preferences.default_provider == provider else '' }}>{{ provider }}</option>
+                            {% endfor %}
+                        </select>
+                        <small>Preferred video provider for downloads.</small>
+                    </div>
+                </div>
+
+                <!-- Appearance Section -->
+                <div class="settings-section">
+                    <h3><i class="fas fa-palette"></i> Appearance</h3>
+
+                    <div class="preference-group">
+                        <label>Accent Color</label>
+                        <div class="color-options">
+                            <label class="color-option">
+                                <input type="radio" name="modal-accent-color" value="purple" {{ 'checked' if preferences.accent_color == 'purple' or not preferences.accent_color else '' }}>
+                                <div class="color-swatch purple"></div>
+                                <span>Purple</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="modal-accent-color" value="blue" {{ 'checked' if preferences.accent_color == 'blue' else '' }}>
+                                <div class="color-swatch blue"></div>
+                                <span>Blue</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="modal-accent-color" value="green" {{ 'checked' if preferences.accent_color == 'green' else '' }}>
+                                <div class="color-swatch green"></div>
+                                <span>Green</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="modal-accent-color" value="orange" {{ 'checked' if preferences.accent_color == 'orange' else '' }}>
+                                <div class="color-swatch orange"></div>
+                                <span>Orange</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="modal-accent-color" value="red" {{ 'checked' if preferences.accent_color == 'red' else '' }}>
+                                <div class="color-swatch red"></div>
+                                <span>Red</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="modal-accent-color" value="pink" {{ 'checked' if preferences.accent_color == 'pink' else '' }}>
+                                <div class="color-swatch pink"></div>
+                                <span>Pink</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="modal-accent-color" value="cyan" {{ 'checked' if preferences.accent_color == 'cyan' else '' }}>
+                                <div class="color-swatch cyan"></div>
+                                <span>Cyan</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="modal-accent-color" value="custom" {{ 'checked' if preferences.accent_color == 'custom' or (preferences.accent_color and preferences.accent_color.startswith('#')) else '' }}>
+                                <div class="color-swatch custom" id="modal-custom-color-swatch"></div>
+                                <span>Custom</span>
+                            </label>
+                        </div>
+                        <div class="custom-color-picker" id="modal-custom-color-picker" style="display: none; margin-top: 1rem;">
+                            <label for="modal-custom-color-input">Custom Color:</label>
+                            <input type="color" id="modal-custom-color-input" value="{{ preferences.custom_color if preferences.custom_color else '#667eea' }}">
+                        </div>
+                        <small>Choose an accent color for buttons and highlights.</small>
+                    </div>
+
+                    <div class="preference-group">
+                        <label for="modal-animations-enabled">
+                            <input type="checkbox" id="modal-animations-enabled" {{ 'checked' if preferences.animations_enabled else '' }}>
+                            Enable Animations
+                        </label>
+                        <small>Toggle background animations and particle effects.</small>
+                    </div>
+                </div>
+
+                <!-- Playback Section -->
+                <div class="settings-section">
+                    <h3><i class="fas fa-play-circle"></i> Playback Settings</h3>
+
+                    <div class="preference-group">
+                        <label for="modal-default-action">Default Action</label>
+                        <select id="modal-default-action">
+                            <option value="Download" selected>Download</option>
+                        </select>
+                        <small>Default action when selecting episodes.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="modal-reset-preferences-btn">
+                <i class="fas fa-undo"></i> Reset to Defaults
+            </button>
+            <button type="button" class="btn btn-primary" id="modal-save-preferences-btn">
+                <i class="fas fa-save"></i> Save Preferences
+            </button>
+            <span class="save-status" id="modal-save-status"></span>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Preferences Modal Specific Styles */
+    .preferences-modal {
+        width: 90%;
+        max-width: 800px;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .preferences-modal .modal-body {
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .preference-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .preference-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .preference-group label {
+        color: var(--text-primary);
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .preference-group input[type="number"],
+    .preference-group input[type="text"],
+    .preference-group select {
+        padding: 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+    }
+
+    .preference-group input[type="number"]:focus,
+    .preference-group input[type="text"]:focus,
+    .preference-group select:focus {
+        outline: none;
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.1);
+    }
+
+    .preference-group small {
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+        line-height: 1.4;
+    }
+
+    .input-with-button {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .input-with-button input {
+        flex: 1;
+    }
+
+    .color-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 1rem;
+        margin-top: 0.5rem;
+    }
+
+    .color-option {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+    }
+
+    .color-option input[type="radio"] {
+        display: none;
+    }
+
+    .color-swatch {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        border: 2px solid var(--border-color);
+        transition: all 0.3s ease;
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .color-option input[type="radio"]:checked + .color-swatch {
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.3);
+    }
+
+    .color-option input[type="radio"]:checked + .color-swatch::after {
+        content: '\f00c';
+        font-family: 'Font Awesome 6 Free';
+        font-weight: 900;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+
+    .color-swatch.purple { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .color-swatch.blue { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
+    .color-swatch.green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+    .color-swatch.orange { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    .color-swatch.red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+    .color-swatch.pink { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
+    .color-swatch.cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+    .color-swatch.custom { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+
+    .color-option span {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+    }
+
+    .custom-color-picker {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+    }
+
+    .custom-color-picker label {
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    #modal-custom-color-input {
+        width: 80px;
+        height: 40px;
+        border: 2px solid var(--border-color);
+        border-radius: 8px;
+        cursor: pointer;
+        background: transparent;
+    }
+
+    #modal-custom-color-input::-webkit-color-swatch-wrapper {
+        padding: 0;
+    }
+
+    #modal-custom-color-input::-webkit-color-swatch {
+        border: none;
+        border-radius: 6px;
+    }
+
+    #modal-custom-color-input::-moz-color-swatch {
+        border: none;
+        border-radius: 6px;
+    }
+
+    .settings-section {
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid var(--border-color);
+    }
+
+    .settings-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .settings-section h3 {
+        color: var(--text-primary);
+        font-size: 1.2rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .settings-section h3 i {
+        color: var(--accent-primary);
+    }
+
+    .modal-footer {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        padding: 1.5rem;
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+    }
+
+    .save-status {
+        margin-left: auto;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .save-status.success {
+        color: #10b981;
+    }
+
+    .save-status.error {
+        color: #ef4444;
+    }
+
+    @media (max-width: 768px) {
+        .preferences-modal {
+            width: 95%;
+            max-height: 90vh;
+        }
+
+        .color-options {
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .modal-footer {
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .modal-footer button {
+            width: 100%;
+        }
+
+        .save-status {
+            margin-left: 0;
+            text-align: center;
+        }
+    }
+</style>
+
+<script>
+(function() {
+    // Preferences Modal JavaScript
+    const modal = document.getElementById('preferences-modal-overlay');
+    const closeBtn = document.getElementById('preferences-modal-close');
+
+    // Close modal handlers
+    closeBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+
+    // Accent color change
+    const colorOptions = document.querySelectorAll('input[name="modal-accent-color"]');
+    const customColorPicker = document.getElementById('modal-custom-color-picker');
+    const customColorInput = document.getElementById('modal-custom-color-input');
+    const customColorSwatch = document.getElementById('modal-custom-color-swatch');
+
+    colorOptions.forEach(option => {
+        option.addEventListener('change', function() {
+            if (this.value === 'custom') {
+                customColorPicker.style.display = 'block';
+                window.applyAccentColor(customColorInput.value, true);
+            } else {
+                customColorPicker.style.display = 'none';
+                window.applyAccentColor(this.value);
+            }
+        });
+    });
+
+    // Custom color input change
+    if (customColorInput) {
+        customColorInput.addEventListener('input', function() {
+            const customRadio = document.querySelector('input[name="modal-accent-color"][value="custom"]');
+            if (customRadio && customRadio.checked) {
+                window.applyAccentColor(this.value, true);
+                customColorSwatch.style.background = this.value;
+            }
+        });
+    }
+
+    // Initialize custom color picker visibility
+    const selectedColorOption = document.querySelector('input[name="modal-accent-color"]:checked');
+    if (selectedColorOption && selectedColorOption.value === 'custom') {
+        customColorPicker.style.display = 'block';
+        if (customColorInput) {
+            customColorSwatch.style.background = customColorInput.value;
+            window.applyAccentColor(customColorInput.value, true);
+        }
+    }
+
+    // Animations toggle
+    const animationsToggle = document.getElementById('modal-animations-enabled');
+    if (animationsToggle) {
+        animationsToggle.addEventListener('change', function() {
+            const bgContainer = document.querySelector('.background-container');
+            if (bgContainer) {
+                bgContainer.style.display = this.checked ? 'block' : 'none';
+            }
+        });
+    }
+
+    // Browse directory button
+    const browseDirBtn = document.getElementById('modal-browse-directory-btn');
+    if (browseDirBtn) {
+        browseDirBtn.addEventListener('click', async function() {
+            const dirInput = document.getElementById('modal-download-directory');
+            const initialDir = dirInput.value || '';
+
+            browseDirBtn.disabled = true;
+            browseDirBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Opening...';
+
+            try {
+                const response = await fetch('/api/browse-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initial_dir: initialDir })
+                });
+
+                const data = await response.json();
+
+                if (data.path) {
+                    dirInput.value = data.path;
+                    if (window.showMessage) window.showMessage('Folder selected: ' + data.path, 'success');
+                } else if (data.error && data.error !== 'No folder selected') {
+                    if (window.showMessage) window.showMessage(data.error, 'error');
+                }
+            } catch (error) {
+                if (window.showMessage) window.showMessage('Failed to open folder picker: ' + error.message, 'error');
+            } finally {
+                browseDirBtn.disabled = false;
+                browseDirBtn.innerHTML = '<i class="fas fa-folder-open"></i> Browse';
+            }
+        });
+    }
+
+    // Save preferences button
+    const saveBtn = document.getElementById('modal-save-preferences-btn');
+    const saveStatus = document.getElementById('modal-save-status');
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async function() {
+            const accentColorValue = document.querySelector('input[name="modal-accent-color"]:checked')?.value || 'purple';
+            const preferences = {
+                max_concurrent_downloads: parseInt(document.getElementById('modal-max-concurrent-downloads').value),
+                download_directory: document.getElementById('modal-download-directory').value,
+                default_language: document.getElementById('modal-default-language').value,
+                default_provider: document.getElementById('modal-default-provider').value,
+                default_action: document.getElementById('modal-default-action').value,
+                accent_color: accentColorValue,
+                custom_color: accentColorValue === 'custom' ? document.getElementById('modal-custom-color-input').value : null,
+                animations_enabled: document.getElementById('modal-animations-enabled').checked
+            };
+
+            console.log('Saving preferences:', preferences);
+
+            try {
+                const response = await fetch('/api/preferences', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(preferences)
+                });
+
+                const data = await response.json();
+                console.log('Save response:', data);
+
+                if (data.success) {
+                    if (window.showMessage) window.showMessage('Preferences saved successfully!', 'success');
+                    saveStatus.textContent = 'Saved!';
+                    saveStatus.className = 'save-status success';
+                } else {
+                    if (window.showMessage) window.showMessage('Failed to save preferences: ' + data.error, 'error');
+                    saveStatus.textContent = 'Error saving';
+                    saveStatus.className = 'save-status error';
+                }
+
+                setTimeout(() => {
+                    saveStatus.textContent = '';
+                }, 3000);
+            } catch (error) {
+                if (window.showMessage) window.showMessage('Failed to save preferences: ' + error.message, 'error');
+                saveStatus.textContent = 'Error saving';
+                saveStatus.className = 'save-status error';
+            }
+        });
+    }
+
+    // Reset preferences button
+    const resetBtn = document.getElementById('modal-reset-preferences-btn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', async function() {
+            if (!confirm('Are you sure you want to reset all preferences to defaults?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/preferences/reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    if (window.showMessage) window.showMessage('Preferences reset successfully! Reloading...', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    if (window.showMessage) window.showMessage('Failed to reset preferences: ' + data.error, 'error');
+                }
+            } catch (error) {
+                if (window.showMessage) window.showMessage('Failed to reset preferences: ' + error.message, 'error');
+            }
+        });
+    }
+})();
+</script>

@@ -117,10 +117,49 @@
         .color-swatch.red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
         .color-swatch.pink { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
         .color-swatch.cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+        .color-swatch.custom { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
 
         .color-option span {
             color: var(--text-secondary);
             font-size: 0.85rem;
+        }
+
+        .custom-color-picker {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .custom-color-picker label {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        #custom-color-input {
+            width: 80px;
+            height: 40px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            background: transparent;
+        }
+
+        #custom-color-input::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+
+        #custom-color-input::-webkit-color-swatch {
+            border: none;
+            border-radius: 6px;
+        }
+
+        #custom-color-input::-moz-color-swatch {
+            border: none;
+            border-radius: 6px;
         }
 
         .save-preferences-container {
@@ -147,13 +186,14 @@
 <body>
     <!-- Animated Background -->
     <div class="background-container">
-        <div class="cloud"></div>
-        <div class="cloud"></div>
-        <div class="cloud"></div>
-        <div class="cloud"></div>
-        <div class="cloud"></div>
-        <!-- Particle System -->
-        <div class="particles">
+        <div class="animations">
+            <!-- Clouds -->
+            <div class="cloud"></div>
+            <div class="cloud"></div>
+            <div class="cloud"></div>
+            <div class="cloud"></div>
+            <div class="cloud"></div>
+            <!-- Particles -->
             <div class="particle"></div>
             <div class="particle"></div>
             <div class="particle"></div>
@@ -291,6 +331,15 @@
                             <div class="color-swatch cyan"></div>
                             <span>Cyan</span>
                         </label>
+                        <label class="color-option">
+                            <input type="radio" name="accent-color" value="custom" {{ 'checked' if preferences.accent_color == 'custom' or (preferences.accent_color and preferences.accent_color.startswith('#')) else '' }}>
+                            <div class="color-swatch custom" id="custom-color-swatch"></div>
+                            <span>Custom</span>
+                        </label>
+                    </div>
+                    <div class="custom-color-picker" id="custom-color-picker" style="display: none; margin-top: 1rem;">
+                        <label for="custom-color-input">Custom Color:</label>
+                        <input type="color" id="custom-color-input" value="{{ preferences.custom_color if preferences.custom_color else '#667eea' }}">
                     </div>
                     <small>Choose an accent color for buttons and highlights.</small>
                 </div>
@@ -345,7 +394,14 @@
             // Apply saved accent color
             const accentColor = document.querySelector('input[name="accent-color"]:checked');
             if (accentColor) {
-                applyAccentColor(accentColor.value);
+                if (accentColor.value === 'custom') {
+                    const customColorInput = document.getElementById('custom-color-input');
+                    if (customColorInput) {
+                        applyAccentColor(customColorInput.value, true);
+                    }
+                } else {
+                    applyAccentColor(accentColor.value);
+                }
             }
 
             // User dropdown functionality
@@ -491,11 +547,42 @@
 
             // Accent color change
             const colorOptions = document.querySelectorAll('input[name="accent-color"]');
+            const customColorPicker = document.getElementById('custom-color-picker');
+            const customColorInput = document.getElementById('custom-color-input');
+            const customColorSwatch = document.getElementById('custom-color-swatch');
+
             colorOptions.forEach(option => {
                 option.addEventListener('change', function() {
-                    applyAccentColor(this.value);
+                    if (this.value === 'custom') {
+                        customColorPicker.style.display = 'block';
+                        applyAccentColor(customColorInput.value, true);
+                    } else {
+                        customColorPicker.style.display = 'none';
+                        applyAccentColor(this.value);
+                    }
                 });
             });
+
+            // Custom color input change
+            if (customColorInput) {
+                customColorInput.addEventListener('input', function() {
+                    const customRadio = document.querySelector('input[name="accent-color"][value="custom"]');
+                    if (customRadio && customRadio.checked) {
+                        applyAccentColor(this.value, true);
+                        // Update the custom swatch color
+                        customColorSwatch.style.background = this.value;
+                    }
+                });
+            }
+
+            // Initialize custom color picker visibility
+            const selectedColorOption = document.querySelector('input[name="accent-color"]:checked');
+            if (selectedColorOption && selectedColorOption.value === 'custom') {
+                customColorPicker.style.display = 'block';
+                if (customColorInput) {
+                    customColorSwatch.style.background = customColorInput.value;
+                }
+            }
 
             // Animations toggle
             const animationsToggle = document.getElementById('animations-enabled');
@@ -509,13 +596,13 @@
             }
 
             function toggleAnimations(enabled) {
-                const bgContainer = document.querySelector('.background-container');
+                const bgContainer = document.querySelector('.animations');
                 if (bgContainer) {
                     bgContainer.style.display = enabled ? 'block' : 'none';
                 }
             }
 
-            function applyAccentColor(color) {
+            function applyAccentColor(color, isCustom = false) {
                 const colors = {
                     purple: { primary: '#667eea', secondary: '#764ba2', rgb: '102, 126, 234' },
                     blue: { primary: '#3b82f6', secondary: '#1d4ed8', rgb: '59, 130, 246' },
@@ -526,13 +613,42 @@
                     cyan: { primary: '#06b6d4', secondary: '#0891b2', rgb: '6, 182, 212' }
                 };
 
-                const selected = colors[color] || colors.purple;
+                let selected;
+
+                if (isCustom || color.startsWith('#')) {
+                    // Handle custom hex color
+                    const hex = color.replace('#', '');
+                    const r = parseInt(hex.substring(0, 2), 16);
+                    const g = parseInt(hex.substring(2, 4), 16);
+                    const b = parseInt(hex.substring(4, 6), 16);
+
+                    // Generate a darker shade for secondary (multiply by 0.8)
+                    const r2 = Math.floor(r * 0.8);
+                    const g2 = Math.floor(g * 0.8);
+                    const b2 = Math.floor(b * 0.8);
+                    const secondary = `#${r2.toString(16).padStart(2, '0')}${g2.toString(16).padStart(2, '0')}${b2.toString(16).padStart(2, '0')}`;
+
+                    selected = {
+                        primary: color,
+                        secondary: secondary,
+                        rgb: `${r}, ${g}, ${b}`
+                    };
+
+                    // Store custom color
+                    localStorage.setItem('customColor', color);
+                } else {
+                    selected = colors[color] || colors.purple;
+                }
+
                 document.documentElement.style.setProperty('--accent-primary', selected.primary);
                 document.documentElement.style.setProperty('--accent-secondary', selected.secondary);
                 document.documentElement.style.setProperty('--accent-primary-rgb', selected.rgb);
+                document.body.style.setProperty('--accent-primary', selected.primary);
+                document.body.style.setProperty('--accent-secondary', selected.secondary);
+                document.body.style.setProperty('--accent-primary-rgb', selected.rgb);
 
                 // Store in localStorage for persistence
-                localStorage.setItem('accentColor', color);
+                localStorage.setItem('accentColor', isCustom ? 'custom' : color);
             }
 
             // Save preferences
@@ -541,15 +657,19 @@
 
             if (saveBtn) {
                 saveBtn.addEventListener('click', async function() {
+                    const accentColorValue = document.querySelector('input[name="accent-color"]:checked')?.value || 'purple';
                     const preferences = {
                         max_concurrent_downloads: parseInt(document.getElementById('max-concurrent-downloads').value),
                         download_directory: document.getElementById('download-directory').value,
                         default_language: document.getElementById('default-language').value,
                         default_provider: document.getElementById('default-provider').value,
                         default_action: document.getElementById('default-action').value,
-                        accent_color: document.querySelector('input[name="accent-color"]:checked')?.value || 'purple',
+                        accent_color: accentColorValue,
+                        custom_color: accentColorValue === 'custom' ? document.getElementById('custom-color-input').value : null,
                         animations_enabled: document.getElementById('animations-enabled').checked
                     };
+
+                    console.log('Saving preferences:', preferences);
 
                     try {
                         const response = await fetch('/api/preferences', {
@@ -561,6 +681,8 @@
                         });
 
                         const data = await response.json();
+
+                        console.log('Save response:', data);
 
                         if (data.success) {
                             showMessage('Preferences saved successfully!', 'success');

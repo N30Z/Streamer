@@ -125,6 +125,7 @@ class WebApp:
             "default_provider": getattr(config, "DEFAULT_PROVIDER", "VOE"),
             "default_action": getattr(config, "DEFAULT_ACTION", "Download"),
             "accent_color": "purple",
+            "custom_color": None,
             "animations_enabled": True,
         }
 

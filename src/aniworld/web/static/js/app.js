@@ -1362,10 +1362,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Accent color functions
     function initializeAccentColor() {
         const savedColor = localStorage.getItem('accentColor') || 'purple';
-        applyAccentColor(savedColor);
+        if (savedColor === 'custom') {
+            const customColor = localStorage.getItem('customColor') || '#667eea';
+            applyAccentColor(customColor, true);
+        } else {
+            applyAccentColor(savedColor);
+        }
     }
 
-    function applyAccentColor(color) {
+    function applyAccentColor(color, isCustom = false) {
         const colors = {
             purple: { primary: '#667eea', secondary: '#764ba2', rgb: '102, 126, 234' },
             blue: { primary: '#3b82f6', secondary: '#1d4ed8', rgb: '59, 130, 246' },
@@ -1376,10 +1381,36 @@ document.addEventListener('DOMContentLoaded', function() {
             cyan: { primary: '#06b6d4', secondary: '#0891b2', rgb: '6, 182, 212' }
         };
 
-        const selected = colors[color] || colors.purple;
+        let selected;
+
+        if (isCustom || color.startsWith('#')) {
+            // Handle custom hex color
+            const hex = color.replace('#', '');
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+
+            // Generate a darker shade for secondary (multiply by 0.8)
+            const r2 = Math.floor(r * 0.8);
+            const g2 = Math.floor(g * 0.8);
+            const b2 = Math.floor(b * 0.8);
+            const secondary = `#${r2.toString(16).padStart(2, '0')}${g2.toString(16).padStart(2, '0')}${b2.toString(16).padStart(2, '0')}`;
+
+            selected = {
+                primary: color,
+                secondary: secondary,
+                rgb: `${r}, ${g}, ${b}`
+            };
+        } else {
+            selected = colors[color] || colors.purple;
+        }
+
         document.documentElement.style.setProperty('--accent-primary', selected.primary);
         document.documentElement.style.setProperty('--accent-secondary', selected.secondary);
         document.documentElement.style.setProperty('--accent-primary-rgb', selected.rgb);
+        document.body.style.setProperty('--accent-primary', selected.primary);
+        document.body.style.setProperty('--accent-secondary', selected.secondary);
+        document.body.style.setProperty('--accent-primary-rgb', selected.rgb);
     }
 
     function toggleTheme() {
