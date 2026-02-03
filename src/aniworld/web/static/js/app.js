@@ -50,8 +50,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const providerSelect = document.getElementById('provider-select');
     const languageSelect = document.getElementById('language-select');
 
-    // Queue elements
-    const queueSection = document.getElementById('queue-section');
+    // Queue modal elements
+    const queueModal = document.getElementById('queue-modal');
+    const queueModalEmpty = document.getElementById('queue-modal-empty');
+    const closeQueueModalBtn = document.getElementById('close-queue-modal');
+    const downloadQueueBtn = document.getElementById('download-queue-btn');
+    const downloadBadge = document.getElementById('download-badge');
     const activeDownloads = document.getElementById('active-downloads');
     const completedDownloads = document.getElementById('completed-downloads');
     const activeQueueList = document.getElementById('active-queue-list');
@@ -77,6 +81,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // Check for active downloads on page load
     checkQueueStatus();
     loadAvailableProviders();
+
+    // Queue modal open/close
+    if (downloadQueueBtn) {
+        downloadQueueBtn.addEventListener('click', () => {
+            queueModal.style.display = 'flex';
+        });
+    }
+    if (closeQueueModalBtn) {
+        closeQueueModalBtn.addEventListener('click', () => {
+            queueModal.style.display = 'none';
+        });
+    }
+    if (queueModal) {
+        queueModal.addEventListener('click', (e) => {
+            if (e.target === queueModal) queueModal.style.display = 'none';
+        });
+    }
 
     // Load popular and new anime on page load
     loadPopularAndNewAnime();
@@ -1025,6 +1046,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showNotification(message, 'success');
                 hideDownloadModal();
                 startQueueTracking();
+                queueModal.style.display = 'flex';
             } else {
                 showNotification(data.error || 'Download failed to start', 'error');
             }
@@ -1122,12 +1144,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success && data.queue) {
                     const activeItems = data.queue.active || [];
                     const completedItems = data.queue.completed || [];
+                    const hasContent = activeItems.length > 0 || completedItems.length > 0;
 
-                    // Show/hide queue section based on content
-                    if (activeItems.length > 0 || completedItems.length > 0) {
-                        queueSection.style.display = 'block';
+                    // Update modal content
+                    if (hasContent) {
+                        queueModalEmpty.style.display = 'none';
 
-                        // Update active downloads
                         if (activeItems.length > 0) {
                             activeDownloads.style.display = 'block';
                             updateQueueList(activeQueueList, activeItems, 'active');
@@ -1135,7 +1157,6 @@ document.addEventListener('DOMContentLoaded', function() {
                             activeDownloads.style.display = 'none';
                         }
 
-                        // Update completed downloads
                         if (completedItems.length > 0) {
                             completedDownloads.style.display = 'block';
                             updateQueueList(completedQueueList, completedItems, 'completed');
@@ -1143,18 +1164,46 @@ document.addEventListener('DOMContentLoaded', function() {
                             completedDownloads.style.display = 'none';
                         }
                     } else {
-                        // No downloads to show
-                        queueSection.style.display = 'none';
+                        queueModalEmpty.style.display = 'block';
+                        activeDownloads.style.display = 'none';
+                        completedDownloads.style.display = 'none';
+
                         if (progressInterval) {
                             clearInterval(progressInterval);
                             progressInterval = null;
                         }
                     }
+
+                    // Update navbar button badge and animation
+                    updateDownloadBadge(activeItems, completedItems);
                 }
             })
             .catch(error => {
                 console.error('Queue status update error:', error);
             });
+    }
+
+    function updateDownloadBadge(activeItems, completedItems) {
+        const pendingCount = activeItems.length;
+        const hasCompleted = completedItems.length > 0;
+
+        if (pendingCount > 0) {
+            // Active downloads: show count badge, pulse animation
+            downloadBadge.textContent = pendingCount;
+            downloadBadge.className = 'download-badge';
+            downloadBadge.style.display = 'block';
+            downloadQueueBtn.classList.add('downloading');
+        } else if (hasCompleted) {
+            // All done: show checkmark badge, no pulse
+            downloadBadge.innerHTML = '<i class="fas fa-check" style="font-size: 0.55rem;"></i>';
+            downloadBadge.className = 'download-badge completed';
+            downloadBadge.style.display = 'block';
+            downloadQueueBtn.classList.remove('downloading');
+        } else {
+            // Nothing: hide badge, no pulse
+            downloadBadge.style.display = 'none';
+            downloadQueueBtn.classList.remove('downloading');
+        }
     }
 
     function updateQueueList(container, items, type) {

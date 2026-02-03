@@ -47,6 +47,10 @@
                 <button id="file-browser-btn" class="nav-btn file-browser-btn" title="Downloaded Files">
                     <i class="fas fa-folder-open"></i>
                 </button>
+                <button id="download-queue-btn" class="nav-btn download-queue-btn" title="Download Queue">
+                    <i class="fas fa-download"></i>
+                    <span class="download-badge" id="download-badge" style="display: none;"></span>
+                </button>
                 <a href="https://github.com/N30Z/Streamer" target="_blank" class="nav-btn github-btn" title="View on GitHub">
                     <i class="fab fa-github"></i>
                 </a>
@@ -112,23 +116,30 @@
                 </div>
             </div>
 
-            <!-- Download Queue Section -->
-            <div class="queue-section" id="queue-section" style="display: none;">
-                <h3>Download Queue</h3>
-
-                <!-- Active Downloads -->
-                <div class="active-downloads" id="active-downloads" style="display: none;">
-                    <h4><i class="fas fa-download"></i> Active Downloads</h4>
-                    <div class="queue-list" id="active-queue-list">
-                        <!-- Active downloads will be populated here -->
+            <!-- Download Queue Modal -->
+            <div id="queue-modal" class="modal-overlay" style="display: none;">
+                <div class="modal-content queue-modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-download"></i> Download Queue</h3>
+                        <button id="close-queue-modal" class="close-btn">&times;</button>
                     </div>
-                </div>
+                    <div class="modal-body">
+                        <div class="queue-modal-empty" id="queue-modal-empty">
+                            <i class="fas fa-inbox"></i>
+                            <p>No downloads in queue</p>
+                        </div>
 
-                <!-- Completed Downloads -->
-                <div class="completed-downloads" id="completed-downloads" style="display: none;">
-                    <h4><i class="fas fa-check-circle"></i> Last Completed Download</h4>
-                    <div class="queue-list" id="completed-queue-list">
-                        <!-- Completed downloads will be populated here -->
+                        <!-- Active Downloads -->
+                        <div class="active-downloads" id="active-downloads" style="display: none;">
+                            <h4><i class="fas fa-download"></i> Active Downloads</h4>
+                            <div class="queue-list" id="active-queue-list"></div>
+                        </div>
+
+                        <!-- Completed Downloads -->
+                        <div class="completed-downloads" id="completed-downloads" style="display: none;">
+                            <h4><i class="fas fa-check-circle"></i> Completed</h4>
+                            <div class="queue-list" id="completed-queue-list"></div>
+                        </div>
                     </div>
                 </div>
             </div>

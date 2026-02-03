@@ -4652,3 +4652,97 @@ body[data-theme="dark"] .episode-progress-text {
         font-size: 0.8rem;
     }
 }
+
+/* ========================================
+   Download Queue Button & Badge
+   ======================================== */
+
+.download-queue-btn {
+    position: relative;
+    background: #4299e1;
+    margin-right: 0.5rem;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.download-queue-btn:hover {
+    background: #3182ce;
+    box-shadow: 0 4px 8px rgba(66, 153, 225, 0.3);
+    transform: translateY(-1px) scale(1.05);
+}
+
+/* Pulse animation when downloads are active */
+.download-queue-btn.downloading {
+    animation: downloadPulse 2s ease-in-out infinite;
+}
+
+@keyframes downloadPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(66, 153, 225, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(66, 153, 225, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(66, 153, 225, 0);
+    }
+}
+
+/* Notification badge (Android-style) */
+.download-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #f56565;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.download-badge.completed {
+    background: #48bb78;
+    min-width: 18px;
+    padding: 0;
+    font-size: 0.6rem;
+}
+
+/* ========================================
+   Download Queue Modal
+   ======================================== */
+
+.queue-modal-content {
+    max-width: 650px;
+    width: 95%;
+    max-height: 80vh;
+}
+
+.queue-modal-empty {
+    padding: 3rem;
+    text-align: center;
+    color: var(--text-tertiary);
+}
+
+.queue-modal-empty i {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    display: block;
+    opacity: 0.5;
+}
+
+.queue-modal-empty p {
+    font-size: 1rem;
+}
