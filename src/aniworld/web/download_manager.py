@@ -37,6 +37,7 @@ class DownloadQueueManager:
         self._active_downloads = {}  # id -> download_job dict
         self._completed_downloads = []  # list of completed download jobs (keep last N)
         self._max_completed_history = 10
+        self._cancelled_ids = set()  # Track cancelled download IDs
 
     def start_queue_processor(self):
         """Start the background queue processor with thread pool"""
@@ -186,6 +187,32 @@ class DownloadQueueManager:
 
             return {"active": active_downloads, "completed": completed_downloads}
 
+    def cancel_download(self, queue_id: int) -> bool:
+        """Cancel a download by its queue ID.
+
+        Queued jobs are removed immediately. Downloading jobs are flagged for
+        cancellation so the worker thread can stop gracefully.
+        """
+        with self._queue_lock:
+            if queue_id in self._active_downloads:
+                job = self._active_downloads[queue_id]
+                if job["status"] == "queued":
+                    # Not started yet – just remove it
+                    del self._active_downloads[queue_id]
+                    logging.info(f"Cancelled queued download {queue_id}")
+                    return True
+                elif job["status"] == "downloading":
+                    # Mark for cancellation so the worker picks it up
+                    self._cancelled_ids.add(queue_id)
+                    job["status"] = "cancelled"
+                    logging.info(f"Cancelling active download {queue_id}")
+                    return True
+            return False
+
+    def is_cancelled(self, queue_id: int) -> bool:
+        """Check whether a download has been cancelled."""
+        return queue_id in self._cancelled_ids
+
     def _process_queue(self):
         """Background worker that processes the download queue with parallel execution"""
         while self.is_processing and not self._stop_event.is_set():
@@ -281,7 +308,12 @@ class DownloadQueueManager:
             for anime in anime_list:
                 # Since this is a single episode job, episode_list should have exactly one element
                 for episode in anime.episode_list:
-                    if self._stop_event.is_set():
+                    if self._stop_event.is_set() or self.is_cancelled(queue_id):
+                        if self.is_cancelled(queue_id):
+                            self._update_download_status(
+                                queue_id, "cancelled", error_message="Cancelled by user"
+                            )
+                            self._cancelled_ids.discard(queue_id)
                         break
 
                     episode_info = f"{anime.title} - Episode {episode.episode} (Season {episode.season})"
@@ -580,7 +612,7 @@ class DownloadQueueManager:
             # Update timestamps based on status
             if status == "downloading" and download["started_at"] is None:
                 download["started_at"] = datetime.now()
-            elif status in ["completed", "failed"]:
+            elif status in ["completed", "failed", "cancelled"]:
                 download["completed_at"] = datetime.now()
                 # Set final progress for completed downloads
                 if status == "completed":

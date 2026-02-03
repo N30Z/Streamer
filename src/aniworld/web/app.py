@@ -1588,6 +1588,19 @@ class WebApp:
                     {"success": False, "error": "Failed to get queue status"}
                 ), 500
 
+        @self.app.route("/api/queue/cancel/<int:queue_id>", methods=["POST"])
+        @self._require_api_auth
+        def api_cancel_download(queue_id):
+            """Cancel a download by queue ID."""
+            try:
+                success = self.download_manager.cancel_download(queue_id)
+                if success:
+                    return jsonify({"success": True})
+                return jsonify({"success": False, "error": "Download not found or already finished"}), 404
+            except Exception as e:
+                logging.error(f"Failed to cancel download: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
+
         @self.app.route("/api/popular-new")
         @self._require_api_auth
         def api_popular_new():
