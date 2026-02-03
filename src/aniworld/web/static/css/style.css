@@ -1591,6 +1591,31 @@ body[data-theme="dark"] .results-section {
     margin-bottom: 0.4rem;
 }
 
+.queue-item-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.queue-cancel-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.queue-cancel-btn:hover {
+    color: #f56565;
+    background: rgba(245, 101, 101, 0.15);
+}
+
 .queue-item-title {
     font-weight: 600;
     color: var(--text-secondary);
@@ -1624,6 +1649,11 @@ body[data-theme="dark"] .results-section {
 .queue-item-status.failed {
     background: rgba(245, 101, 101, 0.2);
     color: #f56565;
+}
+
+.queue-item-status.cancelled {
+    background: rgba(160, 160, 160, 0.2);
+    color: #a0aec0;
 }
 
 .queue-item-progress {
@@ -4309,4 +4339,509 @@ body[data-theme="dark"] .episode-progress-text {
         background: var(--border-color);
         border-radius: 2px;
     }
+}
+
+/* ========================================
+   Local Files Section (File Browser on Index)
+   ======================================== */
+
+.local-files {
+    padding: 2rem;
+    text-align: center;
+}
+
+.local-files-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.local-files-header h3 {
+    color: var(--text-primary);
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.local-files-header h3 i {
+    color: #48bb78;
+    margin-right: 0.3rem;
+}
+
+.local-files-back-btn,
+.local-files-refresh-btn {
+    background: var(--button-secondary-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+}
+
+.local-files-back-btn:hover,
+.local-files-refresh-btn:hover {
+    background: var(--tree-hover);
+    transform: translateY(-1px);
+}
+
+.local-files-loading {
+    padding: 3rem;
+    color: var(--text-tertiary);
+}
+
+.local-files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.local-file-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.local-file-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.local-file-card-cover {
+    position: relative;
+    width: 100%;
+    height: 150px;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.local-file-card-cover i {
+    font-size: 3rem;
+    color: #ed8936;
+    opacity: 0.8;
+}
+
+.local-file-card-cover .video-count-badge {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.local-file-card:hover .local-file-card-cover i {
+    opacity: 1;
+    transform: scale(1.05);
+    transition: all 0.3s ease;
+}
+
+.local-file-card-title {
+    padding: 0.4rem 0.3rem;
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    text-align: center;
+    height: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-wrap: break-word;
+    word-break: break-word;
+    hyphens: auto;
+    box-sizing: border-box;
+}
+
+.local-files-empty {
+    padding: 3rem;
+    color: var(--text-tertiary);
+    text-align: center;
+}
+
+.local-files-empty i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+    display: block;
+}
+
+@media (max-width: 768px) {
+    .local-files {
+        padding: 1rem;
+    }
+
+    .local-files-grid {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 0.75rem;
+    }
+
+    .local-file-card-cover {
+        height: 120px;
+    }
+}
+
+@media (max-width: 480px) {
+    .local-files-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+    }
+
+    .local-file-card-cover {
+        height: 100px;
+    }
+
+    .local-file-card-title {
+        font-size: 0.65rem;
+        height: 2.5rem;
+        padding: 0.3rem 0.2rem;
+    }
+}
+
+/* ========================================
+   File Modal Styles
+   ======================================== */
+
+.file-modal-content {
+    max-width: 750px;
+    width: 90%;
+}
+
+.file-modal-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 3rem;
+    color: var(--text-tertiary);
+}
+
+.file-modal-list {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--tree-bg);
+}
+
+.file-modal-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+    gap: 0.75rem;
+}
+
+.file-modal-item:last-child {
+    border-bottom: none;
+}
+
+.file-modal-item:hover {
+    background: var(--tree-hover);
+}
+
+.file-modal-item .file-checkbox {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--accent-primary);
+}
+
+.file-modal-item .file-icon {
+    font-size: 1.25rem;
+    color: #4299e1;
+    width: 30px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.file-modal-item .file-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-modal-item .file-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    word-break: break-word;
+    font-size: 0.9rem;
+    margin-bottom: 0.15rem;
+}
+
+.file-modal-item .file-meta {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.file-modal-item .file-actions {
+    display: flex;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+
+.file-modal-empty {
+    padding: 3rem;
+    text-align: center;
+    color: var(--text-tertiary);
+}
+
+.file-modal-empty i {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.file-modal-select-all-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.file-modal-select-all-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+}
+
+.danger-btn {
+    background: #fc8181;
+    color: white;
+    border: 1px solid #f56565;
+}
+
+.danger-btn:hover {
+    background: #f56565;
+}
+
+/* Cast button style for file modal episode actions */
+.file-action-btn.cast-file-btn {
+    background: #9f7aea;
+    color: white;
+}
+
+.file-action-btn.cast-file-btn:hover {
+    background: #805ad5;
+    transform: translateY(-1px);
+}
+
+/* ========================================
+   New Cast Modal Styles
+   ======================================== */
+
+.cast-modal-content {
+    max-width: 550px;
+    width: 95%;
+}
+
+@media (max-width: 768px) {
+    .file-modal-content {
+        max-height: 95vh;
+    }
+
+    .file-modal-item {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .file-modal-item .file-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .file-modal-item .file-action-btn {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8rem;
+    }
+}
+
+/* ========================================
+   Download Queue Button & Badge
+   ======================================== */
+
+.download-queue-btn {
+    position: relative;
+    background: #4299e1;
+    margin-right: 0.5rem;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.download-queue-btn:hover {
+    background: #3182ce;
+    box-shadow: 0 4px 8px rgba(66, 153, 225, 0.3);
+    transform: translateY(-1px) scale(1.05);
+}
+
+/* Pulse animation when downloads are active */
+.download-queue-btn.downloading {
+    animation: downloadPulse 2s ease-in-out infinite;
+}
+
+@keyframes downloadPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(66, 153, 225, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(66, 153, 225, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(66, 153, 225, 0);
+    }
+}
+
+/* Notification badge (Android-style) */
+.download-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #f56565;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.download-badge.completed {
+    background: #48bb78;
+    min-width: 18px;
+    padding: 0;
+    font-size: 0.6rem;
+}
+
+/* ========================================
+   Download Queue Modal
+   ======================================== */
+
+.queue-modal-content {
+    max-width: 650px;
+    width: 95%;
+    max-height: 80vh;
+}
+
+.queue-modal-empty {
+    padding: 3rem;
+    text-align: center;
+    color: var(--text-tertiary);
+}
+
+.queue-modal-empty i {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    display: block;
+    opacity: 0.5;
+}
+
+.queue-modal-empty p {
+    font-size: 1rem;
+}
+
+/* ========================================
+   Queue Mini Popup (auto-dismiss)
+   ======================================== */
+
+.queue-mini-popup {
+    position: fixed;
+    z-index: 10000;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.6rem;
+    min-width: 260px;
+    max-width: 320px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+}
+
+.queue-mini-popup.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.queue-mini-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+}
+
+.queue-mini-icon {
+    color: #4299e1;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    width: 22px;
+    text-align: center;
+}
+
+.queue-mini-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.queue-mini-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-mini-status {
+    font-size: 0.65rem;
+    color: #48bb78;
+    text-transform: uppercase;
+    font-weight: 500;
+    letter-spacing: 0.3px;
 }
