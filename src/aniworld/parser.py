@@ -344,7 +344,12 @@ def parse_arguments() -> argparse.Namespace:
     return args
 
 
-arguments = parse_arguments()
+arguments = None
 
+def get_arguments():
+    global arguments
+    if arguments is None:
+        arguments = parse_arguments()
+    return arguments
 if __name__ == "__main__":
     pass

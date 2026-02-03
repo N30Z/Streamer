@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     webview.create_window(
         title="Streamer",
-        url="http://127.0.0.1:8000",  # adjust if your app uses another port
+        url="http://127.0.0.1:5000",  # adjust if your app uses another port
         width=1200,
         height=800,
     )

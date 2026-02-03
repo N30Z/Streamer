@@ -7,9 +7,10 @@ import yt_dlp
 
 from ..models import Anime
 from ..config import PROVIDER_HEADERS_D
-from ..parser import arguments
+from ..parser import get_arguments
 from .common import get_direct_link, sanitize_filename
 
+arguments = get_arguments()
 
 class QuietLogger:
     """Custom logger to suppress yt-dlp output while allowing progress hooks."""

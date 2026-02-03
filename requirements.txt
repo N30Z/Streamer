@@ -14,6 +14,7 @@ winfcntl
 jsbeautifier
 flask
 ffmpeg
+pywebview
  
 # Windows-specific dependencies (installed automatically on Windows)
 # py-cpuinfo

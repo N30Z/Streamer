@@ -5,10 +5,12 @@ from typing import List
 
 from .models import Anime, Episode, SUPPORTED_SITES
 from .movie4k import Movie, MovieAnime, is_movie4k_url
-from .parser import arguments
+from .parser import get_arguments
+arguments = get_arguments()
 from .search import search_anime
 from .execute import execute
 from .common import generate_links
+
 
 
 def _detect_site_from_url(url: str) -> str:

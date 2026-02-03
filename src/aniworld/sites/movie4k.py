@@ -28,7 +28,9 @@ from ..config import (
     SUPPORTED_PROVIDERS,
     MOVIE4K_SX,
 )
-from ..parser import arguments
+from ..parser import get_arguments
+arguments = get_arguments()
+
 
 
 # Provider name mappings from stream URLs to internal provider names

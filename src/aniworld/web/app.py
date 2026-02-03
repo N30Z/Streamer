@@ -88,7 +88,8 @@ class WebApp:
 
             # Apply download directory to runtime arguments
             if prefs.get("download_directory"):
-                from ..parser import arguments
+                from ..parser import get_arguments
+                arguments = get_arguments()
                 # Only apply if not overridden by command-line argument
                 if not self.arguments or not getattr(self.arguments, "output_dir", None) or \
                    str(getattr(self.arguments, "output_dir", "")) == str(config.DEFAULT_DOWNLOAD_PATH):
@@ -177,7 +178,8 @@ class WebApp:
 
         # Update download directory in runtime arguments
         if "download_directory" in data:
-            from ..parser import arguments
+            from ..parser import get_arguments
+            arguments = get_arguments()
             arguments.output_dir = data["download_directory"]
             logging.info(f"Updated runtime output_dir to: {data['download_directory']}")
 

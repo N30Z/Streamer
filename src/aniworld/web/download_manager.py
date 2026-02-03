@@ -292,7 +292,8 @@ class DownloadQueueManager:
                     episode._selected_provider = job["provider"]
 
             # Get download directory from arguments (which includes -o parameter)
-            from ..parser import arguments
+            from ..parser import get_arguments
+            arguments = get_arguments()
 
             download_dir = str(
                 getattr(

@@ -18,7 +18,7 @@ from .config import (
     SITE_LANGUAGE_NAMES,
     SUPPORTED_PROVIDERS,
 )
-from .parser import arguments
+from .parser import get_arguments
 from .common import get_season_episode_count, get_movie_episode_count
 
 
