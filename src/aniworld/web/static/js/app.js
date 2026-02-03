@@ -1097,6 +1097,14 @@ document.addEventListener('DOMContentLoaded', function() {
         homeContent.style.display = 'block';
     }
 
+    function toggleFolderIcon() {
+    const icon = document.querySelector('#file-browser-btn i');
+    if (!icon) return;
+
+    icon.classList.toggle('fa-folder');
+    icon.classList.toggle('fa-folder-open');
+}
+
     function showLocalFiles() {
         homeContent.style.display = 'none';
         resultsSection.style.display = 'none';
@@ -1593,6 +1601,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.showDownloadModal = showDownloadModal;
     window.showLocalFiles = showLocalFiles;
     window.showHomeContent = showHomeContent;
+    window.toggleFolderIcon = toggleFolderIcon;
 });
 
 // Show notification function
@@ -1825,18 +1834,30 @@ document.head.appendChild(style);
     let castDurationValue = 0;
     let castStartTime = 0;
     let lastSavedCastTime = 0;
+    let localshown = false;
 
     // ---- File Browser Button -> show local-files on index ----
     if (fileBrowserBtn) {
         fileBrowserBtn.addEventListener('click', () => {
-            window.showLocalFiles();
-            loadLocalFiles();
+            window.toggleFolderIcon();
+            if (!localshown) {
+                window.showLocalFiles();
+                localshown = true;
+                loadLocalFiles()
+            }
+            else {
+                window.showHomeContent();
+                localshown = false;
+            }
+            ;
         });
     }
 
     if (localFilesBackBtn) {
         localFilesBackBtn.addEventListener('click', () => {
             window.showHomeContent();
+            window.toggleFolderIcon();
+            localshown = false;
         });
     }
 
