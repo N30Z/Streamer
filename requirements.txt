@@ -1,0 +1,24 @@
+# AniWorld Downloader - Requirements
+# Install with: python3 -m pip install -r .\requirements.txt
+ 
+# Core dependencies
+requests
+bs4
+yt-dlp
+npyscreen
+tqdm
+fake_useragent
+packaging
+windows-curses
+winfcntl
+jsbeautifier
+flask
+ffmpeg
+ 
+# Windows-specific dependencies (installed automatically on Windows)
+# py-cpuinfo
+# windows-curses
+# winfcntl
+ 
+# Optional: Chromecast support
+# pychromecast
