@@ -1046,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showNotification(message, 'success');
                 hideDownloadModal();
                 startQueueTracking();
-                queueModal.style.display = 'flex';
+                showQueueMiniPopup();
             } else {
                 showNotification(data.error || 'Download failed to start', 'error');
             }
@@ -1204,6 +1204,66 @@ document.addEventListener('DOMContentLoaded', function() {
             downloadBadge.style.display = 'none';
             downloadQueueBtn.classList.remove('downloading');
         }
+    }
+
+    let miniPopupTimeout = null;
+
+    function showQueueMiniPopup() {
+        // Remove existing popup if any
+        const existing = document.getElementById('queue-mini-popup');
+        if (existing) {
+            existing.remove();
+            if (miniPopupTimeout) clearTimeout(miniPopupTimeout);
+        }
+
+        // Fetch current queue to show latest items
+        fetch('/api/queue-status')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success || !data.queue) return;
+
+                const activeItems = data.queue.active || [];
+                if (activeItems.length === 0) return;
+
+                // Take the last 3 items
+                const items = activeItems.slice(-3);
+
+                const popup = document.createElement('div');
+                popup.id = 'queue-mini-popup';
+                popup.className = 'queue-mini-popup';
+
+                let itemsHtml = items.map(item => `
+                    <div class="queue-mini-item">
+                        <div class="queue-mini-icon"><i class="fas fa-download"></i></div>
+                        <div class="queue-mini-info">
+                            <div class="queue-mini-title">${escapeHtml(item.anime_title)}</div>
+                            <div class="queue-mini-status">${item.status}</div>
+                        </div>
+                    </div>
+                `).join('');
+
+                popup.innerHTML = itemsHtml;
+
+                // Position below the download queue button
+                const btn = document.getElementById('download-queue-btn');
+                const rect = btn.getBoundingClientRect();
+                popup.style.top = (rect.bottom + 8) + 'px';
+                popup.style.right = (window.innerWidth - rect.right) + 'px';
+
+                document.body.appendChild(popup);
+
+                // Trigger entrance animation
+                requestAnimationFrame(() => popup.classList.add('visible'));
+
+                // Auto-close after 3 seconds
+                miniPopupTimeout = setTimeout(() => {
+                    popup.classList.remove('visible');
+                    popup.addEventListener('transitionend', () => popup.remove(), { once: true });
+                    // Fallback removal in case transitionend doesn't fire
+                    setTimeout(() => { if (popup.parentNode) popup.remove(); }, 400);
+                }, 3000);
+            })
+            .catch(() => {});
     }
 
     function updateQueueList(container, items, type) {

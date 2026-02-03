@@ -4776,3 +4776,72 @@ body[data-theme="dark"] .episode-progress-text {
 .queue-modal-empty p {
     font-size: 1rem;
 }
+
+/* ========================================
+   Queue Mini Popup (auto-dismiss)
+   ======================================== */
+
+.queue-mini-popup {
+    position: fixed;
+    z-index: 10000;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.6rem;
+    min-width: 260px;
+    max-width: 320px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+}
+
+.queue-mini-popup.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.queue-mini-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+}
+
+.queue-mini-icon {
+    color: #4299e1;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    width: 22px;
+    text-align: center;
+}
+
+.queue-mini-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.queue-mini-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-mini-status {
+    font-size: 0.65rem;
+    color: #48bb78;
+    text-transform: uppercase;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
