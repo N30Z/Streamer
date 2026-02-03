@@ -26,8 +26,12 @@ jobs:
         run: |
           pyinstaller `
           --onefile `
-          --windowed `
-          --add-data "src/aniworld;src/aniworld" `
+          --noconsole `
+          --hidden-import jsbeautifier `
+          --hidden-import bs4 `
+          --hidden-import lxml `
+          --hidden-import cloudscraper `
+          --hidden-import curl_cffi `
           native_launcher.py
 
       - name: Upload artifact
