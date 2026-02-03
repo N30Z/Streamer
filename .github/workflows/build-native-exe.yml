@@ -24,11 +24,11 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller ^
-            --onefile ^
-            --windowed ^
-            --add-data "src/aniworld;src/aniworld" ^
-            native_launcher.py
+          pyinstaller `
+          --onefile `
+          --windowed `
+          --add-data "src/aniworld;src/aniworld" `
+          native_launcher.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
