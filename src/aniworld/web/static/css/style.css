@@ -1591,6 +1591,31 @@ body[data-theme="dark"] .results-section {
     margin-bottom: 0.4rem;
 }
 
+.queue-item-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.queue-cancel-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.queue-cancel-btn:hover {
+    color: #f56565;
+    background: rgba(245, 101, 101, 0.15);
+}
+
 .queue-item-title {
     font-weight: 600;
     color: var(--text-secondary);
@@ -1624,6 +1649,11 @@ body[data-theme="dark"] .results-section {
 .queue-item-status.failed {
     background: rgba(245, 101, 101, 0.2);
     color: #f56565;
+}
+
+.queue-item-status.cancelled {
+    background: rgba(160, 160, 160, 0.2);
+    color: #a0aec0;
 }
 
 .queue-item-progress {

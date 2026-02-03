@@ -1223,10 +1223,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const overallProgressClamped = Math.max(0, Math.min(100, overallProgress));
             const episodeProgressClamped = Math.max(0, Math.min(100, episodeProgress));
 
+            const canCancel = item.status === 'downloading' || item.status === 'queued';
+
             queueItem.innerHTML = `
                 <div class="queue-item-header">
                     <div class="queue-item-title">${escapeHtml(item.anime_title)}</div>
-                    <div class="queue-item-status ${item.status}">${item.status}</div>
+                    <div class="queue-item-header-right">
+                        ${canCancel ? `<button class="queue-cancel-btn" data-id="${item.id}" title="Cancel download"><i class="fas fa-times"></i></button>` : ''}
+                        <div class="queue-item-status ${item.status}">${item.status}</div>
+                    </div>
                 </div>
                 ${showProgressBar ? `
                 <div class="queue-item-progress">
@@ -1252,6 +1257,25 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${escapeHtml(item.current_episode || (item.status === 'completed' ? 'Download completed' : 'Waiting in queue'))}
                 </div>
             `;
+
+            // Attach cancel button handler
+            const cancelBtn = queueItem.querySelector('.queue-cancel-btn');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => {
+                    const queueId = cancelBtn.dataset.id;
+                    fetch(`/api/queue/cancel/${queueId}`, { method: 'POST' })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                showNotification('Download cancelled', 'info');
+                                updateQueueDisplay();
+                            } else {
+                                showNotification(data.error || 'Failed to cancel', 'error');
+                            }
+                        })
+                        .catch(() => showNotification('Failed to cancel download', 'error'));
+                });
+            }
 
             container.appendChild(queueItem);
         });
