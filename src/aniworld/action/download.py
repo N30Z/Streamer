@@ -10,7 +10,7 @@ from ..config import PROVIDER_HEADERS_D
 from ..parser import get_arguments
 from .common import get_direct_link, sanitize_filename
 
-arguments = get_arguments()
+
 
 class QuietLogger:
     """Custom logger to suppress yt-dlp output while allowing progress hooks."""
@@ -319,6 +319,7 @@ def download(anime: Anime, web_progress_callback: Optional[Callable] = None) -> 
             )
             continue
 
+        arguments = get_arguments()
         # Handle direct link only mode
         if arguments.only_direct_link:
             print(episode_title)

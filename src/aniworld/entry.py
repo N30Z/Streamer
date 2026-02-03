@@ -6,7 +6,7 @@ from typing import List
 from .models import Anime, Episode, SUPPORTED_SITES
 from .movie4k import Movie, MovieAnime, is_movie4k_url
 from .parser import get_arguments
-arguments = get_arguments()
+
 from .search import search_anime
 from .execute import execute
 from .common import generate_links
@@ -60,6 +60,7 @@ def _read_episode_file(episode_file: str) -> List[str]:
 def _collect_episode_links() -> List[str]:
     """Collect episode links from arguments and files."""
     links = []
+    arguments = get_arguments()
 
     if arguments.episode_file:
         urls = _read_episode_file(arguments.episode_file)
@@ -141,6 +142,7 @@ def _group_episodes_by_series(links: List[str]) -> List[Anime]:
 
 
 def _handle_episode_mode() -> None:
+    arguments = get_arguments()
     """Handle episode/file mode execution."""
     links = _collect_episode_links()
 
@@ -168,6 +170,7 @@ def _handle_episode_mode() -> None:
 
 
 def _handle_runtime_error(e: Exception) -> None:
+    arguments = get_arguments()
     """Handle runtime errors with proper formatting."""
     if arguments.debug:
         traceback.print_exc()
@@ -177,6 +180,7 @@ def _handle_runtime_error(e: Exception) -> None:
 
 
 def aniworld() -> None:
+    arguments = get_arguments()
     """
     Main entry point for the AniWorld downloader.
 

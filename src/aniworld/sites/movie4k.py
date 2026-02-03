@@ -29,7 +29,6 @@ from ..config import (
     MOVIE4K_SX,
 )
 from ..parser import get_arguments
-arguments = get_arguments()
 
 
 
@@ -391,6 +390,7 @@ class Movie:
         self._runtime: Optional[str] = None
         self._rating: Optional[str] = None
         self._genres: Optional[str] = None
+        arguments = get_arguments()
 
         self._selected_provider = _selected_provider or getattr(
             arguments, "provider", None
@@ -651,6 +651,7 @@ class Movie:
 
             # Provide referer (the movie page URL) to providers that need it
             kwargs["referer"] = self.link
+            arguments = get_arguments()
 
             if provider == "Luluvdo":
                 kwargs["arguments"] = arguments
@@ -706,6 +707,7 @@ class MovieAnime:
         self.provider = movie._selected_provider
         self.language = movie._selected_language
         self.aniskip = False
+        arguments = get_arguments()
         self.output_directory = getattr(arguments, "output_dir", "")
 
         self._title_cache = None
