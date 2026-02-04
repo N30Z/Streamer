@@ -25,14 +25,41 @@ jobs:
       - name: Build EXE
         run: |
           pyinstaller `
-          --onefile `
-          --noconsole `
-          --hidden-import jsbeautifier `
-          --hidden-import bs4 `
-          --hidden-import lxml `
-          --hidden-import cloudscraper `
-          --hidden-import curl_cffi `
-          native_launcher.py
+            --onefile `
+            --noconsole `
+            --name Streamer `
+            --add-data "src;src" `
+            --hidden-import aniworld `
+            --hidden-import aniworld.web `
+            --hidden-import aniworld.web.app `
+            --hidden-import aniworld.web.download_manager `
+            --hidden-import aniworld.web.database `
+            --hidden-import aniworld.extractors `
+            --hidden-import aniworld.extractors.provider.common `
+            --hidden-import aniworld.extractors.provider.doodstream `
+            --hidden-import aniworld.extractors.provider.filemoon `
+            --hidden-import aniworld.extractors.provider.hanime `
+            --hidden-import aniworld.extractors.provider.loadx `
+            --hidden-import aniworld.extractors.provider.luluvdo `
+            --hidden-import aniworld.extractors.provider.speedfiles `
+            --hidden-import aniworld.extractors.provider.streamtape `
+            --hidden-import aniworld.extractors.provider.vidmoly `
+            --hidden-import aniworld.extractors.provider.vidoza `
+            --hidden-import aniworld.extractors.provider.voe `
+            --hidden-import aniworld.sites.aniworld `
+            --hidden-import aniworld.sites.s_to `
+            --hidden-import aniworld.sites.movie4k `
+            --hidden-import jsbeautifier `
+            --hidden-import bs4 `
+            --hidden-import lxml `
+            --hidden-import flask `
+            --hidden-import jinja2 `
+            --hidden-import yt_dlp `
+            --hidden-import fake_useragent `
+            --hidden-import packaging `
+            --hidden-import requests `
+            --hidden-import engineio `
+            native_launcher.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
