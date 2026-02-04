@@ -8,32 +8,43 @@ via PyInstaller (--onefile --noconsole).
 
 import os
 import sys
+import socket
 import threading
 import time
+import traceback
 import types
 import logging
+import tempfile
 
 # ---------------------------------------------------------------------------
-# PyInstaller helper: when running from a --onefile bundle the unpacked
-# temporary directory (_MEIPASS) must be on sys.path so that ``import
-# aniworld`` resolves correctly.
+# Crash log – with --noconsole there is no stderr, so dump errors to a file
+# the user can inspect.
 # ---------------------------------------------------------------------------
-_BUNDLE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-_SRC_DIR = os.path.join(_BUNDLE_DIR, "src")
-if _SRC_DIR not in sys.path:
-    sys.path.insert(0, _SRC_DIR)
-if _BUNDLE_DIR not in sys.path:
-    sys.path.insert(0, _BUNDLE_DIR)
-
-import webview  # noqa: E402  (must come after path fixup)
+_LOG_FILE = os.path.join(tempfile.gettempdir(), "streamer_native.log")
+logging.basicConfig(
+    filename=_LOG_FILE,
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 PORT = 5000
 
 
-def _wait_for_server(host: str = "127.0.0.1", port: int = PORT, timeout: int = 30) -> bool:
-    """Block until the Flask server is accepting connections (or *timeout* seconds elapse)."""
-    import socket
+def _show_error(message: str) -> None:
+    """Show an error to the user even when running without a console."""
+    logging.critical(message)
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(
+            0, message, "Streamer - Error", 0x10,  # MB_ICONERROR
+        )
+    except Exception:
+        # Not on Windows or ctypes unavailable – write to stderr as fallback
+        print(message, file=sys.stderr)
 
+
+def _wait_for_server(host: str = "127.0.0.1", port: int = PORT, timeout: int = 30) -> bool:
+    """Block until the Flask server is accepting connections."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
@@ -45,18 +56,16 @@ def _wait_for_server(host: str = "127.0.0.1", port: int = PORT, timeout: int = 3
 
 
 def start_backend() -> None:
-    """Start the Flask web interface in the current thread (blocking)."""
+    """Start the Flask web interface (blocking – run in a daemon thread)."""
     try:
         from aniworld.web.app import start_web_interface
 
-        # Build a minimal namespace that looks like argparse output so that
-        # start_web_interface behaves correctly without touching sys.argv.
         args = types.SimpleNamespace(
             web_ui=True,
             web_port=PORT,
             web_expose=False,
             enable_web_auth=False,
-            no_browser=True,       # pywebview provides the window
+            no_browser=True,
             debug=False,
             output_dir=None,
             live=False,
@@ -64,18 +73,30 @@ def start_backend() -> None:
         start_web_interface(args, port=PORT, debug=False)
     except Exception:
         logging.exception("Backend failed to start")
+        _show_error(
+            "The Streamer backend failed to start.\n\n"
+            f"Details have been written to:\n{_LOG_FILE}"
+        )
 
 
 def main() -> None:
-    # Silence argv so argparse (if it still gets invoked somewhere) sees
-    # nothing beyond the program name.
+    try:
+        import webview
+    except ImportError:
+        _show_error("pywebview is not installed.  Cannot open native window.")
+        sys.exit(1)
+
+    # Strip argv so argparse (if triggered internally) sees no flags.
     sys.argv = [sys.argv[0]]
 
     backend_thread = threading.Thread(target=start_backend, daemon=True)
     backend_thread.start()
 
     if not _wait_for_server():
-        print("ERROR: Backend did not start in time.", file=sys.stderr)
+        _show_error(
+            "The backend did not start within 30 seconds.\n\n"
+            f"Check the log file for details:\n{_LOG_FILE}"
+        )
         sys.exit(1)
 
     webview.create_window(
@@ -88,4 +109,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        logging.exception("Unhandled exception in native launcher")
+        _show_error(
+            f"An unexpected error occurred.\n\n"
+            f"Details have been written to:\n{_LOG_FILE}"
+        )
+        sys.exit(1)
