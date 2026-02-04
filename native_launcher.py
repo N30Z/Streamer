@@ -15,10 +15,6 @@ import traceback
 import types
 import logging
 import tempfile
-import io
-
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 # ---------------------------------------------------------------------------
 # Crash log – with --noconsole there is no stderr, so dump errors to a file

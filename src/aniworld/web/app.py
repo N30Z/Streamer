@@ -266,7 +266,7 @@ class WebApp:
                     f"{season_count} seasons, {episode_count} episodes "
                     f"({format_size(total_size)})"
                 )
-                print(f"📚 Media Library: {series_count} series, {season_count} seasons, {episode_count} episodes ({format_size(total_size)})")
+                print(f" Media Library: {series_count} series, {season_count} seasons, {episode_count} episodes ({format_size(total_size)})")
             else:
                 logging.info(f"Media library is empty: {download_path}")
 
@@ -2634,20 +2634,20 @@ def start_web_interface(arguments=None, port=5000, debug=False):
     )
 
     print("\n" + "=" * 69)
-    print("🌐 AniWorld Downloader Web Interface")
+    print(" AniWorld Downloader Web Interface")
     print("=" * 69)
-    print(f"📍 Server Address:   {server_address}")
-    print(f"🔐 Security Mode:    {auth_status}")
-    print(f"🌐 External Access:  {expose_status}")
-    print(f"📁 Download Path:    {download_path}")
-    print(f"🐞 Debug Mode:       {'ENABLED' if debug else 'DISABLED'}")
-    print(f"📦 Version:          {config.VERSION}")
-    print(f"🌏 Browser:          {browser_status}")
+    print(f" Server Address:   {server_address}")
+    print(f" Security Mode:    {auth_status}")
+    print(f" External Access:  {expose_status}")
+    print(f" Download Path:    {download_path}")
+    print(f" Debug Mode:       {'ENABLED' if debug else 'DISABLED'}")
+    print(f" Version:          {config.VERSION}")
+    print(f" Browser:          {browser_status}")
     print("=" * 69)
-    print("💡 Access the web interface by opening the URL above in your browser")
+    print(" Access the web interface by opening the URL above in your browser")
     if getattr(arguments, "enable_web_auth", False):
-        print("💡 First visit will prompt you to create an admin account")
-    print("💡 Press Ctrl+C to stop the server")
+        print(" First visit will prompt you to create an admin account")
+    print(" Press Ctrl+C to stop the server")
     print("=" * 69 + "\n")
 
     # Open browser automatically unless disabled
