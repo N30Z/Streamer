@@ -1497,7 +1497,11 @@ class WebApp:
                     available_providers = []
                     available_languages = []
                     try:
-                        ep = Episode(link=sample_url, site=site)
+                        try:
+                            ep = Episode(link=sample_url, site=site)
+                        except Exception as e:
+                            logging.warning("Failed to create Episode object for URL: %s, error: %s", sample_url, e)
+                            return available_providers, available_languages
                         providers = ep._get_providers_from_html()
                         # Filter to only supported providers, preserve order
                         available_providers = [

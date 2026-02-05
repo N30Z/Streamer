@@ -69,6 +69,7 @@ class Anime:
         title: Optional[str] = None,
         slug: Optional[str] = None,
         site: str = "aniworld.to",
+        arguments = get_arguments(),
         action: Optional[str] = None,
         provider: Optional[str] = None,
         language: Optional[str] = None,
@@ -457,6 +458,7 @@ class Anime:
 
 
 class Episode:
+    
     """
     Represents an episode of an anime series with comprehensive data management.
 
@@ -560,6 +562,7 @@ class Episode:
             ValueError: If neither link nor (slug + season + episode) provided
         """
         # Validate required parameters
+        arguments = get_arguments()
         if not link and (not slug or season is None or episode is None):
             raise ValueError(
                 "Provide either 'link' or 'slug' with 'season' and 'episode'."

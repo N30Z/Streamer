@@ -344,7 +344,7 @@ class DownloadQueueManager:
                             """Handle progress updates from yt-dlp and update web interface"""
                             try:
                                 # Check if we should stop during download
-                                if self._stop_event.is_set():
+                                if self._stop_event.is_set() or self.is_cancelled(queue_id):
                                     # Signal yt-dlp to stop by raising an exception
                                     raise KeyboardInterrupt("Download stopped by user")
 
@@ -466,6 +466,19 @@ class DownloadQueueManager:
                                     f"Failed to download: {episode_info} - No new files created"
                                 )
 
+                        except KeyboardInterrupt:
+                            # HARD cancel path – yt-dlp was aborted via progress callback
+                            logging.info(f"Download cancelled during execution for queue {queue_id}")
+
+                            self._update_download_status(
+                                queue_id,
+                                "cancelled",
+                                error_message="Cancelled by user",
+                            )
+
+                            self._cancelled_ids.discard(queue_id)
+                            return
+                        
                         except Exception as download_error:
                             logging.warning(
                                 f"Failed to download: {episode_info} - Error: {download_error}"
@@ -474,7 +487,16 @@ class DownloadQueueManager:
                     except Exception as e:
                         logging.error(f"Error downloading {episode_info}: {e}")
 
-            # Final status update
+            # Final status update (skip if cancelled)
+            if self.is_cancelled(queue_id):
+                self._update_download_status(
+                    queue_id,
+                    "cancelled",
+                    error_message="Cancelled by user",
+                )
+                self._cancelled_ids.discard(queue_id)
+                return
+
             if successful:
                 status = "completed"
                 error_msg = f"Successfully downloaded episode"
