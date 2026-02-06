@@ -231,17 +231,20 @@ class CliProgressBar:
                     r"\x1b\[[0-9;]*m", "", str(total_bytes_str)
                 ).strip()
 
-            # Create progress bar
+            # Create progress bar (ASCII-safe for Windows console compatibility)
             bar_width = 40
             filled_width = int(bar_width * percentage / 100)
-            bar = "█" * filled_width + "░" * (bar_width - filled_width)
+            bar = "#" * filled_width + "-" * (bar_width - filled_width)
 
             # Only update if percentage changed significantly to reduce flickering
             if abs(percentage - self.last_percentage) >= 0.5:
-                sys.stdout.write(
-                    f"\r[{bar}] {percentage:.1f}% | Size: {total_bytes_str} | Speed: {speed_str} | ETA: {eta_str}  "
-                )
-                sys.stdout.flush()
+                try:
+                    sys.stdout.write(
+                        f"\r[{bar}] {percentage:.1f}% | Size: {total_bytes_str} | Speed: {speed_str} | ETA: {eta_str}  "
+                    )
+                    sys.stdout.flush()
+                except (UnicodeEncodeError, OSError):
+                    pass  # Ignore encoding errors on Windows
                 self.last_percentage = percentage
 
         elif d["status"] == "finished":
