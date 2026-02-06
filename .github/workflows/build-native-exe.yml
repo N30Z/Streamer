@@ -22,6 +22,16 @@ jobs:
           pip install pyinstaller pywebview
           pip install -e .
 
+      - name: Download FFmpeg
+        run: |
+          # Download FFmpeg essentials build
+          Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile "ffmpeg.zip"
+          Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_extract"
+          # Find and copy ffmpeg.exe
+          $ffmpegDir = Get-ChildItem -Path "ffmpeg_extract" -Recurse -Directory | Where-Object { $_.Name -eq "bin" } | Select-Object -First 1
+          Copy-Item "$($ffmpegDir.FullName)\ffmpeg.exe" -Destination "ffmpeg.exe"
+          Copy-Item "$($ffmpegDir.FullName)\ffprobe.exe" -Destination "ffprobe.exe"
+
       - name: Build EXE
         run: |
           pyinstaller `
@@ -30,6 +40,8 @@ jobs:
             --name Streamer `
             --paths src `
             --collect-all aniworld `
+            --add-binary "ffmpeg.exe;." `
+            --add-binary "ffprobe.exe;." `
             --hidden-import webview `
             --hidden-import engineio `
             --hidden-import aniworld.extractors.provider.common `

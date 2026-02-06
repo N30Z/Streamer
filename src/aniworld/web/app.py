@@ -1497,6 +1497,20 @@ class WebApp:
                     available_providers = []
                     available_languages = []
                     try:
+                        # movie4k.sx uses Movie class with API-based data
+                        if site == "movie4k.sx":
+                            from ..sites.movie4k import Movie
+                            try:
+                                movie = Movie(url=sample_url)
+                                available_providers = [
+                                    p for p in movie.provider_names
+                                    if p in SUPPORTED_PROVIDERS
+                                ]
+                                available_languages = movie.available_languages
+                            except Exception as e:
+                                logging.warning("Failed to create Movie object for URL: %s, error: %s", sample_url, e)
+                            return available_providers, available_languages
+
                         try:
                             ep = Episode(link=sample_url, site=site)
                         except Exception as e:

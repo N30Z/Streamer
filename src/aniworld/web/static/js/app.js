@@ -1043,7 +1043,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     message += ` (${parallelCount} parallel download${parallelCount !== 1 ? 's' : ''})`;
                 }
                 
-                showNotification(message, 'success');
+                // showNotification(message, 'success');
                 hideDownloadModal();
                 startQueueTracking();
                 showQueueMiniPopup();

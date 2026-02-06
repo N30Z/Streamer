@@ -91,6 +91,36 @@ def _get_output_filename(anime: Anime, episode, sanitized_title: str) -> str:
     return f"Episode {episode_num:03}.mp4"
 
 
+def _get_ffmpeg_location() -> Optional[str]:
+    """Find bundled FFmpeg location for PyInstaller frozen apps."""
+    import shutil
+
+    # Check if running as PyInstaller frozen app
+    if getattr(sys, 'frozen', False):
+        # For --onefile builds, files are extracted to sys._MEIPASS
+        # For --onedir builds, files are next to the executable
+        bundle_dir = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+
+        # Check for ffmpeg in bundle directory
+        for ffmpeg_name in ['ffmpeg.exe', 'ffmpeg']:
+            ffmpeg_path = bundle_dir / ffmpeg_name
+            if ffmpeg_path.exists():
+                return str(bundle_dir)
+
+        # Also check executable directory (for --onedir)
+        exe_dir = Path(sys.executable).parent
+        for ffmpeg_name in ['ffmpeg.exe', 'ffmpeg']:
+            ffmpeg_path = exe_dir / ffmpeg_name
+            if ffmpeg_path.exists():
+                return str(exe_dir)
+
+    # Check if ffmpeg is in PATH
+    if shutil.which('ffmpeg'):
+        return None  # Let yt-dlp find it in PATH
+
+    return None
+
+
 def _build_ytdl_options(
     output_path: str, anime: Anime, progress_hook: Optional[Callable] = None
 ) -> dict:
@@ -104,6 +134,11 @@ def _build_ytdl_options(
         "no_warnings": True,
         "logger": _create_quiet_logger(),  # Custom logger to suppress most output
     }
+
+    # Set FFmpeg location for PyInstaller bundles
+    ffmpeg_location = _get_ffmpeg_location()
+    if ffmpeg_location:
+        options["ffmpeg_location"] = ffmpeg_location
 
     # Add provider-specific headers
     if anime.provider in PROVIDER_HEADERS_D:
@@ -124,6 +159,8 @@ def _build_ytdl_options(
 
 def _cleanup_partial_files(output_dir: Path) -> None:
     """Clean up partial download files and empty directories."""
+    import time
+
     if not output_dir.exists():
         return
 
@@ -132,10 +169,16 @@ def _cleanup_partial_files(output_dir: Path) -> None:
 
     for file_path in output_dir.iterdir():
         if partial_pattern.search(file_path.name):
-            try:
-                file_path.unlink()
-            except OSError as err:
-                logging.warning("Failed to remove partial file %s: %s", file_path, err)
+            # Retry with delay for Windows file locking
+            for attempt in range(3):
+                try:
+                    file_path.unlink()
+                    break
+                except OSError as err:
+                    if attempt < 2:
+                        time.sleep(0.5)  # Wait for file handle release
+                    else:
+                        logging.debug("Could not remove partial file %s: %s", file_path, err)
         else:
             is_empty = False
 
@@ -143,10 +186,8 @@ def _cleanup_partial_files(output_dir: Path) -> None:
     if is_empty:
         try:
             output_dir.rmdir()
-        except OSError as err:
-            logging.warning(
-                "Failed to remove empty directory %s: %s", str(output_dir), err
-            )
+        except OSError:
+            pass  # Directory not empty or still in use
 
 
 class CliProgressBar:

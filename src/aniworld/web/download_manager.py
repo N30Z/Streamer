@@ -231,21 +231,29 @@ class DownloadQueueManager:
                                 jobs_to_start.append(download)
                 
                 # Submit jobs to thread pool
-                if jobs_to_start:
+                if jobs_to_start and self.thread_pool is not None:
                     for job in jobs_to_start:
+                        # Check again before each submit in case of shutdown
+                        if self._stop_event.is_set() or self.thread_pool is None:
+                            break
                         # Mark as downloading
                         self._update_download_status(
                             job["id"], "downloading", current_episode="Starting download..."
                         )
                         # Submit to thread pool
-                        worker_future = self.thread_pool.submit(self._process_download_job, job)
-                        self.active_workers.add(job["id"])
-                        
-                        # Add callback to remove from active workers when done
-                        worker_future.add_done_callback(
-                            lambda f, job_id=job["id"]: self.active_workers.discard(job_id)
-                        )
-                    
+                        try:
+                            worker_future = self.thread_pool.submit(self._process_download_job, job)
+                            self.active_workers.add(job["id"])
+
+                            # Add callback to remove from active workers when done
+                            worker_future.add_done_callback(
+                                lambda f, job_id=job["id"]: self.active_workers.discard(job_id)
+                            )
+                        except RuntimeError as e:
+                            # Thread pool was shut down between check and submit
+                            logging.debug(f"Could not submit job {job['id']}: {e}")
+                            break
+
                     logging.info(f"Started {len(jobs_to_start)} parallel download(s)")
                 else:
                     # No jobs available or workers at max capacity, wait a bit
