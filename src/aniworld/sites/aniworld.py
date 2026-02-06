@@ -17,10 +17,17 @@ from functools import lru_cache
 
 from bs4 import BeautifulSoup
 
-import curses
 import requests
 
 from ..config import DEFAULT_REQUEST_TIMEOUT, ANIWORLD_TO, RANDOM_USER_AGENT
+
+# Optional curses import (not available on Windows)
+try:
+    import curses
+    CURSES_AVAILABLE = True
+except ImportError:
+    curses = None
+    CURSES_AVAILABLE = False
 
 
 # Constants for better maintainability
@@ -30,15 +37,18 @@ EASTER_EGG_URL = "https://www.youtube.com/watch?v=PDJLvF1dUek"
 # Forbidden search patterns (case-insensitive)
 FORBIDDEN_SEARCHES = ["boku no piko", "boku no pico", "pico boku", "piko boku"]
 
-# Key mapping for menu navigation
-KEY_MAP = {
-    curses.KEY_UP: "UP",
-    curses.KEY_DOWN: "DOWN",
-    curses.KEY_LEFT: "LEFT",
-    curses.KEY_RIGHT: "RIGHT",
-    ord("b"): "b",
-    ord("a"): "a",
-}
+# Key mapping for menu navigation (only defined if curses is available)
+if CURSES_AVAILABLE:
+    KEY_MAP = {
+        curses.KEY_UP: "UP",
+        curses.KEY_DOWN: "DOWN",
+        curses.KEY_LEFT: "LEFT",
+        curses.KEY_RIGHT: "RIGHT",
+        ord("b"): "b",
+        ord("a"): "a",
+    }
+else:
+    KEY_MAP = {}
 
 
 def _validate_keyword(keyword: str) -> str:
@@ -125,6 +135,11 @@ def search_anime(
 
     if not anime_list:
         raise ValueError("Could not get valid anime")
+
+    if not CURSES_AVAILABLE:
+        # Fallback when curses is not available (Windows)
+        logging.warning("Interactive menu not available (curses not installed). Returning first result.")
+        return anime_list[0].get("link", None)
 
     return curses.wrapper(show_menu, anime_list)
 
@@ -328,7 +343,7 @@ def _handle_konami_code(entered_keys: List[str], key_input: str) -> List[str]:
     return entered_keys
 
 
-def _render_menu(stdscr: curses.window, options: List[Dict], current_row: int) -> None:
+def _render_menu(stdscr, options: List[Dict], current_row: int) -> None:
     """
     Render the anime selection menu.
 
@@ -359,14 +374,14 @@ def _render_menu(stdscr: curses.window, options: List[Dict], current_row: int) -
             stdscr.attron(highlight)
             stdscr.addstr(idx, 0, display_text)
             stdscr.attroff(highlight)
-        except curses.error:
+        except Exception:
             # Handle cases where we can't draw to the screen
             pass
 
     stdscr.refresh()
 
 
-def show_menu(stdscr: curses.window, options: List[Dict]) -> Optional[str]:
+def show_menu(stdscr, options: List[Dict]) -> Optional[str]:
     """
     Display interactive menu for anime selection.
 
@@ -394,18 +409,18 @@ def show_menu(stdscr: curses.window, options: List[Dict]) -> Optional[str]:
             else:
                 entered_keys.clear()
 
-            # Handle navigation
-            if key == curses.KEY_DOWN:
+            # Handle navigation (curses key constants)
+            if CURSES_AVAILABLE and key == curses.KEY_DOWN:
                 current_row = (current_row + 1) % len(options)
-            elif key == curses.KEY_UP:
+            elif CURSES_AVAILABLE and key == curses.KEY_UP:
                 current_row = (current_row - 1 + len(options)) % len(options)
             elif key == ord("\n"):
                 return options[current_row].get("link", "No Link")
             elif key == ord("q") or key == 27:  # 'q' or ESC
                 break
 
-    except curses.error as err:
-        logging.error("Curses error in menu: %s", err)
+    except Exception as err:
+        logging.error("Error in menu: %s", err)
     except KeyboardInterrupt:
         pass
 
