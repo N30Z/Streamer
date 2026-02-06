@@ -480,12 +480,15 @@ class DownloadQueueManager:
                             return
                         
                         except Exception as download_error:
+                            import traceback
                             logging.warning(
-                                f"Failed to download: {episode_info} - Error: {download_error}"
+                                f"Failed to download: {episode_info} - Error: {download_error}\n"
+                                f"Traceback:\n{traceback.format_exc()}"
                             )
 
                     except Exception as e:
-                        logging.error(f"Error downloading {episode_info}: {e}")
+                        import traceback
+                        logging.error(f"Error downloading {episode_info}: {e}\n{traceback.format_exc()}")
 
             # Final status update (skip if cancelled)
             if self.is_cancelled(queue_id):

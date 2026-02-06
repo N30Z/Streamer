@@ -291,16 +291,18 @@ def _execute_download(
 
     except yt_dlp.DownloadError as e:
         logging.error(f"yt-dlp download error: {e}")
-        print(f"\n❌ Download failed: {e}")
+        print(f"\n[ERROR] Download failed: {e}")
         return False
     except KeyboardInterrupt:
         logging.info("Download interrupted by user")
-        print("\n⏹️ Download interrupted by user")
+        print("\n[STOP] Download interrupted by user")
         _cleanup_partial_files(output_path.parent)
         raise
     except Exception as e:
-        logging.error(f"Unexpected download error: {e}")
-        print(f"\n❌ Unexpected error: {e}")
+        import traceback
+        logging.error(f"Unexpected download error: {e}\n{traceback.format_exc()}")
+        print(f"\n[ERROR] Unexpected error: {e}")
+        print(f"[DEBUG] Traceback:\n{traceback.format_exc()}")
         return False
 
 

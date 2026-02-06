@@ -7,6 +7,18 @@ import logging
 from typing import NoReturn
 import pathlib
 
+# Fix Windows console encoding to handle Unicode gracefully
+# This prevents crashes when printing characters the console can't display
+if sys.platform == "win32":
+    try:
+        # Python 3.7+ supports reconfigure() to change error handling
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(errors='replace')
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(errors='replace')
+    except Exception:
+        pass  # Ignore if reconfigure fails (e.g., in frozen apps)
+
 # Compatibility shim: If the package is invoked as `python -m src.aniworld`,
 # ensure the repository `src` directory is on sys.path so absolute imports
 # like `import aniworld` succeed for worker threads or dynamic imports.

@@ -81,7 +81,10 @@ class CriticalErrorHandler(logging.Handler):
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(levelname)s:%(name)s:%(funcName)s: %(message)s",
-    handlers=[logging.FileHandler(log_file_path, mode="w"), CriticalErrorHandler()],
+    handlers=[
+        logging.FileHandler(log_file_path, mode="w", encoding="utf-8"),
+        CriticalErrorHandler(),
+    ],
 )
 
 console_handler = logging.StreamHandler()
@@ -89,6 +92,12 @@ console_handler.setLevel(logging.WARNING)
 console_handler.setFormatter(
     logging.Formatter("%(levelname)s:%(name)s:%(funcName)s: %(message)s")
 )
+# Handle Unicode gracefully on Windows console
+if hasattr(console_handler.stream, 'reconfigure'):
+    try:
+        console_handler.stream.reconfigure(errors='replace')
+    except Exception:
+        pass  # Ignore if reconfigure fails
 logging.getLogger().addHandler(console_handler)
 logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 logging.getLogger("charset_normalizer").setLevel(logging.WARNING)
