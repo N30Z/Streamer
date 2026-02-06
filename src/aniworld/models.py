@@ -69,7 +69,7 @@ class Anime:
         title: Optional[str] = None,
         slug: Optional[str] = None,
         site: str = "aniworld.to",
-        arguments = get_arguments(),
+        arguments: Optional[Any] = None,
         action: Optional[str] = None,
         provider: Optional[str] = None,
         language: Optional[str] = None,
@@ -101,6 +101,10 @@ class Anime:
             ValueError: If episode_list is empty or slug cannot be determined
             requests.RequestException: If fetching anime data fails
         """
+        # Lazy-load arguments to avoid import-time side effects (PyInstaller compatibility)
+        if arguments is None:
+            arguments = get_arguments()
+
         # Validate required parameters
         if not episode_list:
             raise ValueError("Provide 'episode_list' with at least one episode.")
