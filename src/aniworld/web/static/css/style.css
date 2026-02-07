@@ -5037,6 +5037,34 @@ body[data-theme="dark"] .episode-progress-text {
     background: linear-gradient(135deg, #f5b82e 0%, #e5a00d 100%) !important;
 }
 
+/* Plex OAuth button in preferences */
+.plex-oauth-btn {
+    background: linear-gradient(135deg, #e5a00d 0%, #cc7b19 100%) !important;
+    border: none !important;
+    color: white !important;
+}
+
+.plex-oauth-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #f5b82e 0%, #e5a00d 100%) !important;
+}
+
+.plex-oauth-btn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.plex-oauth-btn.plex-connected {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+}
+
+.plex-oauth-status {
+    display: inline-block;
+    margin-left: 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    vertical-align: middle;
+}
+
 @media (max-width: 768px) {
     .plex-modal-content {
         width: 95%;

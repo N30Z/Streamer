@@ -127,13 +127,29 @@
                         <small>Sync your Plex watchlist and download titles directly.</small>
                     </div>
 
-                    <div class="preference-group" id="modal-plex-token-group" style="{{ '' if preferences.plex_enabled else 'display: none;' }}">
-                        <label for="modal-plex-token">Plex Token</label>
-                        <input type="password" id="modal-plex-token" value="{{ '********' if preferences.plex_token else '' }}" placeholder="Enter your Plex token">
-                        <small>
-                            Open <strong>plex.tv</strong>, press F12, run:
-                            <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">window.localStorage.getItem("myPlexAccessToken")</code>
-                        </small>
+                    <div id="modal-plex-token-group" style="{{ '' if preferences.plex_enabled else 'display: none;' }}">
+                        <div class="preference-group">
+                            <label>Sign in</label>
+                            <div>
+                                <button type="button" class="btn btn-primary plex-oauth-btn" id="modal-plex-oauth-btn">
+                                    <i class="fas fa-sign-in-alt"></i> Sign in with Plex
+                                </button>
+                                <span class="plex-oauth-status" id="modal-plex-oauth-status"></span>
+                            </div>
+                            <small>Opens Plex in a new tab. Sign in to link your account automatically.</small>
+                            {% if preferences.plex_token %}
+                            <small style="color: #10b981;"><i class="fas fa-check-circle"></i> Plex account connected</small>
+                            {% endif %}
+                        </div>
+
+                        <div class="preference-group">
+                            <label for="modal-plex-token">Manual Token</label>
+                            <input type="password" id="modal-plex-token" value="{{ '********' if preferences.plex_token else '' }}" placeholder="Or paste token manually">
+                            <small>
+                                Alternative: Open <strong>plex.tv</strong>, press F12, run:
+                                <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">window.localStorage.getItem("myPlexAccessToken")</code>
+                            </small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -476,6 +492,75 @@ setTimeout(function() {
     if (modalPlexEnabled && modalPlexTokenGroup) {
         modalPlexEnabled.addEventListener('change', function() {
             modalPlexTokenGroup.style.display = this.checked ? '' : 'none';
+        });
+    }
+
+    // Plex OAuth sign-in button (modal version)
+    const modalPlexOAuthBtn = document.getElementById('modal-plex-oauth-btn');
+    const modalPlexOAuthStatus = document.getElementById('modal-plex-oauth-status');
+    if (modalPlexOAuthBtn) {
+        modalPlexOAuthBtn.addEventListener('click', async function() {
+            modalPlexOAuthBtn.disabled = true;
+            modalPlexOAuthBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Waiting for Plex...';
+            modalPlexOAuthStatus.textContent = '';
+
+            try {
+                const response = await fetch('/api/plex/auth/pin', { method: 'POST' });
+                const data = await response.json();
+                if (!data.success) {
+                    modalPlexOAuthStatus.textContent = data.error || 'Failed';
+                    modalPlexOAuthStatus.style.color = '#ef4444';
+                    modalPlexOAuthBtn.disabled = false;
+                    modalPlexOAuthBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign in with Plex';
+                    return;
+                }
+
+                window.open(data.oauth_url, '_blank');
+                modalPlexOAuthStatus.textContent = 'Please sign in in the opened tab...';
+                modalPlexOAuthStatus.style.color = 'var(--text-secondary)';
+
+                const pinId = data.pin_id;
+                let attempts = 0;
+                const pollInterval = setInterval(async () => {
+                    attempts++;
+                    if (attempts > 60) {
+                        clearInterval(pollInterval);
+                        modalPlexOAuthStatus.textContent = 'Timed out. Try again.';
+                        modalPlexOAuthStatus.style.color = '#ef4444';
+                        modalPlexOAuthBtn.disabled = false;
+                        modalPlexOAuthBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign in with Plex';
+                        return;
+                    }
+                    try {
+                        const checkResp = await fetch('/api/plex/auth/check/' + pinId);
+                        const checkData = await checkResp.json();
+                        if (checkData.success && checkData.authenticated) {
+                            clearInterval(pollInterval);
+                            modalPlexOAuthStatus.textContent = 'Connected!';
+                            modalPlexOAuthStatus.style.color = '#10b981';
+                            modalPlexOAuthBtn.disabled = false;
+                            modalPlexOAuthBtn.innerHTML = '<i class="fas fa-check"></i> Connected';
+
+                            const tokenInput = document.getElementById('modal-plex-token');
+                            if (tokenInput) tokenInput.value = '********';
+
+                            const enabledCb = document.getElementById('modal-plex-enabled');
+                            if (enabledCb && !enabledCb.checked) {
+                                enabledCb.checked = true;
+                                enabledCb.dispatchEvent(new Event('change'));
+                            }
+
+                            if (window.showMessage) window.showMessage('Plex account connected!', 'success');
+                        }
+                    } catch (err) { /* retry silently */ }
+                }, 2000);
+
+            } catch (error) {
+                modalPlexOAuthStatus.textContent = 'Error: ' + error.message;
+                modalPlexOAuthStatus.style.color = '#ef4444';
+                modalPlexOAuthBtn.disabled = false;
+                modalPlexOAuthBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign in with Plex';
+            }
         });
     }
 

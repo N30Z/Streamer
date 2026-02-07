@@ -368,13 +368,29 @@
                     <small>Sync your Plex watchlist and download titles directly.</small>
                 </div>
 
-                <div class="preference-group" id="plex-token-group" style="{{ '' if preferences.plex_enabled else 'display: none;' }}">
-                    <label for="plex-token">Plex Token</label>
-                    <input type="password" id="plex-token" value="{{ '********' if preferences.plex_token else '' }}" placeholder="Enter your Plex token">
-                    <small>
-                        To get your token: Open <strong>plex.tv</strong> in your browser, press F12 to open the developer console, and run:<br>
-                        <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">window.localStorage.getItem("myPlexAccessToken")</code>
-                    </small>
+                <div id="plex-token-group" style="{{ '' if preferences.plex_enabled else 'display: none;' }}">
+                    <div class="preference-group">
+                        <label>Sign in</label>
+                        <div>
+                            <button type="button" class="btn btn-primary plex-oauth-btn" id="plex-oauth-btn">
+                                <i class="fas fa-sign-in-alt"></i> Sign in with Plex
+                            </button>
+                            <span class="plex-oauth-status" id="plex-oauth-status"></span>
+                        </div>
+                        <small>Opens Plex in a new tab. Sign in to link your account automatically.</small>
+                        {% if preferences.plex_token %}
+                        <small style="color: #10b981;"><i class="fas fa-check-circle"></i> Plex account connected</small>
+                        {% endif %}
+                    </div>
+
+                    <div class="preference-group">
+                        <label for="plex-token">Manual Token</label>
+                        <input type="password" id="plex-token" value="{{ '********' if preferences.plex_token else '' }}" placeholder="Or paste token manually">
+                        <small>
+                            Alternative: Open <strong>plex.tv</strong>, press F12, run:
+                            <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">window.localStorage.getItem("myPlexAccessToken")</code>
+                        </small>
+                    </div>
                 </div>
             </div>
 
@@ -621,6 +637,90 @@
                 plexEnabledToggle.addEventListener('change', function() {
                     plexTokenGroup.style.display = this.checked ? '' : 'none';
                 });
+            }
+
+            // Plex OAuth sign-in button
+            const plexOAuthBtn = document.getElementById('plex-oauth-btn');
+            const plexOAuthStatus = document.getElementById('plex-oauth-status');
+            if (plexOAuthBtn) {
+                plexOAuthBtn.addEventListener('click', function() {
+                    startPlexOAuth(plexOAuthBtn, plexOAuthStatus, 'plex-token');
+                });
+            }
+
+            async function startPlexOAuth(btn, statusEl, tokenInputId) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Waiting for Plex...';
+                statusEl.textContent = '';
+
+                try {
+                    const response = await fetch('/api/plex/auth/pin', { method: 'POST' });
+                    const data = await response.json();
+                    if (!data.success) {
+                        statusEl.textContent = data.error || 'Failed to create PIN';
+                        statusEl.style.color = '#ef4444';
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign in with Plex';
+                        return;
+                    }
+
+                    // Open Plex auth in new tab
+                    window.open(data.oauth_url, '_blank');
+                    statusEl.textContent = 'Please sign in in the opened tab...';
+                    statusEl.style.color = 'var(--text-secondary)';
+
+                    // Poll for auth completion
+                    const pinId = data.pin_id;
+                    let attempts = 0;
+                    const maxAttempts = 60; // 2 minutes
+
+                    const pollInterval = setInterval(async () => {
+                        attempts++;
+                        if (attempts > maxAttempts) {
+                            clearInterval(pollInterval);
+                            statusEl.textContent = 'Timed out. Please try again.';
+                            statusEl.style.color = '#ef4444';
+                            btn.disabled = false;
+                            btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign in with Plex';
+                            return;
+                        }
+
+                        try {
+                            const checkResp = await fetch('/api/plex/auth/check/' + pinId);
+                            const checkData = await checkResp.json();
+
+                            if (checkData.success && checkData.authenticated) {
+                                clearInterval(pollInterval);
+                                statusEl.textContent = 'Connected!';
+                                statusEl.style.color = '#10b981';
+                                btn.disabled = false;
+                                btn.innerHTML = '<i class="fas fa-check"></i> Connected';
+                                btn.classList.add('plex-connected');
+
+                                // Update the token field
+                                const tokenInput = document.getElementById(tokenInputId);
+                                if (tokenInput) tokenInput.value = '********';
+
+                                // Auto-check the enabled checkbox
+                                const enabledCheckbox = document.getElementById('plex-enabled');
+                                if (enabledCheckbox && !enabledCheckbox.checked) {
+                                    enabledCheckbox.checked = true;
+                                    enabledCheckbox.dispatchEvent(new Event('change'));
+                                }
+
+                                showMessage('Plex account connected successfully!', 'success');
+                            }
+                        } catch (err) {
+                            // Silently retry on network errors
+                        }
+                    }, 2000);
+
+                } catch (error) {
+                    statusEl.textContent = 'Error: ' + error.message;
+                    statusEl.style.color = '#ef4444';
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign in with Plex';
+                }
             }
 
             function applyAccentColor(color, isCustom = false) {

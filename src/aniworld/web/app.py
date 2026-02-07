@@ -658,6 +658,102 @@ class WebApp:
                 logging.error(f"Error resetting preferences: {e}")
                 return jsonify({"success": False, "error": str(e)}), 500
 
+        @self.app.route("/api/plex/auth/pin", methods=["POST"])
+        @self._require_api_auth
+        def api_plex_auth_pin():
+            """Create a Plex OAuth PIN for authentication."""
+            try:
+                import requests as req
+                import uuid
+
+                # Generate a stable client identifier (per installation)
+                prefs = self._load_preferences()
+                client_id = prefs.get("plex_client_id")
+                if not client_id:
+                    client_id = str(uuid.uuid4())
+                    self._save_preferences({"plex_client_id": client_id})
+
+                headers = {
+                    "Accept": "application/json",
+                    "X-Plex-Product": "AniWorld Downloader",
+                    "X-Plex-Client-Identifier": client_id,
+                }
+
+                response = req.post(
+                    "https://plex.tv/api/v2/pins",
+                    headers=headers,
+                    data={"strong": "true"},
+                    timeout=10,
+                )
+                response.raise_for_status()
+                pin_data = response.json()
+
+                pin_id = pin_data.get("id")
+                pin_code = pin_data.get("code")
+
+                if not pin_id or not pin_code:
+                    return jsonify({"success": False, "error": "Failed to create Plex PIN"}), 500
+
+                # Build the OAuth URL
+                from urllib.parse import urlencode
+                oauth_params = urlencode({
+                    "clientID": client_id,
+                    "code": pin_code,
+                    "context[device][product]": "AniWorld Downloader",
+                })
+                oauth_url = f"https://app.plex.tv/auth#?{oauth_params}"
+
+                return jsonify({
+                    "success": True,
+                    "pin_id": pin_id,
+                    "pin_code": pin_code,
+                    "oauth_url": oauth_url,
+                    "client_id": client_id,
+                })
+
+            except Exception as e:
+                logging.error(f"Plex PIN creation error: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/plex/auth/check/<int:pin_id>", methods=["GET"])
+        @self._require_api_auth
+        def api_plex_auth_check(pin_id):
+            """Poll a Plex PIN to check if the user has authenticated."""
+            try:
+                import requests as req
+
+                prefs = self._load_preferences()
+                client_id = prefs.get("plex_client_id", "")
+
+                headers = {
+                    "Accept": "application/json",
+                    "X-Plex-Client-Identifier": client_id,
+                }
+
+                response = req.get(
+                    f"https://plex.tv/api/v2/pins/{pin_id}",
+                    headers=headers,
+                    timeout=10,
+                )
+                response.raise_for_status()
+                pin_data = response.json()
+
+                auth_token = pin_data.get("authToken")
+
+                if auth_token:
+                    # Save the token automatically
+                    self._save_preferences({
+                        "plex_token": auth_token,
+                        "plex_enabled": True,
+                    })
+                    return jsonify({"success": True, "authenticated": True})
+                else:
+                    return jsonify({"success": True, "authenticated": False})
+
+            except Exception as e:
+                logging.error(f"Plex PIN check error: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
+
         @self.app.route("/api/plex/watchlist", methods=["GET"])
         @self._require_api_auth
         def api_plex_watchlist():
