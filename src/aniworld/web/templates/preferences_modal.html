@@ -115,16 +115,25 @@
                     </div>
                 </div>
 
-                <!-- Playback Section -->
+                <!-- Plex Integration Section -->
                 <div class="settings-section">
-                    <h3><i class="fas fa-play-circle"></i> Playback Settings</h3>
+                    <h3><i class="fas fa-play-circle"></i> Plex Integration</h3>
 
                     <div class="preference-group">
-                        <label for="modal-default-action">Default Action</label>
-                        <select id="modal-default-action">
-                            <option value="Download" selected>Download</option>
-                        </select>
-                        <small>Default action when selecting episodes.</small>
+                        <label for="modal-plex-enabled">
+                            <input type="checkbox" id="modal-plex-enabled" {{ 'checked' if preferences.plex_enabled else '' }}>
+                            Enable Plex Watchlist Integration
+                        </label>
+                        <small>Sync your Plex watchlist and download titles directly.</small>
+                    </div>
+
+                    <div class="preference-group" id="modal-plex-token-group" style="{{ '' if preferences.plex_enabled else 'display: none;' }}">
+                        <label for="modal-plex-token">Plex Token</label>
+                        <input type="password" id="modal-plex-token" value="{{ '********' if preferences.plex_token else '' }}" placeholder="Enter your Plex token">
+                        <small>
+                            Open <strong>plex.tv</strong>, press F12, run:
+                            <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">window.localStorage.getItem("myPlexAccessToken")</code>
+                        </small>
                     </div>
                 </div>
             </div>
@@ -175,6 +184,7 @@
 
     .preference-group input[type="number"],
     .preference-group input[type="text"],
+    .preference-group input[type="password"],
     .preference-group select {
         padding: 0.75rem;
         border: 1px solid var(--border-color);
@@ -187,6 +197,7 @@
 
     .preference-group input[type="number"]:focus,
     .preference-group input[type="text"]:focus,
+    .preference-group input[type="password"]:focus,
     .preference-group select:focus {
         outline: none;
         border-color: var(--accent-primary);
@@ -459,6 +470,15 @@ setTimeout(function() {
         });
     }
 
+    // Plex enabled toggle - show/hide token field
+    const modalPlexEnabled = document.getElementById('modal-plex-enabled');
+    const modalPlexTokenGroup = document.getElementById('modal-plex-token-group');
+    if (modalPlexEnabled && modalPlexTokenGroup) {
+        modalPlexEnabled.addEventListener('change', function() {
+            modalPlexTokenGroup.style.display = this.checked ? '' : 'none';
+        });
+    }
+
     // Browse directory button
     const browseDirBtn = document.getElementById('modal-browse-directory-btn');
     if (browseDirBtn) {
@@ -500,16 +520,22 @@ setTimeout(function() {
     if (saveBtn) {
         saveBtn.addEventListener('click', async function() {
             const accentColorValue = document.querySelector('input[name="modal-accent-color"]:checked')?.value || 'purple';
+            const modalPlexTokenInput = document.getElementById('modal-plex-token');
+            const modalPlexTokenValue = modalPlexTokenInput ? modalPlexTokenInput.value : '';
             const preferences = {
                 max_concurrent_downloads: parseInt(document.getElementById('modal-max-concurrent-downloads').value),
                 download_directory: document.getElementById('modal-download-directory').value,
                 default_language: document.getElementById('modal-default-language').value,
                 default_provider: document.getElementById('modal-default-provider').value,
-                default_action: document.getElementById('modal-default-action').value,
                 accent_color: accentColorValue,
                 custom_color: accentColorValue === 'custom' ? document.getElementById('modal-custom-color-input').value : null,
-                animations_enabled: document.getElementById('modal-animations-enabled').checked
+                animations_enabled: document.getElementById('modal-animations-enabled').checked,
+                plex_enabled: document.getElementById('modal-plex-enabled')?.checked || false,
             };
+            // Only send plex_token if user actually changed it
+            if (modalPlexTokenValue && modalPlexTokenValue !== '********') {
+                preferences.plex_token = modalPlexTokenValue;
+            }
 
             console.log('Saving preferences:', preferences);
 

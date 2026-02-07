@@ -4845,3 +4845,205 @@ body[data-theme="dark"] .episode-progress-text {
     font-weight: 500;
     letter-spacing: 0.3px;
 }
+
+/* Plex Modal Styles */
+.plex-modal-content {
+    max-width: 700px;
+}
+
+.plex-modal-content .modal-body {
+    overflow-y: auto;
+    max-height: 65vh;
+    padding: 1.5rem;
+}
+
+.plex-loading,
+.plex-search-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    color: var(--text-secondary);
+}
+
+.plex-error {
+    text-align: center;
+    padding: 2rem;
+    color: #ef4444;
+}
+
+.plex-error i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.plex-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-secondary);
+}
+
+.plex-empty i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.plex-watchlist {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.plex-watchlist-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.plex-watchlist-item:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.plex-watchlist-item-thumb {
+    width: 45px;
+    height: 65px;
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.plex-watchlist-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.plex-watchlist-item-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.plex-watchlist-item-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.2rem;
+}
+
+.plex-watchlist-item-arrow {
+    color: var(--text-tertiary);
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+/* Plex search results inside modal */
+.plex-search-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.plex-search-header span {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.plex-search-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1rem;
+}
+
+.plex-search-card {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+    aspect-ratio: 2/3;
+}
+
+.plex-search-card:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.plex-search-card-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    background-color: var(--bg-tertiary);
+}
+
+.plex-search-card-content {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.5rem;
+    background: linear-gradient(transparent, rgba(0,0,0,0.85));
+}
+
+.plex-search-card-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.plex-search-card-site {
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.7);
+}
+
+.plex-no-results {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-secondary);
+}
+
+.plex-no-results i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+/* Plex button accent */
+.plex-btn {
+    background: linear-gradient(135deg, #e5a00d 0%, #cc7b19 100%) !important;
+}
+
+.plex-btn:hover {
+    background: linear-gradient(135deg, #f5b82e 0%, #e5a00d 100%) !important;
+}
+
+@media (max-width: 768px) {
+    .plex-modal-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .plex-search-grid {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    }
+}

@@ -124,10 +124,11 @@ class WebApp:
             "download_directory": str(getattr(config, "DEFAULT_DOWNLOAD_PATH", Path.home() / "Downloads")),
             "default_language": getattr(config, "DEFAULT_LANGUAGE", "German Sub"),
             "default_provider": getattr(config, "DEFAULT_PROVIDER", "VOE"),
-            "default_action": getattr(config, "DEFAULT_ACTION", "Download"),
             "accent_color": "purple",
             "custom_color": None,
             "animations_enabled": True,
+            "plex_enabled": False,
+            "plex_token": None,
         }
 
         # Override download_directory if set via command line
@@ -163,6 +164,10 @@ class WebApp:
             download_dir.mkdir(parents=True, exist_ok=True)
             data["download_directory"] = str(download_dir)
 
+        # Never save the masked placeholder as the actual token
+        if data.get("plex_token") == "********":
+            del data["plex_token"]
+
         # Load existing preferences and merge
         current_prefs = self._load_preferences()
         current_prefs.update(data)
@@ -183,7 +188,9 @@ class WebApp:
             arguments.output_dir = data["download_directory"]
             logging.info(f"Updated runtime output_dir to: {data['download_directory']}")
 
-        logging.info(f"Preferences saved: {data}")
+        # Log saved preferences (excluding sensitive token)
+        safe_log = {k: v for k, v in data.items() if k != "plex_token"}
+        logging.info(f"Preferences saved: {safe_log}")
 
     def _reset_preferences(self):
         """Reset preferences to defaults."""
@@ -446,6 +453,9 @@ class WebApp:
             """Main page route."""
             # Load preferences for the modal
             preferences_data = self._load_preferences()
+            # Never expose the actual plex token to templates
+            if preferences_data.get("plex_token"):
+                preferences_data["plex_token"] = True
             providers = list(config.SUPPORTED_PROVIDERS)
 
             if self.auth_enabled and self.db:
@@ -581,7 +591,9 @@ class WebApp:
 
             # Load current preferences
             preferences_data = self._load_preferences()
-
+            # Never expose the actual plex token to templates
+            if preferences_data.get("plex_token"):
+                preferences_data["plex_token"] = True  # truthy for template check
             # Get list of providers
             providers = list(config.SUPPORTED_PROVIDERS)
 
@@ -598,6 +610,9 @@ class WebApp:
             """Get preferences modal HTML."""
             # Load current preferences
             preferences_data = self._load_preferences()
+            # Never expose the actual plex token to templates
+            if preferences_data.get("plex_token"):
+                preferences_data["plex_token"] = True
 
             # Get list of providers
             providers = list(config.SUPPORTED_PROVIDERS)
@@ -612,6 +627,9 @@ class WebApp:
         def api_get_preferences():
             """Get current preferences."""
             preferences_data = self._load_preferences()
+            # Never expose the actual plex token to the frontend
+            if preferences_data.get("plex_token"):
+                preferences_data["plex_token"] = "********"
             return jsonify({"success": True, "preferences": preferences_data})
 
         @self.app.route("/api/preferences", methods=["POST"])
@@ -638,6 +656,146 @@ class WebApp:
                 return jsonify({"success": True, "message": "Preferences reset to defaults"})
             except Exception as e:
                 logging.error(f"Error resetting preferences: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/plex/watchlist", methods=["GET"])
+        @self._require_api_auth
+        def api_plex_watchlist():
+            """Fetch the user's Plex watchlist."""
+            try:
+                import requests as req
+
+                prefs = self._load_preferences()
+                if not prefs.get("plex_enabled"):
+                    return jsonify({"success": False, "error": "Plex integration is not enabled"}), 400
+
+                plex_token = prefs.get("plex_token")
+                if not plex_token:
+                    return jsonify({"success": False, "error": "No Plex token configured"}), 400
+
+                headers = {
+                    "X-Plex-Token": plex_token,
+                    "Accept": "application/json",
+                }
+
+                response = req.get(
+                    "https://discover.provider.plex.tv/library/sections/watchlist/all",
+                    headers=headers,
+                    params={
+                        "sort": "watchlistedAt:desc",
+                        "includeCollections": "0",
+                        "includeExternalMedia": "1",
+                        "X-Plex-Container-Size": "100",
+                    },
+                    timeout=15,
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                items = []
+                media_container = data.get("MediaContainer", {})
+                metadata_list = media_container.get("Metadata", [])
+
+                for item in metadata_list:
+                    items.append({
+                        "ratingKey": item.get("ratingKey", ""),
+                        "title": item.get("title", "Unknown"),
+                        "type": item.get("type", "unknown"),
+                        "year": item.get("year"),
+                        "thumb": item.get("thumb", ""),
+                    })
+
+                return jsonify({"success": True, "items": items})
+
+            except req.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 401:
+                    return jsonify({"success": False, "error": "Invalid Plex token. Please check your token in Preferences."}), 401
+                logging.error(f"Plex API HTTP error: {e}")
+                return jsonify({"success": False, "error": f"Plex API error: {str(e)}"}), 500
+            except req.exceptions.RequestException as e:
+                logging.error(f"Plex API request error: {e}")
+                return jsonify({"success": False, "error": f"Failed to connect to Plex: {str(e)}"}), 500
+            except Exception as e:
+                logging.error(f"Plex watchlist error: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/plex/search-and-download", methods=["POST"])
+        @self._require_api_auth
+        def api_plex_search_and_download():
+            """Search for a Plex watchlist title across all sites and return results."""
+            try:
+                from flask import request as flask_request
+                from ..search import fetch_anime_list
+                from urllib.parse import quote
+
+                data = flask_request.get_json()
+                if not data or "title" not in data:
+                    return jsonify({"success": False, "error": "Title is required"}), 400
+
+                title = data["title"].strip()
+                if not title:
+                    return jsonify({"success": False, "error": "Title cannot be empty"}), 400
+
+                # Search across all sites
+                all_results = []
+                seen_slugs = set()
+
+                # Search aniworld.to
+                try:
+                    url = f"{config.ANIWORLD_TO}/ajax/seriesSearch?keyword={quote(title)}"
+                    results = fetch_anime_list(url)
+                    for anime in results:
+                        slug = anime.get("link", "")
+                        if slug and slug not in seen_slugs:
+                            anime["site"] = "aniworld.to"
+                            anime["base_url"] = config.ANIWORLD_TO
+                            anime["stream_path"] = "anime/stream"
+                            all_results.append(anime)
+                            seen_slugs.add(slug)
+                except Exception as e:
+                    logging.warning(f"Plex search - aniworld failed: {e}")
+
+                # Search s.to
+                try:
+                    from ..search import fetch_sto_search_results
+                    results = fetch_sto_search_results(title)
+                    for anime in results:
+                        slug = anime.get("link", "")
+                        if slug and slug not in seen_slugs:
+                            anime["site"] = "s.to"
+                            anime["base_url"] = config.S_TO
+                            anime["stream_path"] = "serie"
+                            all_results.append(anime)
+                            seen_slugs.add(slug)
+                except Exception as e:
+                    logging.warning(f"Plex search - s.to failed: {e}")
+
+                # Process results
+                processed = []
+                for anime in all_results[:20]:
+                    link = anime.get("link", "")
+                    anime_base_url = anime.get("base_url", config.ANIWORLD_TO)
+                    anime_stream_path = anime.get("stream_path", "anime/stream")
+
+                    if link and not link.startswith("http"):
+                        full_url = f"{anime_base_url}/{anime_stream_path}/{link}"
+                    else:
+                        full_url = link
+
+                    name = anime.get("name", "Unknown")
+                    cover = anime.get("cover", anime.get("image", ""))
+
+                    processed.append({
+                        "title": name,
+                        "url": full_url,
+                        "cover": cover,
+                        "site": anime.get("site", "aniworld.to"),
+                    })
+
+                return jsonify({"success": True, "results": processed})
+
+            except Exception as e:
+                logging.error(f"Plex search error: {e}")
                 return jsonify({"success": False, "error": str(e)}), 500
 
         @self.app.route("/api/browse-folder", methods=["POST"])

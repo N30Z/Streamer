@@ -27,6 +27,7 @@
 
         .preference-group input[type="number"],
         .preference-group input[type="text"],
+        .preference-group input[type="password"],
         .preference-group select {
             padding: 0.75rem;
             border: 1px solid var(--border-color);
@@ -38,7 +39,9 @@
             max-width: 400px;
         }
 
-        .preference-group input:focus,
+        .preference-group input[type="number"]:focus,
+        .preference-group input[type="text"]:focus,
+        .preference-group input[type="password"]:focus,
         .preference-group select:focus {
             outline: none;
             border-color: #667eea;
@@ -353,16 +356,25 @@
                 </div>
             </div>
 
-            <!-- Playback Section -->
+            <!-- Plex Integration Section -->
             <div class="settings-section">
-                <h2><i class="fas fa-play-circle"></i> Playback Settings</h2>
+                <h2><i class="fas fa-play-circle"></i> Plex Integration</h2>
 
                 <div class="preference-group">
-                    <label for="default-action">Default Action</label>
-                    <select id="default-action">
-                        <option value="Download" selected>Download</option>
-                    </select>
-                    <small>Default action when selecting episodes.</small>
+                    <label for="plex-enabled">
+                        <input type="checkbox" id="plex-enabled" {{ 'checked' if preferences.plex_enabled else '' }}>
+                        Enable Plex Watchlist Integration
+                    </label>
+                    <small>Sync your Plex watchlist and download titles directly.</small>
+                </div>
+
+                <div class="preference-group" id="plex-token-group" style="{{ '' if preferences.plex_enabled else 'display: none;' }}">
+                    <label for="plex-token">Plex Token</label>
+                    <input type="password" id="plex-token" value="{{ '********' if preferences.plex_token else '' }}" placeholder="Enter your Plex token">
+                    <small>
+                        To get your token: Open <strong>plex.tv</strong> in your browser, press F12 to open the developer console, and run:<br>
+                        <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">window.localStorage.getItem("myPlexAccessToken")</code>
+                    </small>
                 </div>
             </div>
 
@@ -602,6 +614,15 @@
                 }
             }
 
+            // Plex enabled toggle - show/hide token field
+            const plexEnabledToggle = document.getElementById('plex-enabled');
+            const plexTokenGroup = document.getElementById('plex-token-group');
+            if (plexEnabledToggle && plexTokenGroup) {
+                plexEnabledToggle.addEventListener('change', function() {
+                    plexTokenGroup.style.display = this.checked ? '' : 'none';
+                });
+            }
+
             function applyAccentColor(color, isCustom = false) {
                 const colors = {
                     purple: { primary: '#667eea', secondary: '#764ba2', rgb: '102, 126, 234' },
@@ -658,16 +679,22 @@
             if (saveBtn) {
                 saveBtn.addEventListener('click', async function() {
                     const accentColorValue = document.querySelector('input[name="accent-color"]:checked')?.value || 'purple';
+                    const plexTokenInput = document.getElementById('plex-token');
+                    const plexTokenValue = plexTokenInput.value;
                     const preferences = {
                         max_concurrent_downloads: parseInt(document.getElementById('max-concurrent-downloads').value),
                         download_directory: document.getElementById('download-directory').value,
                         default_language: document.getElementById('default-language').value,
                         default_provider: document.getElementById('default-provider').value,
-                        default_action: document.getElementById('default-action').value,
                         accent_color: accentColorValue,
                         custom_color: accentColorValue === 'custom' ? document.getElementById('custom-color-input').value : null,
-                        animations_enabled: document.getElementById('animations-enabled').checked
+                        animations_enabled: document.getElementById('animations-enabled').checked,
+                        plex_enabled: document.getElementById('plex-enabled').checked,
                     };
+                    // Only send plex_token if user actually changed it (not the masked placeholder)
+                    if (plexTokenValue && plexTokenValue !== '********') {
+                        preferences.plex_token = plexTokenValue;
+                    }
 
                     console.log('Saving preferences:', preferences);
 

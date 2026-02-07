@@ -1602,6 +1602,227 @@ document.addEventListener('DOMContentLoaded', function() {
     window.showLocalFiles = showLocalFiles;
     window.showHomeContent = showHomeContent;
     window.toggleFolderIcon = toggleFolderIcon;
+
+    // ===== Plex Watchlist Integration =====
+    const plexBtn = document.getElementById('plex-btn');
+    const plexModal = document.getElementById('plex-modal');
+    const closePlexModal = document.getElementById('close-plex-modal');
+
+    if (plexBtn && plexModal) {
+        const plexLoading = document.getElementById('plex-loading');
+        const plexError = document.getElementById('plex-error');
+        const plexErrorMessage = document.getElementById('plex-error-message');
+        const plexEmpty = document.getElementById('plex-empty');
+        const plexWatchlist = document.getElementById('plex-watchlist');
+        const plexSearchResults = document.getElementById('plex-search-results');
+        const plexSearchLoading = document.getElementById('plex-search-loading');
+        const plexSearchGrid = document.getElementById('plex-search-grid');
+        const plexSearchTitle = document.getElementById('plex-search-title');
+        const plexBackBtn = document.getElementById('plex-back-btn');
+
+        plexBtn.addEventListener('click', () => {
+            plexModal.style.display = 'flex';
+            loadPlexWatchlist();
+        });
+
+        closePlexModal.addEventListener('click', () => {
+            plexModal.style.display = 'none';
+        });
+
+        plexModal.addEventListener('click', (e) => {
+            if (e.target === plexModal) plexModal.style.display = 'none';
+        });
+
+        if (plexBackBtn) {
+            plexBackBtn.addEventListener('click', () => {
+                plexSearchResults.style.display = 'none';
+                plexWatchlist.style.display = 'block';
+            });
+        }
+
+        function loadPlexWatchlist() {
+            // Reset state
+            plexLoading.style.display = 'flex';
+            plexError.style.display = 'none';
+            plexEmpty.style.display = 'none';
+            plexWatchlist.style.display = 'none';
+            plexSearchResults.style.display = 'none';
+
+            fetch('/api/plex/watchlist')
+                .then(response => response.json())
+                .then(data => {
+                    plexLoading.style.display = 'none';
+
+                    if (!data.success) {
+                        plexError.style.display = 'block';
+                        plexErrorMessage.textContent = data.error || 'Failed to load watchlist';
+                        return;
+                    }
+
+                    const items = data.items || [];
+                    if (items.length === 0) {
+                        plexEmpty.style.display = 'block';
+                        return;
+                    }
+
+                    renderPlexWatchlist(items);
+                    plexWatchlist.style.display = 'block';
+                })
+                .catch(error => {
+                    plexLoading.style.display = 'none';
+                    plexError.style.display = 'block';
+                    plexErrorMessage.textContent = 'Failed to connect to Plex: ' + error.message;
+                });
+        }
+
+        function renderPlexWatchlist(items) {
+            plexWatchlist.innerHTML = '';
+
+            items.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'plex-watchlist-item';
+
+                let thumbUrl = '';
+                if (item.thumb) {
+                    if (item.thumb.startsWith('http')) {
+                        thumbUrl = item.thumb;
+                    } else if (item.thumb.startsWith('/')) {
+                        thumbUrl = `https://metadata-static.plex.tv${item.thumb}`;
+                    } else {
+                        thumbUrl = item.thumb;
+                    }
+                }
+
+                const typeLabel = item.type === 'movie' ? 'Film' : item.type === 'show' ? 'Serie' : item.type;
+                const yearText = item.year ? ` (${item.year})` : '';
+
+                el.innerHTML = `
+                    ${thumbUrl ? `<img class="plex-watchlist-item-thumb" src="${thumbUrl}" alt="" onerror="this.style.display='none'">` : '<div class="plex-watchlist-item-thumb"></div>'}
+                    <div class="plex-watchlist-item-info">
+                        <div class="plex-watchlist-item-title">${escapeHtml(item.title)}</div>
+                        <div class="plex-watchlist-item-meta">${typeLabel}${yearText}</div>
+                    </div>
+                    <div class="plex-watchlist-item-arrow"><i class="fas fa-chevron-right"></i></div>
+                `;
+
+                el.addEventListener('click', () => {
+                    searchPlexTitle(item.title);
+                });
+
+                plexWatchlist.appendChild(el);
+            });
+        }
+
+        function searchPlexTitle(title) {
+            // Switch to search results view
+            plexWatchlist.style.display = 'none';
+            plexSearchResults.style.display = 'block';
+            plexSearchTitle.textContent = `Results for "${title}"`;
+            plexSearchGrid.innerHTML = '';
+            plexSearchLoading.style.display = 'flex';
+
+            fetch('/api/plex/search-and-download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title })
+            })
+            .then(response => response.json())
+            .then(data => {
+                plexSearchLoading.style.display = 'none';
+
+                if (!data.success) {
+                    plexSearchGrid.innerHTML = `<div class="plex-no-results"><i class="fas fa-search"></i>Search failed: ${escapeHtml(data.error)}</div>`;
+                    return;
+                }
+
+                const results = data.results || [];
+
+                if (results.length === 0) {
+                    plexSearchGrid.innerHTML = '<div class="plex-no-results"><i class="fas fa-search"></i>No results found on any site</div>';
+                    return;
+                }
+
+                // If exactly one result, go directly to download modal
+                if (results.length === 1) {
+                    const result = results[0];
+                    plexModal.style.display = 'none';
+                    showDownloadModal(result.title, 'Series', result.url, result.cover);
+                    // Auto-select all episodes after the modal loads
+                    setTimeout(() => {
+                        selectAllEpisodesAuto();
+                    }, 2000);
+                    return;
+                }
+
+                // Multiple results - show selection
+                renderPlexSearchResults(results);
+            })
+            .catch(error => {
+                plexSearchLoading.style.display = 'none';
+                plexSearchGrid.innerHTML = `<div class="plex-no-results"><i class="fas fa-exclamation-triangle"></i>Error: ${escapeHtml(error.message)}</div>`;
+            });
+        }
+
+        function renderPlexSearchResults(results) {
+            plexSearchGrid.innerHTML = '';
+
+            results.forEach(result => {
+                const card = document.createElement('div');
+                card.className = 'plex-search-card';
+
+                let coverStyle = '';
+                if (result.cover) {
+                    let coverUrl = result.cover;
+                    if (!coverUrl.startsWith('http')) {
+                        if (coverUrl.startsWith('//')) {
+                            coverUrl = 'https:' + coverUrl;
+                        } else if (coverUrl.startsWith('/')) {
+                            let baseUrl = 'https://aniworld.to';
+                            if (result.site === 's.to') baseUrl = 'https://s.to';
+                            coverUrl = baseUrl + coverUrl;
+                        }
+                    }
+                    coverUrl = coverUrl.replace("150x225", "220x330");
+                    coverStyle = `background-image: url('${coverUrl}')`;
+                }
+
+                card.innerHTML = `
+                    <div class="plex-search-card-bg" style="${coverStyle}"></div>
+                    <div class="plex-search-card-content">
+                        <div class="plex-search-card-title">${escapeHtml(result.title)}</div>
+                        <div class="plex-search-card-site">${escapeHtml(result.site)}</div>
+                    </div>
+                `;
+
+                card.addEventListener('click', () => {
+                    plexModal.style.display = 'none';
+                    showDownloadModal(result.title, 'Series', result.url, result.cover);
+                    // Auto-select all episodes after the modal loads
+                    setTimeout(() => {
+                        selectAllEpisodesAuto();
+                    }, 2000);
+                });
+
+                plexSearchGrid.appendChild(card);
+            });
+        }
+
+        function selectAllEpisodesAuto() {
+            // Select all episode checkboxes in the download modal
+            const checkboxes = document.querySelectorAll('#episode-tree .episode-checkbox');
+            checkboxes.forEach(cb => {
+                if (!cb.checked) {
+                    cb.checked = true;
+                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+            // Also check all season header checkboxes
+            const seasonCheckboxes = document.querySelectorAll('#episode-tree thead input[type="checkbox"]');
+            seasonCheckboxes.forEach(cb => {
+                cb.checked = true;
+            });
+        }
+    }
 });
 
 // Show notification function
