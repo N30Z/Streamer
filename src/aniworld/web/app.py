@@ -58,6 +58,9 @@ class WebApp:
         # Apply saved preferences at startup
         self._apply_saved_preferences()
 
+        # Ensure FFmpeg is available (download if missing)
+        self._ensure_ffmpeg()
+
         # Scan for manually placed files at startup
         self._scan_media_library()
 
@@ -103,6 +106,16 @@ class WebApp:
 
         except Exception as e:
             logging.warning(f"Could not apply saved preferences: {e}")
+
+    def _ensure_ffmpeg(self):
+        """Ensure FFmpeg is available, downloading if necessary."""
+        from ..ffmpeg_downloader import ensure_ffmpeg
+        try:
+            result = ensure_ffmpeg()
+            if result:
+                logging.info("FFmpeg available at: %s", result)
+        except Exception as e:
+            logging.warning("FFmpeg auto-download failed: %s", e)
 
     def _get_preferences_file(self) -> Path:
         """Get the path to the preferences file."""

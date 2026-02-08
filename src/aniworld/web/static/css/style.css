@@ -1760,6 +1760,111 @@ body[data-theme="dark"] .episode-progress-text {
     transition: color 0.3s ease;
 }
 
+/* Queue Group (collapsible container for same-title downloads) */
+.queue-group {
+    background: var(--input-bg);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.queue-group:hover {
+    border-color: #4299e1;
+}
+
+.queue-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.queue-group-header:hover {
+    background: var(--tree-hover);
+}
+
+.queue-group-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.queue-group-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.queue-group-chevron {
+    color: var(--text-tertiary);
+    font-size: 0.75rem;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.queue-group.expanded .queue-group-chevron {
+    transform: rotate(90deg);
+}
+
+.queue-group-title {
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-group-count {
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+
+.queue-group-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0 0.75rem 0.5rem 0.75rem;
+}
+
+.queue-group-children {
+    border-top: 1px solid var(--border-color);
+}
+
+.queue-group-child {
+    padding: 0.5rem 0.75rem 0.5rem 2rem;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+}
+
+.queue-group-child:last-child {
+    border-bottom: none;
+}
+
+.queue-group-child:hover {
+    background: var(--tree-bg);
+}
+
+.queue-group-child-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.queue-group-child-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
 /* Loading Section */
 .loading-section {
     text-align: center;
@@ -3844,6 +3949,18 @@ body[data-theme="dark"] .episode-progress-text {
 
     .queue-item-status {
         padding: 0.2rem 0.5rem;
+        font-size: 0.7rem;
+    }
+
+    .queue-group-child {
+        padding-left: 1.25rem;
+    }
+
+    .queue-group-title {
+        font-size: 0.85rem;
+    }
+
+    .queue-group-count {
         font-size: 0.7rem;
     }
 
