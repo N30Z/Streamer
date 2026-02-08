@@ -69,6 +69,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let progressInterval = null;
     let availableProviders = [];
 
+    // Track which queue groups are expanded (persists across poll updates)
+    let expandedGroups = new Set();
+    let queueGroupsInitialized = false;
+
     // Saved user preferences (loaded from server)
     let userPreferences = {};
 
@@ -1119,6 +1123,57 @@ document.addEventListener('DOMContentLoaded', function() {
         return div.innerHTML;
     }
 
+    function groupItemsByTitle(items) {
+        const groups = {};
+        const order = [];
+        items.forEach(item => {
+            const title = item.anime_title;
+            if (!groups[title]) {
+                groups[title] = [];
+                order.push(title);
+            }
+            groups[title].push(item);
+        });
+        return order.map(title => ({
+            title: title,
+            items: groups[title],
+            isSingle: groups[title].length === 1
+        }));
+    }
+
+    function computeGroupStats(groupItems) {
+        const totalEpisodes = groupItems.length;
+        const completedEpisodes = groupItems.filter(i => i.status === 'completed').length;
+        const failedEpisodes = groupItems.filter(i => i.status === 'failed' || i.status === 'cancelled').length;
+        const downloadingItems = groupItems.filter(i => i.status === 'downloading');
+        const queuedItems = groupItems.filter(i => i.status === 'queued');
+
+        let totalProgress = 0;
+        groupItems.forEach(item => {
+            if (item.status === 'completed') {
+                totalProgress += 100;
+            } else if (item.status === 'downloading') {
+                totalProgress += (item.current_episode_progress || 0);
+            }
+        });
+        const aggregateProgress = totalEpisodes > 0 ? totalProgress / totalEpisodes : 0;
+
+        let groupStatus;
+        if (downloadingItems.length > 0) {
+            groupStatus = 'downloading';
+        } else if (queuedItems.length > 0) {
+            groupStatus = 'queued';
+        } else if (completedEpisodes === totalEpisodes) {
+            groupStatus = 'completed';
+        } else if (failedEpisodes > 0) {
+            groupStatus = 'failed';
+        } else {
+            groupStatus = 'queued';
+        }
+
+        return { totalEpisodes, completedEpisodes, aggregateProgress, groupStatus };
+    }
+
     function startQueueTracking() {
         // Start polling for queue status updates
         progressInterval = setInterval(updateQueueDisplay, 2000); // Poll every 2 seconds
@@ -1184,6 +1239,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     // Update navbar button badge and animation
                     updateDownloadBadge(activeItems, completedItems);
+
+                    // Clean up expandedGroups for titles no longer in the queue
+                    const currentTitles = new Set([
+                        ...activeItems.map(i => i.anime_title),
+                        ...completedItems.map(i => i.anime_title)
+                    ]);
+                    expandedGroups.forEach(title => {
+                        if (!currentTitles.has(title)) {
+                            expandedGroups.delete(title);
+                        }
+                    });
                 }
             })
             .catch(error => {
@@ -1276,77 +1342,217 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateQueueList(container, items, type) {
         container.innerHTML = '';
+        const groups = groupItemsByTitle(items);
 
-        items.forEach(item => {
-            const queueItem = document.createElement('div');
-            queueItem.className = 'queue-item';
+        // Auto-expand all groups on first render
+        if (!queueGroupsInitialized && groups.some(g => !g.isSingle)) {
+            groups.forEach(g => {
+                if (!g.isSingle) expandedGroups.add(g.title);
+            });
+            queueGroupsInitialized = true;
+        }
 
-            const overallProgress = item.progress_percentage || 0;
-            const episodeProgress = item.current_episode_progress || 0;
-            const showProgressBar = item.status === 'downloading' || item.status === 'queued';
-            const isDownloading = item.status === 'downloading';
-
-
-            // Create the HTML content
-            const overallProgressClamped = Math.max(0, Math.min(100, overallProgress));
-            const episodeProgressClamped = Math.max(0, Math.min(100, episodeProgress));
-
-            const canCancel = item.status === 'downloading' || item.status === 'queued';
-
-            queueItem.innerHTML = `
-                <div class="queue-item-header">
-                    <div class="queue-item-title">${escapeHtml(item.anime_title)}</div>
-                    <div class="queue-item-header-right">
-                        ${canCancel ? `<button class="queue-cancel-btn" data-id="${item.id}" title="Cancel download"><i class="fas fa-times"></i></button>` : ''}
-                        <div class="queue-item-status ${item.status}">${item.status}</div>
-                    </div>
-                </div>
-                ${showProgressBar ? `
-                <div class="queue-item-progress">
-                    <div class="queue-progress-bar">
-                        <div class="queue-progress-fill" style="width: ${overallProgressClamped}%; transition: width 0.3s ease;"></div>
-                    </div>
-                    <div class="queue-progress-text">${overallProgressClamped.toFixed(1)}% | ${item.completed_episodes}/${item.total_episodes} episodes</div>
-                </div>
-                ${isDownloading ? `
-                <div class="queue-item-progress episode-progress">
-                    <div class="queue-progress-bar">
-                        <div class="queue-progress-fill episode-progress-fill" style="width: ${episodeProgressClamped}%; transition: width 0.3s ease;"></div>
-                    </div>
-                    <div class="queue-progress-text episode-progress-text">Current Episode: ${episodeProgressClamped.toFixed(1)}%</div>
-                </div>
-                ` : ''}
-                ` : `
-                <div class="queue-item-progress">
-                    <div class="queue-progress-text">${item.completed_episodes}/${item.total_episodes} episodes</div>
-                </div>
-                `}
-                <div class="queue-item-details">
-                    ${escapeHtml(item.current_episode || (item.status === 'completed' ? 'Download completed' : 'Waiting in queue'))}
-                </div>
-            `;
-
-            // Attach cancel button handler
-            const cancelBtn = queueItem.querySelector('.queue-cancel-btn');
-            if (cancelBtn) {
-                cancelBtn.addEventListener('click', () => {
-                    const queueId = cancelBtn.dataset.id;
-                    fetch(`/api/queue/cancel/${queueId}`, { method: 'POST' })
-                        .then(r => r.json())
-                        .then(data => {
-                            if (data.success) {
-                                showNotification('Download cancelled', 'info');
-                                updateQueueDisplay();
-                            } else {
-                                showNotification(data.error || 'Failed to cancel', 'error');
-                            }
-                        })
-                        .catch(() => showNotification('Failed to cancel download', 'error'));
-                });
+        groups.forEach(group => {
+            if (group.isSingle) {
+                container.appendChild(renderSingleQueueItem(group.items[0]));
+            } else {
+                container.appendChild(renderQueueGroup(group));
             }
-
-            container.appendChild(queueItem);
         });
+    }
+
+    function renderSingleQueueItem(item) {
+        const queueItem = document.createElement('div');
+        queueItem.className = 'queue-item';
+
+        const overallProgress = item.progress_percentage || 0;
+        const episodeProgress = item.current_episode_progress || 0;
+        const showProgressBar = item.status === 'downloading' || item.status === 'queued';
+        const isDownloading = item.status === 'downloading';
+        const overallProgressClamped = Math.max(0, Math.min(100, overallProgress));
+        const episodeProgressClamped = Math.max(0, Math.min(100, episodeProgress));
+        const canCancel = item.status === 'downloading' || item.status === 'queued';
+
+        queueItem.innerHTML = `
+            <div class="queue-item-header">
+                <div class="queue-item-title">${escapeHtml(item.anime_title)}</div>
+                <div class="queue-item-header-right">
+                    ${canCancel ? `<button class="queue-cancel-btn" data-id="${item.id}" title="Cancel download"><i class="fas fa-times"></i></button>` : ''}
+                    <div class="queue-item-status ${item.status}">${item.status}</div>
+                </div>
+            </div>
+            ${showProgressBar ? `
+            <div class="queue-item-progress">
+                <div class="queue-progress-bar">
+                    <div class="queue-progress-fill" style="width: ${overallProgressClamped}%; transition: width 0.3s ease;"></div>
+                </div>
+                <div class="queue-progress-text">${overallProgressClamped.toFixed(1)}% | ${item.completed_episodes}/${item.total_episodes} episodes</div>
+            </div>
+            ${isDownloading ? `
+            <div class="queue-item-progress episode-progress">
+                <div class="queue-progress-bar">
+                    <div class="queue-progress-fill episode-progress-fill" style="width: ${episodeProgressClamped}%; transition: width 0.3s ease;"></div>
+                </div>
+                <div class="queue-progress-text episode-progress-text">Current Episode: ${episodeProgressClamped.toFixed(1)}%</div>
+            </div>
+            ` : ''}
+            ` : `
+            <div class="queue-item-progress">
+                <div class="queue-progress-text">${item.completed_episodes}/${item.total_episodes} episodes</div>
+            </div>
+            `}
+            <div class="queue-item-details">
+                ${escapeHtml(item.current_episode || (item.status === 'completed' ? 'Download completed' : 'Waiting in queue'))}
+            </div>
+        `;
+
+        const cancelBtn = queueItem.querySelector('.queue-cancel-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                const queueId = cancelBtn.dataset.id;
+                fetch(`/api/queue/cancel/${queueId}`, { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            showNotification('Download cancelled', 'info');
+                            updateQueueDisplay();
+                        } else {
+                            showNotification(data.error || 'Failed to cancel', 'error');
+                        }
+                    })
+                    .catch(() => showNotification('Failed to cancel download', 'error'));
+            });
+        }
+
+        return queueItem;
+    }
+
+    function renderQueueGroup(group) {
+        const stats = computeGroupStats(group.items);
+        const isExpanded = expandedGroups.has(group.title);
+        const progressClamped = Math.max(0, Math.min(100, stats.aggregateProgress));
+        const showProgressBar = stats.groupStatus === 'downloading' || stats.groupStatus === 'queued';
+        const canCancelAll = group.items.some(i => i.status === 'downloading' || i.status === 'queued');
+
+        const sortedItems = [...group.items].sort((a, b) => (a.episode_number || 0) - (b.episode_number || 0));
+
+        const groupEl = document.createElement('div');
+        groupEl.className = 'queue-group' + (isExpanded ? ' expanded' : '');
+
+        groupEl.innerHTML = `
+            <div class="queue-group-header">
+                <div class="queue-group-header-left">
+                    <i class="fas fa-chevron-right queue-group-chevron"></i>
+                    <div class="queue-group-title">${escapeHtml(group.title)}</div>
+                </div>
+                <div class="queue-group-header-right">
+                    <span class="queue-group-count">${stats.completedEpisodes}/${stats.totalEpisodes} episodes</span>
+                    ${canCancelAll ? `<button class="queue-cancel-btn queue-group-cancel-btn" title="Cancel all episodes"><i class="fas fa-times"></i></button>` : ''}
+                    <div class="queue-item-status ${stats.groupStatus}">${stats.groupStatus}</div>
+                </div>
+            </div>
+            ${showProgressBar ? `
+            <div class="queue-group-progress">
+                <div class="queue-progress-bar">
+                    <div class="queue-progress-fill" style="width: ${progressClamped}%; transition: width 0.3s ease;"></div>
+                </div>
+                <div class="queue-progress-text">${progressClamped.toFixed(1)}%</div>
+            </div>
+            ` : ''}
+            <div class="queue-group-children" style="display: ${isExpanded ? 'block' : 'none'};"></div>
+        `;
+
+        const childrenContainer = groupEl.querySelector('.queue-group-children');
+        sortedItems.forEach(item => {
+            childrenContainer.appendChild(renderGroupChildItem(item));
+        });
+
+        // Expand/collapse toggle
+        const header = groupEl.querySelector('.queue-group-header');
+        header.addEventListener('click', (e) => {
+            if (e.target.closest('.queue-cancel-btn')) return;
+            if (expandedGroups.has(group.title)) {
+                expandedGroups.delete(group.title);
+            } else {
+                expandedGroups.add(group.title);
+            }
+            const children = groupEl.querySelector('.queue-group-children');
+            const isNowExpanded = expandedGroups.has(group.title);
+            children.style.display = isNowExpanded ? 'block' : 'none';
+            groupEl.classList.toggle('expanded', isNowExpanded);
+        });
+
+        // Cancel-all handler
+        const cancelAllBtn = groupEl.querySelector('.queue-group-cancel-btn');
+        if (cancelAllBtn) {
+            cancelAllBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const cancellable = group.items.filter(i => i.status === 'downloading' || i.status === 'queued');
+                Promise.all(cancellable.map(item =>
+                    fetch(`/api/queue/cancel/${item.id}`, { method: 'POST' }).then(r => r.json())
+                )).then(results => {
+                    const successCount = results.filter(r => r.success).length;
+                    showNotification(`Cancelled ${successCount} download(s)`, 'info');
+                    updateQueueDisplay();
+                }).catch(() => {
+                    showNotification('Failed to cancel downloads', 'error');
+                });
+            });
+        }
+
+        return groupEl;
+    }
+
+    function renderGroupChildItem(item) {
+        const childEl = document.createElement('div');
+        childEl.className = 'queue-group-child';
+
+        const episodeProgress = item.current_episode_progress || 0;
+        const episodeProgressClamped = Math.max(0, Math.min(100, episodeProgress));
+        const isDownloading = item.status === 'downloading';
+        const canCancel = item.status === 'downloading' || item.status === 'queued';
+        const episodeLabel = item.episode_number ? `Episode ${item.episode_number}` : `Download #${item.id}`;
+
+        childEl.innerHTML = `
+            <div class="queue-group-child-header">
+                <span class="queue-group-child-label">${escapeHtml(episodeLabel)}</span>
+                <div class="queue-item-header-right">
+                    ${canCancel ? `<button class="queue-cancel-btn" data-id="${item.id}" title="Cancel download"><i class="fas fa-times"></i></button>` : ''}
+                    <div class="queue-item-status ${item.status}">${item.status}</div>
+                </div>
+            </div>
+            ${isDownloading ? `
+            <div class="queue-item-progress episode-progress">
+                <div class="queue-progress-bar">
+                    <div class="queue-progress-fill episode-progress-fill" style="width: ${episodeProgressClamped}%; transition: width 0.3s ease;"></div>
+                </div>
+                <div class="queue-progress-text episode-progress-text">${episodeProgressClamped.toFixed(1)}%</div>
+            </div>
+            ` : ''}
+            ${item.current_episode && isDownloading ? `
+            <div class="queue-item-details">${escapeHtml(item.current_episode)}</div>
+            ` : ''}
+        `;
+
+        const cancelBtn = childEl.querySelector('.queue-cancel-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                const queueId = cancelBtn.dataset.id;
+                fetch(`/api/queue/cancel/${queueId}`, { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            showNotification('Download cancelled', 'info');
+                            updateQueueDisplay();
+                        } else {
+                            showNotification(data.error || 'Failed to cancel', 'error');
+                        }
+                    })
+                    .catch(() => showNotification('Failed to cancel download', 'error'));
+            });
+        }
+
+        return childEl;
     }
 
     function loadPopularAndNewAnime() {
@@ -1602,6 +1808,227 @@ document.addEventListener('DOMContentLoaded', function() {
     window.showLocalFiles = showLocalFiles;
     window.showHomeContent = showHomeContent;
     window.toggleFolderIcon = toggleFolderIcon;
+
+    // ===== Plex Watchlist Integration =====
+    const plexBtn = document.getElementById('plex-btn');
+    const plexModal = document.getElementById('plex-modal');
+    const closePlexModal = document.getElementById('close-plex-modal');
+
+    if (plexBtn && plexModal) {
+        const plexLoading = document.getElementById('plex-loading');
+        const plexError = document.getElementById('plex-error');
+        const plexErrorMessage = document.getElementById('plex-error-message');
+        const plexEmpty = document.getElementById('plex-empty');
+        const plexWatchlist = document.getElementById('plex-watchlist');
+        const plexSearchResults = document.getElementById('plex-search-results');
+        const plexSearchLoading = document.getElementById('plex-search-loading');
+        const plexSearchGrid = document.getElementById('plex-search-grid');
+        const plexSearchTitle = document.getElementById('plex-search-title');
+        const plexBackBtn = document.getElementById('plex-back-btn');
+
+        plexBtn.addEventListener('click', () => {
+            plexModal.style.display = 'flex';
+            loadPlexWatchlist();
+        });
+
+        closePlexModal.addEventListener('click', () => {
+            plexModal.style.display = 'none';
+        });
+
+        plexModal.addEventListener('click', (e) => {
+            if (e.target === plexModal) plexModal.style.display = 'none';
+        });
+
+        if (plexBackBtn) {
+            plexBackBtn.addEventListener('click', () => {
+                plexSearchResults.style.display = 'none';
+                plexWatchlist.style.display = 'block';
+            });
+        }
+
+        function loadPlexWatchlist() {
+            // Reset state
+            plexLoading.style.display = 'flex';
+            plexError.style.display = 'none';
+            plexEmpty.style.display = 'none';
+            plexWatchlist.style.display = 'none';
+            plexSearchResults.style.display = 'none';
+
+            fetch('/api/plex/watchlist')
+                .then(response => response.json())
+                .then(data => {
+                    plexLoading.style.display = 'none';
+
+                    if (!data.success) {
+                        plexError.style.display = 'block';
+                        plexErrorMessage.textContent = data.error || 'Failed to load watchlist';
+                        return;
+                    }
+
+                    const items = data.items || [];
+                    if (items.length === 0) {
+                        plexEmpty.style.display = 'block';
+                        return;
+                    }
+
+                    renderPlexWatchlist(items);
+                    plexWatchlist.style.display = 'block';
+                })
+                .catch(error => {
+                    plexLoading.style.display = 'none';
+                    plexError.style.display = 'block';
+                    plexErrorMessage.textContent = 'Failed to connect to Plex: ' + error.message;
+                });
+        }
+
+        function renderPlexWatchlist(items) {
+            plexWatchlist.innerHTML = '';
+
+            items.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'plex-watchlist-item';
+
+                let thumbUrl = '';
+                if (item.thumb) {
+                    if (item.thumb.startsWith('http')) {
+                        thumbUrl = item.thumb;
+                    } else if (item.thumb.startsWith('/')) {
+                        thumbUrl = `https://metadata-static.plex.tv${item.thumb}`;
+                    } else {
+                        thumbUrl = item.thumb;
+                    }
+                }
+
+                const typeLabel = item.type === 'movie' ? 'Film' : item.type === 'show' ? 'Serie' : item.type;
+                const yearText = item.year ? ` (${item.year})` : '';
+
+                el.innerHTML = `
+                    ${thumbUrl ? `<img class="plex-watchlist-item-thumb" src="${thumbUrl}" alt="" onerror="this.style.display='none'">` : '<div class="plex-watchlist-item-thumb"></div>'}
+                    <div class="plex-watchlist-item-info">
+                        <div class="plex-watchlist-item-title">${escapeHtml(item.title)}</div>
+                        <div class="plex-watchlist-item-meta">${typeLabel}${yearText}</div>
+                    </div>
+                    <div class="plex-watchlist-item-arrow"><i class="fas fa-chevron-right"></i></div>
+                `;
+
+                el.addEventListener('click', () => {
+                    searchPlexTitle(item.title);
+                });
+
+                plexWatchlist.appendChild(el);
+            });
+        }
+
+        function searchPlexTitle(title) {
+            // Switch to search results view
+            plexWatchlist.style.display = 'none';
+            plexSearchResults.style.display = 'block';
+            plexSearchTitle.textContent = `Results for "${title}"`;
+            plexSearchGrid.innerHTML = '';
+            plexSearchLoading.style.display = 'flex';
+
+            fetch('/api/plex/search-and-download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title })
+            })
+            .then(response => response.json())
+            .then(data => {
+                plexSearchLoading.style.display = 'none';
+
+                if (!data.success) {
+                    plexSearchGrid.innerHTML = `<div class="plex-no-results"><i class="fas fa-search"></i>Search failed: ${escapeHtml(data.error)}</div>`;
+                    return;
+                }
+
+                const results = data.results || [];
+
+                if (results.length === 0) {
+                    plexSearchGrid.innerHTML = '<div class="plex-no-results"><i class="fas fa-search"></i>No results found on any site</div>';
+                    return;
+                }
+
+                // If exactly one result, go directly to download modal
+                if (results.length === 1) {
+                    const result = results[0];
+                    plexModal.style.display = 'none';
+                    showDownloadModal(result.title, 'Series', result.url, result.cover);
+                    // Auto-select all episodes after the modal loads
+                    setTimeout(() => {
+                        selectAllEpisodesAuto();
+                    }, 2000);
+                    return;
+                }
+
+                // Multiple results - show selection
+                renderPlexSearchResults(results);
+            })
+            .catch(error => {
+                plexSearchLoading.style.display = 'none';
+                plexSearchGrid.innerHTML = `<div class="plex-no-results"><i class="fas fa-exclamation-triangle"></i>Error: ${escapeHtml(error.message)}</div>`;
+            });
+        }
+
+        function renderPlexSearchResults(results) {
+            plexSearchGrid.innerHTML = '';
+
+            results.forEach(result => {
+                const card = document.createElement('div');
+                card.className = 'plex-search-card';
+
+                let coverStyle = '';
+                if (result.cover) {
+                    let coverUrl = result.cover;
+                    if (!coverUrl.startsWith('http')) {
+                        if (coverUrl.startsWith('//')) {
+                            coverUrl = 'https:' + coverUrl;
+                        } else if (coverUrl.startsWith('/')) {
+                            let baseUrl = 'https://aniworld.to';
+                            if (result.site === 's.to') baseUrl = 'https://s.to';
+                            coverUrl = baseUrl + coverUrl;
+                        }
+                    }
+                    coverUrl = coverUrl.replace("150x225", "220x330");
+                    coverStyle = `background-image: url('${coverUrl}')`;
+                }
+
+                card.innerHTML = `
+                    <div class="plex-search-card-bg" style="${coverStyle}"></div>
+                    <div class="plex-search-card-content">
+                        <div class="plex-search-card-title">${escapeHtml(result.title)}</div>
+                        <div class="plex-search-card-site">${escapeHtml(result.site)}</div>
+                    </div>
+                `;
+
+                card.addEventListener('click', () => {
+                    plexModal.style.display = 'none';
+                    showDownloadModal(result.title, 'Series', result.url, result.cover);
+                    // Auto-select all episodes after the modal loads
+                    setTimeout(() => {
+                        selectAllEpisodesAuto();
+                    }, 2000);
+                });
+
+                plexSearchGrid.appendChild(card);
+            });
+        }
+
+        function selectAllEpisodesAuto() {
+            // Select all episode checkboxes in the download modal
+            const checkboxes = document.querySelectorAll('#episode-tree .episode-checkbox');
+            checkboxes.forEach(cb => {
+                if (!cb.checked) {
+                    cb.checked = true;
+                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+            // Also check all season header checkboxes
+            const seasonCheckboxes = document.querySelectorAll('#episode-tree thead input[type="checkbox"]');
+            seasonCheckboxes.forEach(cb => {
+                cb.checked = true;
+            });
+        }
+    }
 });
 
 // Show notification function

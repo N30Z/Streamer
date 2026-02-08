@@ -189,6 +189,13 @@ def aniworld() -> None:
     2. Episode/file mode - downloads specific episodes via CLI
     """
     try:
+        # Ensure FFmpeg is available (download if missing)
+        from .ffmpeg_downloader import ensure_ffmpeg
+        try:
+            ensure_ffmpeg()
+        except Exception as ffmpeg_err:
+            logging.warning("FFmpeg auto-download failed: %s", ffmpeg_err)
+
         # Handle web UI mode
         if arguments.web_ui:
             from .web.app import start_web_interface

@@ -92,33 +92,9 @@ def _get_output_filename(anime: Anime, episode, sanitized_title: str) -> str:
 
 
 def _get_ffmpeg_location() -> Optional[str]:
-    """Find bundled FFmpeg location for PyInstaller frozen apps."""
-    import shutil
-
-    # Check if running as PyInstaller frozen app
-    if getattr(sys, 'frozen', False):
-        # For --onefile builds, files are extracted to sys._MEIPASS
-        # For --onedir builds, files are next to the executable
-        bundle_dir = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
-
-        # Check for ffmpeg in bundle directory
-        for ffmpeg_name in ['ffmpeg.exe', 'ffmpeg']:
-            ffmpeg_path = bundle_dir / ffmpeg_name
-            if ffmpeg_path.exists():
-                return str(bundle_dir)
-
-        # Also check executable directory (for --onedir)
-        exe_dir = Path(sys.executable).parent
-        for ffmpeg_name in ['ffmpeg.exe', 'ffmpeg']:
-            ffmpeg_path = exe_dir / ffmpeg_name
-            if ffmpeg_path.exists():
-                return str(exe_dir)
-
-    # Check if ffmpeg is in PATH
-    if shutil.which('ffmpeg'):
-        return None  # Let yt-dlp find it in PATH
-
-    return None
+    """Find FFmpeg location (bundled, system PATH, or auto-downloaded)."""
+    from ..ffmpeg_downloader import find_ffmpeg
+    return find_ffmpeg()
 
 
 def _build_ytdl_options(

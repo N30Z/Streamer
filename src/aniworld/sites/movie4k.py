@@ -703,11 +703,11 @@ class MovieAnime:
         self.slug = movie.slug
         self.episode_list = [movie]
 
+        arguments = get_arguments()
         self.action = getattr(arguments, "action", "Watch")
         self.provider = movie._selected_provider
         self.language = movie._selected_language
         self.aniskip = False
-        arguments = get_arguments()
         self.output_directory = getattr(arguments, "output_dir", "")
 
         self._title_cache = None

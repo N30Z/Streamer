@@ -149,6 +149,7 @@ class DownloadQueueManager:
                         {
                             "id": download["id"],
                             "anime_title": download["anime_title"],
+                            "episode_number": download["episode_number"],
                             "total_episodes": download["total_episodes"],
                             "completed_episodes": download["completed_episodes"],
                             "status": download["status"],
@@ -165,11 +166,12 @@ class DownloadQueueManager:
                     )
 
             completed_downloads = []
-            for download in self._completed_downloads[-1:]:  # Get last completed
+            for download in self._completed_downloads:
                 completed_downloads.append(
                     {
                         "id": download["id"],
                         "anime_title": download["anime_title"],
+                        "episode_number": download.get("episode_number", 0),
                         "total_episodes": download["total_episodes"],
                         "completed_episodes": download["completed_episodes"],
                         "status": download["status"],
