@@ -293,13 +293,30 @@ class DownloadQueueManager:
                 return
 
             # Apply settings to anime objects
+            provider = job["provider"]
+            is_auto_provider = (provider == "auto" or not provider)
+
             for anime in anime_list:
                 anime.language = job["language"]
-                anime.provider = job["provider"]
                 anime.action = "Download"
-                for episode in anime.episode_list:
-                    episode._selected_language = job["language"]
-                    episode._selected_provider = job["provider"]
+                if not is_auto_provider:
+                    anime.provider = provider
+                    for episode in anime.episode_list:
+                        episode._selected_language = job["language"]
+                        episode._selected_provider = provider
+                else:
+                    # Auto-provider: resolve working provider with timeout
+                    anime.provider = "VOE"  # Fallback default
+                    for episode in anime.episode_list:
+                        episode._selected_language = job["language"]
+                        resolved_provider = self._resolve_provider_with_timeout(
+                            episode, job["language"], queue_id
+                        )
+                        if resolved_provider:
+                            episode._selected_provider = resolved_provider
+                            anime.provider = resolved_provider
+                        else:
+                            episode._selected_provider = "VOE"
 
             # Get download directory from arguments (which includes -o parameter)
             from ..parser import get_arguments
@@ -531,6 +548,61 @@ class DownloadQueueManager:
                 queue_id, "failed", error_message=f"Download failed: {str(e)}"
             )
 
+
+    def _resolve_provider_with_timeout(self, episode, language, queue_id, timeout_sec=5):
+        """Try each supported provider with a timeout to find one that works.
+
+        Args:
+            episode: Episode object to resolve direct link for
+            language: Language string
+            queue_id: Queue ID for status updates
+            timeout_sec: Seconds to wait per provider attempt
+
+        Returns:
+            Provider name that worked, or None if all failed
+        """
+        from ..config import SUPPORTED_PROVIDERS
+
+        result_container = {}
+
+        for provider_name in SUPPORTED_PROVIDERS:
+            if self._stop_event.is_set() or self.is_cancelled(queue_id):
+                return None
+
+            self._update_download_status(
+                queue_id, "downloading",
+                current_episode=f"Trying provider {provider_name}..."
+            )
+
+            def try_provider(pname=provider_name):
+                try:
+                    link = episode.get_direct_link(provider=pname, language=language)
+                    if link:
+                        result_container["link"] = link
+                        result_container["provider"] = pname
+                except Exception as e:
+                    logging.debug("Provider %s failed: %s", pname, e)
+
+            t = threading.Thread(target=try_provider, daemon=True)
+            t.start()
+            t.join(timeout=timeout_sec)
+
+            if "provider" in result_container:
+                logging.info("Auto-provider resolved to '%s' for queue %s",
+                             result_container["provider"], queue_id)
+                # Reset episode state for actual download
+                episode.direct_link = None
+                episode.embeded_link = None
+                episode.redirect_link = None
+                return result_container["provider"]
+
+            # Reset episode state before next attempt
+            episode.direct_link = None
+            episode.embeded_link = None
+            episode.redirect_link = None
+            logging.info("Provider %s timed out or failed for queue %s", provider_name, queue_id)
+
+        return None
 
     def update_episode_progress(
         self, queue_id: int, episode_progress: float, current_episode_desc: str = None

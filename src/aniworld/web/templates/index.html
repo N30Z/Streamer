@@ -394,16 +394,10 @@
                     <!-- Download Settings -->
                     <div class="download-settings">
                         <div class="setting-group">
-                            <label for="language-select"><strong>Language:</strong></label>
-                            <select id="language-select" class="language-dropdown">
-                                <option value="">Loading languages...</option>
-                            </select>
-                        </div>
-                        <div class="setting-group">
-                            <label for="provider-select"><strong>Provider:</strong></label>
-                            <select id="provider-select" class="provider-dropdown">
-                                <option value="">Loading providers...</option>
-                            </select>
+                            <label><strong>Language:</strong></label>
+                            <div id="language-select" class="language-buttons">
+                                <!-- Language flag buttons populated dynamically -->
+                            </div>
                         </div>
                     </div>
                     <div class="download-cover" id="download-cover" style="display: none;">
@@ -411,9 +405,20 @@
                     </div>
                 </div>
 
+                <!-- Description Section -->
+                <div class="description-section" id="description-section" style="display: none;">
+                    <button class="description-toggle" id="description-toggle" type="button">
+                        <span>Description</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="description-content" id="description-content" style="display: none;">
+                        <p id="description-text"></p>
+                    </div>
+                </div>
+
                 <!-- Episode Selection Tree -->
-                <div class="episode-selection">
-                    
+                <div class="episode-selection" id="episode-selection">
+
                     <div class="episode-tree-loading" id="episode-tree-loading">
                         <div class="loading-spinner-small"></div>
                         <span>Loading episodes...</span>

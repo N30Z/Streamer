@@ -64,6 +64,9 @@ class WebApp:
         # Scan for manually placed files at startup
         self._scan_media_library()
 
+        # Backfill series metadata for existing download folders (background)
+        self._start_metadata_backfill()
+
         # Setup routes
         self._setup_routes()
 
@@ -292,6 +295,136 @@ class WebApp:
 
         except Exception as e:
             logging.warning(f"Failed to scan media library: {e}")
+
+    def _start_metadata_backfill(self):
+        """Start a background thread to backfill .series_meta.json for existing folders."""
+        t = threading.Thread(target=self._backfill_series_metadata, daemon=True)
+        t.start()
+
+    def _backfill_series_metadata(self):
+        """Scan download folders and create .series_meta.json where missing."""
+        try:
+            import json as json_mod
+            from ..search import fetch_anime_list
+            from urllib.parse import quote
+
+            download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+            if (
+                self.arguments
+                and hasattr(self.arguments, "output_dir")
+                and self.arguments.output_dir is not None
+            ):
+                download_path = str(self.arguments.output_dir)
+
+            download_dir = Path(download_path)
+            if not download_dir.exists():
+                return
+
+            video_extensions = {'.mp4', '.mkv', '.avi', '.webm', '.mov', '.m4v', '.flv', '.wmv'}
+            folders_to_backfill = []
+
+            for item in download_dir.iterdir():
+                if not item.is_dir():
+                    continue
+                meta_file = item / ".series_meta.json"
+                if meta_file.exists():
+                    # Validate existing metadata has required fields
+                    try:
+                        meta = json_mod.loads(meta_file.read_text(encoding="utf-8"))
+                        if meta.get("url") and meta.get("title"):
+                            continue  # Already has valid metadata
+                    except Exception:
+                        pass  # Invalid JSON, will re-create
+                # Check if folder has video files
+                has_videos = any(
+                    f.is_file() and f.suffix.lower() in video_extensions
+                    for f in item.rglob("*")
+                )
+                if has_videos:
+                    folders_to_backfill.append(item)
+
+            if not folders_to_backfill:
+                return
+
+            logging.info(
+                f"Metadata backfill: {len(folders_to_backfill)} folder(s) without metadata"
+            )
+
+            for folder in folders_to_backfill:
+                try:
+                    folder_name = folder.name
+                    best_match = None
+
+                    # Search on aniworld.to
+                    try:
+                        url = f"{config.ANIWORLD_TO}/ajax/seriesSearch?keyword={quote(folder_name)}"
+                        results = fetch_anime_list(url)
+                        for r in results:
+                            name = r.get("name", "")
+                            if name.lower() == folder_name.lower():
+                                best_match = {
+                                    "url": f"{config.ANIWORLD_TO}/anime/stream/{r.get('link', '')}",
+                                    "title": folder_name,
+                                    "site": "aniworld.to",
+                                    "cover": r.get("cover", ""),
+                                }
+                                break
+                        if not best_match and results:
+                            r = results[0]
+                            best_match = {
+                                "url": f"{config.ANIWORLD_TO}/anime/stream/{r.get('link', '')}",
+                                "title": folder_name,
+                                "site": "aniworld.to",
+                                "cover": r.get("cover", ""),
+                            }
+                    except Exception as e:
+                        logging.debug(f"Backfill aniworld search failed for '{folder_name}': {e}")
+
+                    # Search on s.to if no match found
+                    if not best_match:
+                        try:
+                            from ..search import fetch_sto_search_results
+                            results = fetch_sto_search_results(folder_name)
+                            for r in results:
+                                name = r.get("name", "")
+                                if name.lower() == folder_name.lower():
+                                    best_match = {
+                                        "url": f"{config.S_TO}/serie/{r.get('link', '')}",
+                                        "title": folder_name,
+                                        "site": "s.to",
+                                        "cover": r.get("cover", ""),
+                                    }
+                                    break
+                            if not best_match and results:
+                                r = results[0]
+                                best_match = {
+                                    "url": f"{config.S_TO}/serie/{r.get('link', '')}",
+                                    "title": folder_name,
+                                    "site": "s.to",
+                                    "cover": r.get("cover", ""),
+                                }
+                        except Exception as e:
+                            logging.debug(f"Backfill s.to search failed for '{folder_name}': {e}")
+
+                    if best_match:
+                        meta_file = folder / ".series_meta.json"
+                        meta_file.write_text(
+                            json_mod.dumps(best_match, ensure_ascii=False),
+                            encoding="utf-8"
+                        )
+                        logging.info(
+                            f"Backfill: Created metadata for '{folder_name}' -> {best_match['site']}"
+                        )
+                    else:
+                        logging.debug(f"Backfill: No match found for '{folder_name}'")
+
+                except Exception as e:
+                    logging.debug(f"Backfill failed for folder '{folder.name}': {e}")
+
+            logging.info("Metadata backfill complete")
+
+        except Exception as e:
+            logging.warning(f"Metadata backfill error: {e}")
 
     def _require_api_auth(self, f):
         """Decorator to require authentication for API routes."""
@@ -1604,6 +1737,45 @@ class WebApp:
                         {"success": False, "error": "Failed to add download to queue"}
                     ), 500
 
+                # Save series metadata for file browser
+                try:
+                    import json as json_mod
+                    download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+                    if (
+                        self.arguments
+                        and hasattr(self.arguments, "output_dir")
+                        and self.arguments.output_dir is not None
+                    ):
+                        download_path = str(self.arguments.output_dir)
+
+                    # Determine series base URL from first episode URL
+                    first_url = episode_urls[0]
+                    if "/staffel-" in first_url:
+                        series_base_url = first_url.rsplit("/staffel-", 1)[0]
+                    elif "/filme/" in first_url:
+                        series_base_url = first_url.rsplit("/filme/", 1)[0]
+                    else:
+                        series_base_url = first_url
+
+                    # Determine site
+                    meta_site = "aniworld.to"
+                    if "s.to" in first_url or "/serie/" in first_url:
+                        meta_site = "s.to"
+                    elif "movie4k" in first_url or "/watch/" in first_url:
+                        meta_site = "movie4k.sx"
+
+                    meta = {
+                        "url": series_base_url,
+                        "title": anime_title,
+                        "site": meta_site,
+                        "cover": data.get("cover", ""),
+                    }
+                    meta_path = Path(download_path) / anime_title / ".series_meta.json"
+                    meta_path.parent.mkdir(parents=True, exist_ok=True)
+                    meta_path.write_text(json_mod.dumps(meta, ensure_ascii=False), encoding="utf-8")
+                except Exception as meta_err:
+                    logging.warning("Failed to save series metadata: %s", meta_err)
+
                 return jsonify(
                     {
                         "success": True,
@@ -1655,6 +1827,7 @@ class WebApp:
                     ), 400
 
                 series_url = data["series_url"]
+                folder_path = data.get("folder_path", "")
 
                 # Create wrapper function to handle all logic
                 def get_episodes_for_series(series_url):
@@ -1683,13 +1856,15 @@ class WebApp:
                         from ..sites.movie4k import Movie as Movie4kMovie
                         if "/watch/" in series_url or "movie4k.sx" in series_url:
                             # Use Movie wrapper to get title and provide as a single movie entry
+                            movie_description = ""
                             try:
                                 movie_obj = Movie4kMovie(url=series_url)
                                 movie_title = movie_obj.title
+                                movie_description = movie_obj.overview or ""
                             except Exception:
                                 movie_title = "Movie"
                             # No seasons/episodes for movies; return a movies list with single item
-                            return {}, [{"movie": 1, "title": movie_title, "url": series_url}], series_url
+                            return {}, [{"movie": 1, "title": movie_title, "url": series_url}], series_url, movie_description
 
                         raise ValueError("Invalid series URL format")
 
@@ -1754,7 +1929,28 @@ class WebApp:
                             }
                         ]
 
-                    return episodes_by_season, movies, slug
+                    # Fetch description from series page
+                    series_description = ""
+                    try:
+                        import requests as req_lib
+                        series_page_url = f"{base_url}/{stream_path}/{slug}"
+                        resp = req_lib.get(
+                            series_page_url,
+                            timeout=config.DEFAULT_REQUEST_TIMEOUT,
+                            headers={"User-Agent": config.RANDOM_USER_AGENT},
+                        )
+                        if resp.ok:
+                            from bs4 import BeautifulSoup
+                            soup = BeautifulSoup(resp.content, "html.parser")
+                            desc_el = soup.find("p", class_="seri_des")
+                            if not desc_el:
+                                desc_el = soup.find(class_="seri_des") or soup.find(class_="description-text")
+                            if desc_el:
+                                series_description = desc_el.get("data-full-description", "") or desc_el.get_text(strip=True)
+                    except Exception as e:
+                        logging.warning("Failed to fetch series description: %s", e)
+
+                    return episodes_by_season, movies, slug, series_description
 
                 def scan_available_providers(sample_url, site):
                     """Scan a sample episode URL for available providers and languages."""
@@ -1810,7 +2006,7 @@ class WebApp:
 
                 # Use the wrapper function
                 try:
-                    episodes_by_season, movies, slug = get_episodes_for_series(
+                    episodes_by_season, movies, slug, description = get_episodes_for_series(
                         series_url
                     )
                 except ValueError as e:
@@ -1844,12 +2040,108 @@ class WebApp:
                         scan_available_providers(sample_url, site)
                     )
 
+                # Scan for local files - auto-detect folder if not provided
+                local_files = {}
+                import re as re_mod
+                download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+                if (
+                    self.arguments
+                    and hasattr(self.arguments, "output_dir")
+                    and self.arguments.output_dir is not None
+                ):
+                    download_path = str(self.arguments.output_dir)
+                download_dir = Path(download_path)
+
+                # Auto-detect folder from slug/title if no explicit folder_path
+                if not folder_path and download_dir.exists():
+                    # Try to find a matching folder by checking .series_meta.json
+                    for candidate in download_dir.iterdir():
+                        if not candidate.is_dir():
+                            continue
+                        meta_file = candidate / ".series_meta.json"
+                        if meta_file.exists():
+                            try:
+                                import json as json_auto
+                                meta = json_auto.loads(meta_file.read_text(encoding="utf-8"))
+                                meta_url = meta.get("url", "")
+                                # Match by URL (strip trailing slashes and season/episode paths)
+                                series_base = series_url.split("/staffel-")[0].split("/filme/")[0].rstrip("/")
+                                meta_base = meta_url.split("/staffel-")[0].split("/filme/")[0].rstrip("/")
+                                if series_base and meta_base and series_base == meta_base:
+                                    folder_path = candidate.name
+                                    break
+                            except Exception:
+                                pass
+                    # Also try matching by folder name == slug
+                    if not folder_path:
+                        slug_clean = slug.replace("-", " ").lower() if slug else ""
+                        for candidate in download_dir.iterdir():
+                            if candidate.is_dir() and candidate.name.lower() == slug_clean:
+                                folder_path = candidate.name
+                                break
+
+                target_dir = download_dir / folder_path if folder_path else None
+                video_exts = {'.mp4', '.mkv', '.avi', '.webm', '.mov', '.m4v', '.flv', '.wmv'}
+                if target_dir and target_dir.exists():
+                    for f in target_dir.rglob("*"):
+                        if f.is_file() and f.suffix.lower() in video_exts:
+                            rel_path = str(f.relative_to(download_dir))
+                            # Try S##E## pattern in filename first
+                            match = re_mod.search(r'S(\d+)E(\d+)', f.name, re_mod.IGNORECASE)
+                            if match:
+                                s_num, e_num = int(match.group(1)), int(match.group(2))
+                                local_files[f"{s_num}-{e_num}"] = rel_path
+                                continue
+                            # Try "Season X/Episode YYY.mp4" pattern (actual download format)
+                            season_match = re_mod.search(r'Season\s+(\d+)', f.parent.name, re_mod.IGNORECASE)
+                            ep_match = re_mod.search(r'Episode\s+(\d+)', f.name, re_mod.IGNORECASE)
+                            if season_match and ep_match:
+                                s_num = int(season_match.group(1))
+                                e_num = int(ep_match.group(1))
+                                local_files[f"{s_num}-{e_num}"] = rel_path
+                                continue
+                            # Try "Movies/Movie YYY.mp4" pattern
+                            movie_match = re_mod.search(r'Movie\s+(\d+)', f.name, re_mod.IGNORECASE)
+                            if movie_match:
+                                local_files[f"movie-{int(movie_match.group(1))}"] = rel_path
+                                continue
+                            # Fallback: unmatched file
+                            local_files[f"file-{f.name}"] = rel_path
+
+                # Annotate episodes with local file info
+                if local_files:
+                    for _, eps in episodes_by_season.items():
+                        for ep in eps:
+                            key = f"{ep['season']}-{ep['episode']}"
+                            if key in local_files:
+                                ep["local"] = True
+                                ep["local_path"] = local_files[key]
+                            else:
+                                ep["local"] = False
+                    for movie in movies:
+                        movie_key = f"movie-{movie.get('movie', 0)}"
+                        if movie_key in local_files:
+                            movie["local"] = True
+                            movie["local_path"] = local_files[movie_key]
+                        else:
+                            # Fallback: check unmatched files
+                            found = False
+                            for fkey, fpath in local_files.items():
+                                if fkey.startswith("file-"):
+                                    found = True
+                                    movie["local"] = True
+                                    movie["local_path"] = fpath
+                                    break
+                            if not found:
+                                movie["local"] = False
+
                 return jsonify(
                     {
                         "success": True,
                         "episodes": episodes_by_season,
                         "movies": movies,
                         "slug": slug,
+                        "description": description,
                         "available_providers": available_providers,
                         "available_languages": available_languages,
                     }
@@ -2038,11 +2330,23 @@ class WebApp:
 
                             if video_count > 0:  # Only show folders with videos
                                 relative_path = item.relative_to(download_dir)
+                                # Read series metadata if available
+                                folder_meta = {}
+                                meta_file = item / ".series_meta.json"
+                                if meta_file.exists():
+                                    try:
+                                        import json as json_mod
+                                        folder_meta = json_mod.loads(meta_file.read_text(encoding="utf-8"))
+                                    except Exception:
+                                        pass
                                 folders.append({
                                     "name": item.name,
                                     "path": str(relative_path),
                                     "type": "folder",
-                                    "video_count": video_count
+                                    "video_count": video_count,
+                                    "cover": folder_meta.get("cover", ""),
+                                    "series_url": folder_meta.get("url", ""),
+                                    "site": folder_meta.get("site", ""),
                                 })
                         elif item.is_file() and item.suffix.lower() in video_extensions:
                             try:

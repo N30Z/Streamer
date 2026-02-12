@@ -2154,6 +2154,152 @@ body[data-theme="dark"] .episode-progress-text {
     border-color: var(--text-tertiary);
 }
 
+/* Language Flag Buttons */
+.language-buttons {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.language-btn {
+    background: transparent;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.language-btn:hover {
+    opacity: 0.85;
+    border-color: var(--text-tertiary);
+    transform: translateY(-1px);
+}
+
+.language-btn.active {
+    opacity: 1;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb), 0.2);
+}
+
+.language-btn img {
+    height: 30px;
+    display: block;
+}
+
+.language-btn.disabled {
+    opacity: 0.2;
+    pointer-events: none;
+}
+
+/* Description Section */
+.description-section {
+    margin: 0.75rem 0;
+}
+
+.description-toggle {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 0.5rem 0;
+    transition: color 0.2s ease;
+    width: 100%;
+    text-align: left;
+}
+
+.description-toggle:hover {
+    color: var(--text-primary);
+}
+
+.description-toggle i {
+    font-size: 0.75rem;
+    transition: transform 0.2s ease;
+}
+
+.description-toggle.expanded i {
+    transform: rotate(180deg);
+}
+
+.description-content {
+    color: var(--text-tertiary);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    padding: 0.5rem 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.description-content p {
+    margin: 0;
+}
+
+/* Episode row local/online indicators */
+.episode-row.local-episode {
+    background: rgba(72, 187, 120, 0.08);
+}
+
+.episode-row.local-episode:hover {
+    background: rgba(72, 187, 120, 0.15);
+}
+
+.episode-local-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: #48bb78;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.episode-play-btn {
+    background: none;
+    border: none;
+    color: var(--accent-primary);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.episode-play-btn:hover {
+    background: rgba(var(--accent-primary-rgb), 0.15);
+    transform: scale(1.1);
+}
+
+.episode-checkbox-cell.dimmed {
+    opacity: 0.25;
+    pointer-events: none;
+}
+
+/* Video count badge on home-anime-cover */
+.home-anime-cover .video-count-badge {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.home-anime-cover {
+    position: relative;
+}
+
 .modal-footer {
     padding: 1.5rem;
     border-top: 1px solid var(--border-color);

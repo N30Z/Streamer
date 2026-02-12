@@ -47,7 +47,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const episodeTreeLoading = document.getElementById('episode-tree-loading');
     const episodeTree = document.getElementById('episode-tree');
     const selectedEpisodeCount = document.getElementById('selected-episode-count');
-    const providerSelect = document.getElementById('provider-select');
     const languageSelect = document.getElementById('language-select');
 
     // Queue modal elements
@@ -67,7 +66,25 @@ document.addEventListener('DOMContentLoaded', function() {
     let availableMovies = [];
     let selectedEpisodes = new Set();
     let progressInterval = null;
-    let availableProviders = [];
+    let selectionMode = null; // 'local' | 'online' | null
+    let currentDescription = '';
+
+    // Description section elements
+    const descriptionSection = document.getElementById('description-section');
+    const descriptionToggle = document.getElementById('description-toggle');
+    const descriptionContent = document.getElementById('description-content');
+    const descriptionText = document.getElementById('description-text');
+    const episodeSelection = document.getElementById('episode-selection');
+
+    // Language flag image mapping (all sites)
+    const LANGUAGE_FLAGS = {
+        "German Dub": "https://aniworld.to/public/img/german.svg",
+        "Deutsch": "https://aniworld.to/public/img/german.svg",
+        "English Sub": "https://aniworld.to/public/img/japanese-english.svg",
+        "German Sub": "https://aniworld.to/public/img/japanese-german.svg",
+        "English Dub": "https://upload.wikimedia.org/wikipedia/commons/0/0b/English_language.svg",
+        "English": "https://upload.wikimedia.org/wikipedia/commons/0/0b/English_language.svg",
+    };
 
     // Track which queue groups are expanded (persists across poll updates)
     let expandedGroups = new Set();
@@ -217,46 +234,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function loadAvailableProviders() {
-        // This will be called from showDownloadModal with site-specific logic
-        // Default providers for initial load (aniworld.to)
-        populateProviderDropdown('aniworld.to');
-    }
-
-    function populateProviderDropdown(site, providers) {
-        if (!providerSelect) {
-            return;
-        }
-
-        // Use dynamic providers if available, otherwise fall back to site defaults
-        let siteProviders = providers || [];
-        if (siteProviders.length === 0) {
-            if (site === 'movie4k.sx') {
-                siteProviders = ['Filemoon', 'Doodstream', 'Streamtape', 'VOE', 'Vidoza'];
-            } else if (site === 's.to') {
-                siteProviders = ['VOE'];
-            } else {
-                siteProviders = ['VOE', 'Filemoon', 'Vidmoly'];
-            }
-        }
-
-        providerSelect.innerHTML = '';
-
-        siteProviders.forEach(provider => {
-            const option = document.createElement('option');
-            option.value = provider;
-            option.textContent = provider;
-            providerSelect.appendChild(option);
-        });
-
-        // Set default based on saved preference, fallback to VOE
-        let defaultProvider = userPreferences.default_provider || '';
-        if (defaultProvider && siteProviders.includes(defaultProvider)) {
-            providerSelect.value = defaultProvider;
-        } else if (siteProviders.length > 0) {
-            providerSelect.value = siteProviders[0];
-        }
-
-        console.log(`Populated providers for ${site}:`, siteProviders);
+        // Provider is now auto-detected on backend - no UI needed
     }
 
     function populateLanguageDropdown(site, languages) {
@@ -265,7 +243,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        console.log('Populating language dropdown for site:', site);
         languageSelect.innerHTML = '';
 
         // Use dynamic languages if available, otherwise fall back to site defaults
@@ -283,7 +260,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 defaultLanguage = 'German Sub';
             }
         } else {
-            // Set default from dynamic list
             if (site === 'movie4k.sx') {
                 defaultLanguage = 'Deutsch';
             } else if (site === 's.to') {
@@ -293,25 +269,36 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        availableLanguages.forEach(language => {
-            const option = document.createElement('option');
-            option.value = language;
-            option.textContent = language;
-            languageSelect.appendChild(option);
-        });
+        // Determine which language to select
+        let selectedLang = userPreferences.default_language || '';
+        if (!selectedLang || !availableLanguages.includes(selectedLang)) {
+            selectedLang = defaultLanguage && availableLanguages.includes(defaultLanguage) ? defaultLanguage : availableLanguages[0] || '';
+        }
 
-        // Set default based on saved preference, then site fallback
-        setTimeout(() => {
-            let defaultLang = userPreferences.default_language || '';
-            if (defaultLang && availableLanguages.includes(defaultLang)) {
-                languageSelect.value = defaultLang;
-            } else if (defaultLanguage && availableLanguages.includes(defaultLanguage)) {
-                languageSelect.value = defaultLanguage;
-            } else if (availableLanguages.length > 0) {
-                languageSelect.value = availableLanguages[0];
+        // Create flag image buttons instead of dropdown options
+        availableLanguages.forEach(lang => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'language-btn' + (lang === selectedLang ? ' active' : '');
+            btn.dataset.language = lang;
+            btn.title = lang;
+            const flagUrl = LANGUAGE_FLAGS[lang] || '';
+            if (flagUrl) {
+                btn.innerHTML = `<img src="${flagUrl}" alt="${lang}" height="30">`;
+            } else {
+                btn.textContent = lang;
             }
-            console.log('Set default language to:', languageSelect.value);
-        }, 0);
+            btn.addEventListener('click', () => {
+                languageSelect.querySelectorAll('.language-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+            languageSelect.appendChild(btn);
+        });
+    }
+
+    function getSelectedLanguage() {
+        const activeBtn = languageSelect ? languageSelect.querySelector('.language-btn.active') : null;
+        return activeBtn ? activeBtn.dataset.language : '';
     }
 
     function isDirectUrl(input) {
@@ -472,7 +459,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return card;
     }
 
-    function showDownloadModal(animeTitle, episodeTitle, episodeUrl, coverUrl) {
+    function showDownloadModal(animeTitle, episodeTitle, episodeUrl, coverUrl, folderPath) {
         // Detect site from URL
         let detectedSite = 'aniworld.to'; // default
         if (episodeUrl.includes('movie4k')) {
@@ -486,12 +473,16 @@ document.addEventListener('DOMContentLoaded', function() {
             episode: episodeTitle,
             url: episodeUrl,
             site: detectedSite,
-            downloadPath: '/Downloads' // Default path - will be fetched from backend
+            cover: coverUrl || '',
+            folderPath: folderPath || '',
+            downloadPath: '/Downloads'
         };
 
         // Reset selection state
         selectedEpisodes.clear();
+        selectionMode = null;
         availableEpisodes = {};
+        currentDescription = '';
 
         // Populate modal
         document.getElementById('download-anime-title').textContent = animeTitle;
@@ -506,14 +497,27 @@ document.addEventListener('DOMContentLoaded', function() {
             coverContainer.style.display = 'none';
         }
 
-        // Show loading state for provider and language dropdowns
-        // They will be populated dynamically when episodes are fetched
-        if (providerSelect) {
-            providerSelect.innerHTML = '<option value="">Loading providers...</option>';
-        }
+        // Reset language buttons
         if (languageSelect) {
-            languageSelect.innerHTML = '<option value="">Loading languages...</option>';
+            languageSelect.innerHTML = '';
         }
+
+        // Reset description section
+        if (descriptionSection) descriptionSection.style.display = 'none';
+        if (descriptionContent) descriptionContent.style.display = 'none';
+        if (descriptionToggle) {
+            descriptionToggle.classList.remove('expanded');
+            const icon = descriptionToggle.querySelector('i');
+            if (icon) icon.className = 'fas fa-chevron-down';
+        }
+
+        // Reset episode selection visibility
+        if (episodeSelection) episodeSelection.style.display = '';
+
+        // Reset action button
+        confirmDownload.textContent = 'Start Download';
+        confirmDownload.className = 'primary-btn';
+        confirmDownload.disabled = true;
 
         // Show loading state for episodes
         episodeTreeLoading.style.display = 'flex';
@@ -525,57 +529,91 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 currentDownloadData.downloadPath = data.path;
-                document.getElementById('download-path').textContent = data.path;
+                const pathEl = document.getElementById('download-path');
+                if (pathEl) pathEl.textContent = data.path;
             })
             .catch(error => {
                 console.error('Failed to fetch download path:', error);
-                document.getElementById('download-path').textContent = 'Unknown';
             });
+
+        // Build request body
+        const reqBody = { series_url: episodeUrl };
+        if (folderPath) {
+            reqBody.folder_path = folderPath;
+        }
 
         // Fetch episodes for this series
         fetch('/api/episodes', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                series_url: episodeUrl
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reqBody)
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 availableEpisodes = data.episodes;
                 availableMovies = data.movies || [];
+                currentDescription = data.description || '';
                 renderEpisodeTree();
 
-                // Populate provider and language dropdowns with scanned data
-                populateProviderDropdown(
-                    currentDownloadData.site,
-                    data.available_providers || []
-                );
+                // Populate language buttons
                 populateLanguageDropdown(
                     currentDownloadData.site,
                     data.available_languages || []
                 );
+
+                // Show description
+                if (currentDescription && descriptionSection && descriptionText) {
+                    descriptionText.textContent = currentDescription;
+                    descriptionSection.style.display = 'block';
+
+                    // For single movies, show description expanded and hide episode tree
+                    const isSingleMovie = Object.keys(availableEpisodes).length === 0
+                        && availableMovies && availableMovies.length <= 1;
+                    if (isSingleMovie) {
+                        if (episodeSelection) episodeSelection.style.display = 'none';
+                        if (descriptionContent) descriptionContent.style.display = 'block';
+                        if (descriptionToggle) {
+                            descriptionToggle.classList.add('expanded');
+                            const icon = descriptionToggle.querySelector('i');
+                            if (icon) icon.className = 'fas fa-chevron-up';
+                        }
+                        // Auto-select the single movie
+                        if (availableMovies.length === 1) {
+                            toggleMovie(availableMovies[0], true);
+                        }
+                    }
+                }
             } else {
                 showNotification(data.error || 'Failed to load episodes', 'error');
-                // Fall back to site defaults on error
-                populateProviderDropdown(currentDownloadData.site);
                 populateLanguageDropdown(currentDownloadData.site);
             }
         })
         .catch(error => {
             console.error('Failed to fetch episodes:', error);
             showNotification('Failed to load episodes', 'error');
-            // Fall back to site defaults on network error
-            populateProviderDropdown(currentDownloadData.site);
             populateLanguageDropdown(currentDownloadData.site);
         })
         .finally(() => {
             episodeTreeLoading.style.display = 'none';
             episodeTree.style.display = 'block';
         });
+
+        // Setup description toggle handler (remove old listeners by replacing)
+        const currentToggle = document.getElementById('description-toggle');
+        if (currentToggle && currentToggle.parentNode) {
+            const newToggle = currentToggle.cloneNode(true);
+            currentToggle.parentNode.replaceChild(newToggle, currentToggle);
+            newToggle.addEventListener('click', () => {
+                const content = document.getElementById('description-content');
+                if (!content) return;
+                const isVisible = content.style.display !== 'none';
+                content.style.display = isVisible ? 'none' : 'block';
+                newToggle.classList.toggle('expanded', !isVisible);
+                const icon = newToggle.querySelector('i');
+                if (icon) icon.className = isVisible ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+            });
+        }
 
         downloadModal.style.display = 'flex';
     }
@@ -584,8 +622,10 @@ document.addEventListener('DOMContentLoaded', function() {
         downloadModal.style.display = 'none';
         currentDownloadData = null;
         selectedEpisodes.clear();
+        selectionMode = null;
         availableEpisodes = {};
         availableMovies = [];
+        currentDescription = '';
     }
 
     function renderEpisodeTree() {
@@ -666,6 +706,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             </th>
                             <th class="episode-number-cell">#</th>
                             <th>Title</th>
+                            <th style="width:40px"></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -677,28 +718,54 @@ document.addEventListener('DOMContentLoaded', function() {
 
             season.forEach(episode => {
                 const episodeId = `${episode.season}-${episode.episode}`;
+                const isLocal = episode.local || false;
                 const tr = document.createElement('tr');
-                tr.className = 'episode-row';
+                tr.className = 'episode-row' + (isLocal ? ' local-episode' : '');
+
+                let localBadge = '';
+                let playBtn = '';
+                if (isLocal) {
+                    localBadge = ' <span class="episode-local-badge"><i class="fas fa-check-circle"></i></span>';
+                    playBtn = `<button class="episode-play-btn" title="Play"><i class="fas fa-play"></i></button>`;
+                }
+
                 tr.innerHTML = `
                     <td class="episode-checkbox-cell">
-                        <input type="checkbox" class="episode-checkbox" id="episode-${episodeId}" ${selectedEpisodes.has(episodeId) ? 'checked' : ''}>
+                        <input type="checkbox" class="episode-checkbox" id="episode-${episodeId}" data-local="${isLocal}" ${selectedEpisodes.has(episodeId) ? 'checked' : ''}>
                     </td>
                     <td class="episode-number-cell">${episode.episode}</td>
-                    <td class="episode-title-cell">${escapeHtml(episode.title)}</td>
+                    <td class="episode-title-cell">${escapeHtml(episode.title)}${localBadge}</td>
+                    <td>${playBtn}</td>
                 `;
 
                 const checkbox = tr.querySelector('.episode-checkbox');
                 checkbox.addEventListener('change', () => {
+                    if (!canSelectEpisode(isLocal, checkbox.checked)) {
+                        checkbox.checked = false;
+                        return;
+                    }
                     toggleEpisode(episode, checkbox.checked);
                     updateHeaderCheckbox(seasonNum, seasonCheckbox);
+                    updateCheckboxDimming();
                 });
 
                 tr.addEventListener('click', (e) => {
-                    if (e.target.tagName === 'INPUT') return;
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('.episode-play-btn')) return;
+                    if (!canSelectEpisode(isLocal, !checkbox.checked)) return;
                     checkbox.checked = !checkbox.checked;
                     toggleEpisode(episode, checkbox.checked);
                     updateHeaderCheckbox(seasonNum, seasonCheckbox);
+                    updateCheckboxDimming();
                 });
+
+                // Play button for local episodes
+                const playButton = tr.querySelector('.episode-play-btn');
+                if (playButton && isLocal && episode.local_path) {
+                    playButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        window.streamFile({ path: episode.local_path, name: episode.title });
+                    });
+                }
 
                 tbody.appendChild(tr);
             });
@@ -708,12 +775,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 const isChecked = seasonCheckbox.checked;
                 season.forEach(episode => {
                     const episodeId = `${episode.season}-${episode.episode}`;
+                    const isLocal = episode.local || false;
                     const cb = container.querySelector(`#episode-${episodeId}`);
                     if (cb) {
-                        cb.checked = isChecked;
-                        toggleEpisode(episode, isChecked);
+                        if (canSelectEpisode(isLocal, isChecked)) {
+                            cb.checked = isChecked;
+                            toggleEpisode(episode, isChecked);
+                        }
                     }
                 });
+                updateCheckboxDimming();
             });
         }
 
@@ -730,6 +801,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             </th>
                             <th class="episode-number-cell">#</th>
                             <th>Title</th>
+                            <th style="width:40px"></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -741,28 +813,54 @@ document.addEventListener('DOMContentLoaded', function() {
 
             availableMovies.forEach((movie, index) => {
                 const movieId = `movie-${movie.movie}`;
+                const isLocal = movie.local || false;
                 const tr = document.createElement('tr');
-                tr.className = 'episode-row';
+                tr.className = 'episode-row' + (isLocal ? ' local-episode' : '');
+
+                let localBadge = '';
+                let playBtn = '';
+                if (isLocal) {
+                    localBadge = ' <span class="episode-local-badge"><i class="fas fa-check-circle"></i></span>';
+                    playBtn = `<button class="episode-play-btn" title="Play"><i class="fas fa-play"></i></button>`;
+                }
+
                 tr.innerHTML = `
                     <td class="episode-checkbox-cell">
-                        <input type="checkbox" class="episode-checkbox" id="movie-${movieId}" ${selectedEpisodes.has(movieId) ? 'checked' : ''}>
+                        <input type="checkbox" class="episode-checkbox" id="movie-${movieId}" data-local="${isLocal}" ${selectedEpisodes.has(movieId) ? 'checked' : ''}>
                     </td>
                     <td class="episode-number-cell">${index + 1}</td>
-                    <td class="episode-title-cell">${escapeHtml(movie.title)}</td>
+                    <td class="episode-title-cell">${escapeHtml(movie.title)}${localBadge}</td>
+                    <td>${playBtn}</td>
                 `;
 
                 const checkbox = tr.querySelector('.episode-checkbox');
                 checkbox.addEventListener('change', () => {
+                    if (!canSelectEpisode(isLocal, checkbox.checked)) {
+                        checkbox.checked = false;
+                        return;
+                    }
                     toggleMovie(movie, checkbox.checked);
                     updateMoviesHeader(moviesCheckbox);
+                    updateCheckboxDimming();
                 });
 
                 tr.addEventListener('click', (e) => {
-                    if (e.target.tagName === 'INPUT') return;
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('.episode-play-btn')) return;
+                    if (!canSelectEpisode(isLocal, !checkbox.checked)) return;
                     checkbox.checked = !checkbox.checked;
                     toggleMovie(movie, checkbox.checked);
                     updateMoviesHeader(moviesCheckbox);
+                    updateCheckboxDimming();
                 });
+
+                // Play button for local movies
+                const playButton = tr.querySelector('.episode-play-btn');
+                if (playButton && isLocal && movie.local_path) {
+                    playButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        window.streamFile({ path: movie.local_path, name: movie.title });
+                    });
+                }
 
                 tbody.appendChild(tr);
             });
@@ -772,10 +870,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const isChecked = moviesCheckbox.checked;
                 availableMovies.forEach(movie => {
                     const movieId = `movie-${movie.movie}`;
+                    const isLocal = movie.local || false;
                     const cb = container.querySelector(`#movie-${movieId}`);
                     if (cb) {
-                        cb.checked = isChecked;
-                        toggleMovie(movie, isChecked);
+                        if (canSelectEpisode(isLocal, isChecked)) {
+                            cb.checked = isChecked;
+                            toggleMovie(movie, isChecked);
+                        }
                     }
                 });
             });
@@ -827,6 +928,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update season checkbox state
         updateSeasonCheckboxState(episode.season);
         updateSelectedCount();
+        updateSelectionMode();
     }
 
     function updateSeasonCheckboxState(seasonNum) {
@@ -877,6 +979,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update movies section checkbox state
         updateMoviesCheckboxState();
         updateSelectedCount();
+        updateSelectionMode();
     }
 
     function updateMoviesCheckboxState() {
@@ -897,6 +1000,67 @@ document.addEventListener('DOMContentLoaded', function() {
             moviesCheckbox.checked = false;
             moviesCheckbox.indeterminate = false;
         }
+    }
+
+    // Selection mode logic: local episodes → delete mode, online → download mode
+    function canSelectEpisode(isLocal, wantChecked) {
+        if (!wantChecked) return true; // Always allow unchecking
+        if (selectionMode === null) return true; // No mode set yet
+        if (isLocal && selectionMode === 'local') return true;
+        if (!isLocal && selectionMode === 'online') return true;
+        return false; // Mismatched mode
+    }
+
+    function updateSelectionMode() {
+        if (selectedEpisodes.size === 0) {
+            selectionMode = null;
+            updateActionButton();
+            updateCheckboxDimming();
+            return;
+        }
+        // Determine mode from first selected item
+        // Check all episodes and movies for a local match
+        let hasLocal = false;
+        selectedEpisodes.forEach(key => {
+            if (key.startsWith('movie-')) {
+                const movie = availableMovies.find(m => `movie-${m.movie}` === key);
+                if (movie && movie.local) hasLocal = true;
+            } else {
+                const [s, e] = key.split('-').map(Number);
+                const season = availableEpisodes[s];
+                if (season) {
+                    const ep = season.find(ep => ep.season === s && ep.episode === e);
+                    if (ep && ep.local) hasLocal = true;
+                }
+            }
+        });
+        selectionMode = hasLocal ? 'local' : 'online';
+        updateActionButton();
+        updateCheckboxDimming();
+    }
+
+    function updateActionButton() {
+        if (selectionMode === 'local') {
+            confirmDownload.textContent = 'Delete Selected';
+            confirmDownload.className = 'primary-btn danger-btn';
+        } else {
+            confirmDownload.textContent = 'Start Download';
+            confirmDownload.className = 'primary-btn';
+        }
+    }
+
+    function updateCheckboxDimming() {
+        const allCheckboxCells = document.querySelectorAll('#episode-tree .episode-checkbox-cell');
+        allCheckboxCells.forEach(cell => {
+            const cb = cell.querySelector('.episode-checkbox');
+            if (!cb) return;
+            const isLocal = cb.dataset.local === 'true';
+            if (selectionMode === null || (isLocal && selectionMode === 'local') || (!isLocal && selectionMode === 'online')) {
+                cell.classList.remove('dimmed');
+            } else {
+                cell.classList.add('dimmed');
+            }
+        });
     }
 
     function selectAllEpisodes() {
@@ -971,11 +1135,60 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function startDownload() {
         if (!currentDownloadData || selectedEpisodes.size === 0) {
-            showNotification('Please select at least one episode or movie to download', 'error');
+            showNotification('Please select at least one episode or movie', 'error');
             return;
         }
 
-        // Show loading state
+        // DELETE MODE: handle local file deletion
+        if (selectionMode === 'local') {
+            if (!confirm(`Delete ${selectedEpisodes.size} selected file(s)?`)) return;
+
+            confirmDownload.disabled = true;
+            confirmDownload.textContent = 'Deleting...';
+
+            // Collect local file paths from selected episodes/movies
+            const localPaths = [];
+            selectedEpisodes.forEach(key => {
+                if (key.startsWith('movie-')) {
+                    const movieNum = key.split('-')[1];
+                    const movie = availableMovies.find(m => m.movie == movieNum);
+                    if (movie && movie.local_path) localPaths.push(movie.local_path);
+                } else {
+                    const [s, e] = key.split('-').map(Number);
+                    const ep = availableEpisodes[s]?.find(ep => ep.season === s && ep.episode === e);
+                    if (ep && ep.local_path) localPaths.push(ep.local_path);
+                }
+            });
+
+            const deletions = localPaths.map(path =>
+                fetch('/api/files/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path })
+                }).then(r => r.json())
+            );
+
+            Promise.all(deletions)
+                .then(results => {
+                    const successCount = results.filter(r => r.success).length;
+                    showNotification(`${successCount} file(s) deleted`, 'success');
+                    // Re-open modal to refresh state
+                    const d = currentDownloadData;
+                    hideDownloadModal();
+                    showDownloadModal(d.anime, d.episode, d.url, d.cover, d.folderPath);
+                })
+                .catch(error => {
+                    console.error('Delete error:', error);
+                    showNotification('Failed to delete some files', 'error');
+                })
+                .finally(() => {
+                    confirmDownload.disabled = false;
+                    confirmDownload.textContent = 'Delete Selected';
+                });
+            return;
+        }
+
+        // DOWNLOAD MODE
         confirmDownload.disabled = true;
         confirmDownload.textContent = 'Starting...';
 
@@ -983,14 +1196,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectedEpisodeUrls = [];
         selectedEpisodes.forEach(episodeKey => {
             if (episodeKey.startsWith('movie-')) {
-                // Handle movie
                 const movieNum = episodeKey.split('-')[1];
                 const movieData = availableMovies.find(movie => movie.movie == movieNum);
                 if (movieData) {
                     selectedEpisodeUrls.push(movieData.url);
                 }
             } else {
-                // Handle episode
                 const [season, episode] = episodeKey.split('-').map(Number);
                 const episodeData = availableEpisodes[season]?.find(ep => ep.season === season && ep.episode === episode);
                 if (episodeData) {
@@ -999,55 +1210,25 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // Get selected provider and language from dropdowns
-        const selectedProvider = providerSelect.value || 'VOE';
+        // Get language from flag buttons
+        const selectedLanguage = getSelectedLanguage() || (currentDownloadData.site === 's.to' ? 'German Dub' : 'German Sub');
 
-        // Get language value without fallback first to see what's actually selected
-        const rawLanguageValue = languageSelect.value;
-
-        // Get language from dropdown - use site-appropriate fallback if empty
-        const selectedLanguage = rawLanguageValue || (currentDownloadData.site === 's.to' ? 'German Dub' : 'German Sub');
-
-        // Debug logging
-        console.log('Raw language value:', rawLanguageValue);
-        console.log('Selected language (final):', selectedLanguage);
-        console.log('Selected provider:', selectedProvider);
-        console.log('Site:', currentDownloadData.site);
-
-        // Validate that we have a real selection
-        if (!rawLanguageValue) {
-            console.warn('Warning: No language selected from dropdown, using fallback');
-        }
-
-        // Create request payload and log it
         const requestPayload = {
             episode_urls: selectedEpisodeUrls,
             language: selectedLanguage,
-            provider: selectedProvider,
-            anime_title: currentDownloadData.anime
+            provider: 'auto',
+            anime_title: currentDownloadData.anime,
+            cover: currentDownloadData.cover || ''
         };
 
         fetch('/api/download', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestPayload)
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                const count = selectedEpisodes.size;
-                const maxConcurrent = data.max_concurrent || 3;
-                let message = `Download started for ${count} episode${count !== 1 ? 's' : ''}`;
-                
-                // Add info about parallel downloads if multiple episodes selected
-                if (count > 1 && maxConcurrent > 1) {
-                    const parallelCount = Math.min(count, maxConcurrent);
-                    message += ` (${parallelCount} parallel download${parallelCount !== 1 ? 's' : ''})`;
-                }
-                
-                // showNotification(message, 'success');
                 hideDownloadModal();
                 startQueueTracking();
                 showQueueMiniPopup();
@@ -2395,25 +2576,36 @@ document.head.appendChild(style);
             return;
         }
 
+        const defaultCover = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDIwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+CjxwYXRoIGQ9Ik0xMDAgMTUwTDEyMCAxNzBMMTAwIDE5MFY3MGwyMCAyMEwxMDAgMTEwVjE1MFoiIGZpbGw9IiM2NjYiLz4KPC9zdmc+';
+
         localFilesGrid.innerHTML = '';
         localFilesGrid.style.display = 'grid';
 
-        // Render folders as cards
+        // Render folders as home-anime-card style cards
         if (folders && folders.length > 0) {
             folders.forEach(folder => {
                 const card = document.createElement('div');
-                card.className = 'local-file-card';
+                card.className = 'home-anime-card';
+
+                const coverUrl = folder.cover || defaultCover;
                 card.innerHTML = `
-                    <div class="local-file-card-cover">
-                        <i class="fas fa-folder"></i>
+                    <div class="home-anime-cover">
+                        <img src="${coverUrl}" alt="${escapeHtmlFB(folder.name)}" loading="lazy"
+                             onerror="this.src='${defaultCover}'">
                         <span class="video-count-badge">${folder.video_count} video${folder.video_count !== 1 ? 's' : ''}</span>
                     </div>
-                    <div class="local-file-card-title" title="${escapeHtmlFB(folder.name)}">
+                    <div class="home-anime-title" title="${escapeHtmlFB(folder.name)}">
                         ${escapeHtmlFB(folder.name)}
                     </div>
                 `;
                 card.addEventListener('click', () => {
-                    openFileModal(folder.name, folder.path);
+                    if (folder.series_url) {
+                        const isMovie = folder.series_url.includes('movie4k');
+                        const episodeLabel = isMovie ? 'Movie' : 'Series';
+                        showDownloadModal(folder.name, episodeLabel, folder.series_url, folder.cover, folder.path);
+                    } else {
+                        openFileModal(folder.name, folder.path);
+                    }
                 });
                 localFilesGrid.appendChild(card);
             });
@@ -2422,13 +2614,13 @@ document.head.appendChild(style);
         // Render loose files (root-level videos) as a single card if present
         if (files && files.length > 0) {
             const card = document.createElement('div');
-            card.className = 'local-file-card';
+            card.className = 'home-anime-card';
             card.innerHTML = `
-                <div class="local-file-card-cover">
-                    <i class="fas fa-video"></i>
+                <div class="home-anime-cover">
+                    <img src="${defaultCover}" alt="Unsorted Files" loading="lazy">
                     <span class="video-count-badge">${files.length} video${files.length !== 1 ? 's' : ''}</span>
                 </div>
-                <div class="local-file-card-title" title="Unsorted Files">
+                <div class="home-anime-title" title="Unsorted Files">
                     Unsorted Files
                 </div>
             `;
@@ -3039,6 +3231,9 @@ document.head.appendChild(style);
         div.textContent = text;
         return div.innerHTML;
     }
+
+    // Export streamFile so the download modal (DOMContentLoaded scope) can use it
+    window.streamFile = streamFile;
 })();
 
 // ========================================
