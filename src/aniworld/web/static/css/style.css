@@ -2104,7 +2104,7 @@ body[data-theme="dark"] .episode-progress-text {
 
 /* Download Settings Styles */
 .download-settings {
-    margin: 1.5rem 0;
+    /* margin: 1.5rem 0; */
     padding: 1.5rem 0;
     border-top: 1px solid var(--border-color);
     border-bottom: 1px solid var(--border-color);
@@ -2197,10 +2197,10 @@ body[data-theme="dark"] .episode-progress-text {
     pointer-events: none;
 }
 
-/* Description Section */
+/* Description Section 
 .description-section {
-    margin: 0.75rem 0;
-}
+     margin: 0.75rem 0; 
+}*/
 
 .description-toggle {
     background: none;
