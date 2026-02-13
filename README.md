@@ -9,17 +9,35 @@ Web-based downloader for anime, series and movies from [aniworld.to](https://ani
 - **Multiple providers** - VOE, Vidmoly, Filemoon, Luluvdo, Doodstream, Vidoza, SpeedFiles, Streamtape, LoadX
 - **Language selection** - German Dub, English Sub, German Sub, English Dub
 - **Parallel downloads** - Configurable concurrent download queue
-- **Authentication** - Optional web interface authentication
+- **Plex integration** - Sign in with Plex and sync your watchlist
+- **Chromecast support** - Discover and cast to Chromecast devices on your network
+- **Built-in file browser** - Stream or download files directly from the web UI
+- **Watch progress tracking** - Resume where you left off
+- **Authentication** - Optional web interface authentication with user management
+- **Auto FFmpeg** - Automatically downloads FFmpeg if not found on your system
 
 ## Installation
+
+### Windows (Native App)
+
+Download `Streamer.exe` from the [latest release](https://github.com/phoenixthrush/AniWorld-Downloader/releases) and run it. No installation or Python required -- FFmpeg is bundled in.
+
+### pip (All Platforms)
 
 ```bash
 pip install aniworld
 ```
 
-### Requirements
+Optional Chromecast support:
+
+```bash
+pip install aniworld[chromecast]
+```
+
+### Requirements (pip install)
 
 - Python 3.9+
+- FFmpeg (auto-downloaded if missing)
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) (installed automatically as dependency)
 
 ## Usage
