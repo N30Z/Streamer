@@ -12,6 +12,7 @@ The module provides:
 """
 
 import importlib
+import inspect
 import logging
 import re
 from typing import Dict, List, Optional, Any
@@ -663,10 +664,12 @@ class Movie:
                 func = getattr(module, func_name)
                 kwargs = {f"embeded_{provider.lower()}_link": self.embeded_link}
 
-                # Provide referer (the movie page URL) to providers that need it
-                kwargs["referer"] = self.link
-                arguments = get_arguments()
+                # Only pass referer to providers that accept it
+                sig = inspect.signature(func)
+                if "referer" in sig.parameters:
+                    kwargs["referer"] = self.link
 
+                arguments = get_arguments()
                 if provider == "Luluvdo":
                     kwargs["arguments"] = arguments
 

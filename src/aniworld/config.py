@@ -245,6 +245,8 @@ DEFAULT_ONLY_DIRECT_LINK = False
 DEFAULT_PROVIDER = "VOE"
 # Number of concurrent parallel downloads in web interface
 DEFAULT_MAX_CONCURRENT_DOWNLOADS = 5
+# Seconds to wait per provider when auto-selecting
+DEFAULT_PROVIDER_TIMEOUT = 5
 
 # https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
 INVALID_PATH_CHARS = ("<", ">", ":", '"', "/", "\\", "|", "?", "*", "&")

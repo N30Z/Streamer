@@ -49,6 +49,12 @@
                         </select>
                         <small>Preferred video provider for downloads.</small>
                     </div>
+
+                    <div class="preference-group">
+                        <label for="modal-provider-timeout">Provider Timeout (seconds)</label>
+                        <input type="number" id="modal-provider-timeout" min="1" max="30" value="{{ preferences.provider_timeout }}">
+                        <small>Seconds to wait per provider when auto-selecting (1-30).</small>
+                    </div>
                 </div>
 
                 <!-- Appearance Section -->
@@ -150,6 +156,27 @@
                                 <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">window.localStorage.getItem("myPlexAccessToken")</code>
                             </small>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Debug Log Section -->
+                <div class="settings-section">
+                    <h3><i class="fas fa-terminal"></i> Debug Log</h3>
+                    <div class="preference-group">
+                        <small><i class="fas fa-file-alt"></i> Log file: <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">{{ log_file_path }}</code></small>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <button type="button" class="btn btn-primary" id="modal-log-refresh-btn" style="padding: 0.5rem 1rem;">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                            <button type="button" class="btn" id="modal-log-download-btn" style="padding: 0.5rem 1rem;">
+                                <i class="fas fa-download"></i> Download
+                            </button>
+                        </div>
+                        <textarea id="modal-log-viewer" readonly
+                            style="width: 100%; height: 250px; font-family: 'Courier New', monospace; font-size: 0.75rem;
+                                   background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);
+                                   border-radius: 8px; padding: 0.75rem; resize: vertical; white-space: pre; overflow-x: auto;"
+                            placeholder="Click Refresh to load log..."></textarea>
                     </div>
                 </div>
             </div>
@@ -609,6 +636,7 @@ setTimeout(function() {
             const modalPlexTokenValue = modalPlexTokenInput ? modalPlexTokenInput.value : '';
             const preferences = {
                 max_concurrent_downloads: parseInt(document.getElementById('modal-max-concurrent-downloads').value),
+                provider_timeout: parseInt(document.getElementById('modal-provider-timeout').value),
                 download_directory: document.getElementById('modal-download-directory').value,
                 default_language: document.getElementById('modal-default-language').value,
                 default_provider: document.getElementById('modal-default-provider').value,
@@ -682,5 +710,53 @@ setTimeout(function() {
             }
         });
     }
+
+    // Debug Log functionality
+    const modalLogViewer = document.getElementById('modal-log-viewer');
+    const modalLogRefreshBtn = document.getElementById('modal-log-refresh-btn');
+    const modalLogDownloadBtn = document.getElementById('modal-log-download-btn');
+
+    async function loadModalLog() {
+        if (!modalLogViewer) return;
+        try {
+            const response = await fetch('/api/logs');
+            const data = await response.json();
+            if (data.success) {
+                modalLogViewer.value = data.content || '(empty log)';
+                modalLogViewer.scrollTop = modalLogViewer.scrollHeight;
+            } else {
+                modalLogViewer.value = 'Failed to load log: ' + (data.error || 'Unknown error');
+            }
+        } catch (error) {
+            modalLogViewer.value = 'Failed to load log: ' + error.message;
+        }
+    }
+
+    if (modalLogRefreshBtn) {
+        modalLogRefreshBtn.addEventListener('click', loadModalLog);
+    }
+
+    if (modalLogDownloadBtn) {
+        modalLogDownloadBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/logs');
+                const data = await response.json();
+                if (data.success) {
+                    const blob = new Blob([data.content], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'aniworld.log';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }
+            } catch (error) {
+                if (window.showMessage) window.showMessage('Failed to download log: ' + error.message, 'error');
+            }
+        });
+    }
+
+    // Auto-load log when modal opens
+    loadModalLog();
 }, 100); // Wait 100ms for DOM to be ready
 </script>

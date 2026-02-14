@@ -107,6 +107,11 @@ class WebApp:
                 self.download_manager.max_concurrent_downloads = prefs["max_concurrent_downloads"]
                 logging.info(f"Applied saved max concurrent downloads: {prefs['max_concurrent_downloads']}")
 
+            # Apply provider timeout
+            if prefs.get("provider_timeout"):
+                self.download_manager.provider_timeout = prefs["provider_timeout"]
+                logging.info(f"Applied saved provider timeout: {prefs['provider_timeout']}s")
+
         except Exception as e:
             logging.warning(f"Could not apply saved preferences: {e}")
 
@@ -143,6 +148,7 @@ class WebApp:
             "accent_color": "purple",
             "custom_color": None,
             "animations_enabled": True,
+            "provider_timeout": getattr(config, "DEFAULT_PROVIDER_TIMEOUT", 5),
             "plex_enabled": False,
             "plex_token": None,
         }
@@ -174,6 +180,10 @@ class WebApp:
                 raise ValueError("Parallel downloads must be between 1 and 10")
             data["max_concurrent_downloads"] = val
 
+        if "provider_timeout" in data:
+            val = int(data["provider_timeout"])
+            data["provider_timeout"] = max(1, min(30, val))
+
         if "download_directory" in data:
             download_dir = Path(data["download_directory"])
             # Create directory if it doesn't exist
@@ -196,6 +206,9 @@ class WebApp:
         # Update runtime config if applicable
         if "max_concurrent_downloads" in data:
             self.download_manager.max_concurrent_downloads = data["max_concurrent_downloads"]
+
+        if "provider_timeout" in data:
+            self.download_manager.provider_timeout = data["provider_timeout"]
 
         # Update download directory in runtime arguments
         if "download_directory" in data:
@@ -748,7 +761,8 @@ class WebApp:
                 auth_enabled=self.auth_enabled,
                 user=user,
                 preferences=preferences_data,
-                providers=providers
+                providers=providers,
+                log_file_path=config.log_file_path
             )
 
         @self.app.route("/api/preferences/modal")
@@ -766,7 +780,8 @@ class WebApp:
             return render_template(
                 "preferences_modal.html",
                 preferences=preferences_data,
-                providers=providers
+                providers=providers,
+                log_file_path=config.log_file_path
             )
 
         @self.app.route("/api/preferences", methods=["GET"])
@@ -802,6 +817,27 @@ class WebApp:
                 return jsonify({"success": True, "message": "Preferences reset to defaults"})
             except Exception as e:
                 logging.error(f"Error resetting preferences: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/logs")
+        @self._require_api_auth
+        def api_logs():
+            """Get application log content (last 200 lines)."""
+            try:
+                log_path = config.log_file_path
+                if not os.path.exists(log_path):
+                    return jsonify({"success": True, "content": "(log file not found)", "path": log_path})
+
+                with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                    lines = f.readlines()
+
+                # Return last 200 lines
+                tail_lines = lines[-200:] if len(lines) > 200 else lines
+                content = "".join(tail_lines)
+
+                return jsonify({"success": True, "content": content, "path": log_path})
+            except Exception as e:
+                logging.error("Error reading log file: %s", e)
                 return jsonify({"success": False, "error": str(e)}), 500
 
         @self.app.route("/api/plex/auth/pin", methods=["POST"])

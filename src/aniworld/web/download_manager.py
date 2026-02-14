@@ -28,6 +28,7 @@ class DownloadQueueManager:
         
         # Parallel download configuration
         self.max_concurrent_downloads = max_concurrent_downloads
+        self.provider_timeout: int = 5
         self.thread_pool = None
         self.active_workers = set()  # Track active worker jobs
 
@@ -549,18 +550,21 @@ class DownloadQueueManager:
             )
 
 
-    def _resolve_provider_with_timeout(self, episode, language, queue_id, timeout_sec=5):
+    def _resolve_provider_with_timeout(self, episode, language, queue_id, timeout_sec=None):
         """Try each supported provider with a timeout to find one that works.
 
         Args:
             episode: Episode object to resolve direct link for
             language: Language string
             queue_id: Queue ID for status updates
-            timeout_sec: Seconds to wait per provider attempt
+            timeout_sec: Seconds to wait per provider attempt (defaults to self.provider_timeout)
 
         Returns:
             Provider name that worked, or None if all failed
         """
+        if timeout_sec is None:
+            timeout_sec = self.provider_timeout
+
         from ..config import SUPPORTED_PROVIDERS
 
         result_container = {}
