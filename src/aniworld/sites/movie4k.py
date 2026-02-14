@@ -612,60 +612,84 @@ class Movie:
         Get the direct streaming link for the movie.
 
         Compatible with Episode.get_direct_link() interface.
+        Tries the selected provider first, then falls back to other
+        available providers if extraction fails (e.g. 404).
         """
-        try:
-            if not self.embeded_link:
-                if not self.get_stream_url():
-                    logging.error("Failed to get stream URL for '%s'", self.title)
-                    return None
+        available = self.providers
 
-            provider = self._selected_provider
+        # Build ordered list: selected provider first, then remaining available
+        provider_order = []
+        if self._selected_provider and self._selected_provider in available:
+            provider_order.append(self._selected_provider)
+        for prov in SUPPORTED_PROVIDERS:
+            if prov in available and prov not in provider_order:
+                provider_order.append(prov)
 
-            if provider not in SUPPORTED_PROVIDERS:
-                raise ValueError(
-                    f"Provider '{provider}' is not supported. "
-                    f"Supported: {SUPPORTED_PROVIDERS}"
-                )
+        if not provider_order:
+            logging.error("No supported providers available for '%s'", self.title)
+            return None
 
-            module = importlib.import_module(".extractors", "aniworld")
-            func_name = f"get_direct_link_from_{provider.lower()}"
-
-            if not hasattr(module, func_name):
-                raise ValueError(f"Extractor function '{func_name}' not found")
-
-            func = getattr(module, func_name)
-            kwargs = {f"embeded_{provider.lower()}_link": self.embeded_link}
-
-            # Movie4k-specific: resolve redirects (if any) and normalize provider URL
+        last_error = None
+        for provider in provider_order:
             try:
-                resolved = self._resolve_stream_url_for_movie(self.embeded_link, referer=self.link)
-                if resolved and resolved != self.embeded_link:
-                    resolved_provider = _extract_provider_from_url(resolved)
-                    if resolved_provider and resolved_provider in SUPPORTED_PROVIDERS:
-                        provider = resolved_provider
-                        self._selected_provider = provider
-                        self.embeded_link = resolved
-                        kwargs = {f"embeded_{provider.lower()}_link": self.embeded_link}
-            except Exception:
-                pass
+                urls = available.get(provider, [])
+                if not urls:
+                    continue
 
-            # Provide referer (the movie page URL) to providers that need it
-            kwargs["referer"] = self.link
-            arguments = get_arguments()
+                self.embeded_link = urls[0]
+                self._selected_provider = provider
 
-            if provider == "Luluvdo":
-                kwargs["arguments"] = arguments
+                # Movie4k-specific: resolve redirects (if any) and normalize provider URL
+                try:
+                    resolved = self._resolve_stream_url_for_movie(
+                        self.embeded_link, referer=self.link
+                    )
+                    if resolved and resolved != self.embeded_link:
+                        resolved_provider = _extract_provider_from_url(resolved)
+                        if resolved_provider and resolved_provider in SUPPORTED_PROVIDERS:
+                            provider = resolved_provider
+                            self._selected_provider = provider
+                            self.embeded_link = resolved
+                except Exception:
+                    pass
 
-            self.direct_link = func(**kwargs)
+                module = importlib.import_module(".extractors", "aniworld")
+                func_name = f"get_direct_link_from_{provider.lower()}"
 
-            if not self.direct_link:
-                raise ValueError(f"Provider '{provider}' returned empty direct link")
+                if not hasattr(module, func_name):
+                    logging.warning("No extractor for '%s', skipping", provider)
+                    continue
 
-            return self.direct_link
+                func = getattr(module, func_name)
+                kwargs = {f"embeded_{provider.lower()}_link": self.embeded_link}
 
-        except Exception as err:
-            logging.error("Error getting direct link: %s", err)
-            raise
+                # Provide referer (the movie page URL) to providers that need it
+                kwargs["referer"] = self.link
+                arguments = get_arguments()
+
+                if provider == "Luluvdo":
+                    kwargs["arguments"] = arguments
+
+                self.direct_link = func(**kwargs)
+
+                if not self.direct_link:
+                    raise ValueError(f"Provider '{provider}' returned empty direct link")
+
+                return self.direct_link
+
+            except Exception as err:
+                logging.warning(
+                    "Provider '%s' failed for '%s': %s", provider, self.title, err
+                )
+                last_error = err
+                self.direct_link = None
+                self.embeded_link = None
+                continue
+
+        logging.error("All providers failed for '%s'", self.title)
+        if last_error:
+            raise last_error
+        return None
 
     def __str__(self) -> str:
         return f"Movie(title='{self.title}', year={self.year})"

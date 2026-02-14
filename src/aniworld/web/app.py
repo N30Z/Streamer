@@ -1770,7 +1770,8 @@ class WebApp:
                         "site": meta_site,
                         "cover": data.get("cover", ""),
                     }
-                    meta_path = Path(download_path) / anime_title / ".series_meta.json"
+                    from ..action.common import sanitize_filename
+                    meta_path = Path(download_path) / sanitize_filename(anime_title) / ".series_meta.json"
                     meta_path.parent.mkdir(parents=True, exist_ok=True)
                     meta_path.write_text(json_mod.dumps(meta, ensure_ascii=False), encoding="utf-8")
                 except Exception as meta_err:
