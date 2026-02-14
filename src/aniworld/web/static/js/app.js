@@ -491,6 +491,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const coverContainer = document.getElementById('download-cover');
         const coverImg = document.getElementById('download-cover-img');
         if (coverUrl && coverContainer && coverImg) {
+            // Normalize relative remote URLs to absolute
+            if (coverUrl && !coverUrl.startsWith('http') && !coverUrl.startsWith('/api/')) {
+                if (coverUrl.startsWith('//')) {
+                    coverUrl = 'https:' + coverUrl;
+                } else if (coverUrl.startsWith('/')) {
+                    let baseUrl = 'https://aniworld.to';
+                    if (detectedSite === 's.to') baseUrl = 'https://s.to';
+                    else if (detectedSite === 'movie4k.sx') baseUrl = 'https://movie4k.sx';
+                    coverUrl = baseUrl + coverUrl;
+                }
+            }
             coverImg.src = coverUrl;
             coverContainer.style.display = 'block';
         } else if (coverContainer) {
@@ -2587,7 +2598,7 @@ document.head.appendChild(style);
                 const card = document.createElement('div');
                 card.className = 'home-anime-card';
 
-                const coverUrl = folder.cover || defaultCover;
+                const coverUrl = folder.local_cover || folder.cover || defaultCover;
                 card.innerHTML = `
                     <div class="home-anime-cover">
                         <img src="${coverUrl}" alt="${escapeHtmlFB(folder.name)}" loading="lazy"
@@ -2602,7 +2613,7 @@ document.head.appendChild(style);
                     if (folder.series_url) {
                         const isMovie = folder.series_url.includes('movie4k');
                         const episodeLabel = isMovie ? 'Movie' : 'Series';
-                        showDownloadModal(folder.name, episodeLabel, folder.series_url, folder.cover, folder.path);
+                        showDownloadModal(folder.name, episodeLabel, folder.series_url, folder.local_cover || folder.cover, folder.path);
                     } else {
                         openFileModal(folder.name, folder.path);
                     }

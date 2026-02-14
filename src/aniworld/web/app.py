@@ -1774,6 +1774,11 @@ class WebApp:
                     meta_path = Path(download_path) / sanitize_filename(anime_title) / ".series_meta.json"
                     meta_path.parent.mkdir(parents=True, exist_ok=True)
                     meta_path.write_text(json_mod.dumps(meta, ensure_ascii=False), encoding="utf-8")
+
+                    # Download and save cover image locally
+                    cover_url = data.get("cover", "")
+                    if cover_url:
+                        self._download_cover_image(cover_url, meta_site, meta_path.parent)
                 except Exception as meta_err:
                     logging.warning("Failed to save series metadata: %s", meta_err)
 
@@ -2340,12 +2345,20 @@ class WebApp:
                                         folder_meta = json_mod.loads(meta_file.read_text(encoding="utf-8"))
                                     except Exception:
                                         pass
+                                # Check for local cover image
+                                local_cover = ""
+                                for ext in (".jpg", ".png", ".webp"):
+                                    if (item / f"cover{ext}").exists():
+                                        local_cover = f"/api/files/cover?path={relative_path}"
+                                        break
+
                                 folders.append({
                                     "name": item.name,
                                     "path": str(relative_path),
                                     "type": "folder",
                                     "video_count": video_count,
                                     "cover": folder_meta.get("cover", ""),
+                                    "local_cover": local_cover,
                                     "series_url": folder_meta.get("url", ""),
                                     "site": folder_meta.get("site", ""),
                                 })
@@ -2395,6 +2408,42 @@ class WebApp:
                     "success": False,
                     "error": f"Failed to list files: {str(e)}"
                 }), 500
+
+        @self.app.route("/api/files/cover")
+        @self._require_api_auth
+        def api_serve_cover():
+            """Serve a locally saved cover image from a series folder."""
+            try:
+                folder_path = request.args.get("path", "").strip()
+                if not folder_path:
+                    return jsonify({"error": "Path required"}), 400
+
+                download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+                if (
+                    self.arguments
+                    and hasattr(self.arguments, "output_dir")
+                    and self.arguments.output_dir is not None
+                ):
+                    download_path = str(self.arguments.output_dir)
+
+                download_dir = Path(download_path)
+                cover_dir = download_dir / folder_path
+
+                # Security check
+                try:
+                    cover_dir.resolve().relative_to(download_dir.resolve())
+                except ValueError:
+                    return jsonify({"error": "Invalid path"}), 403
+
+                for ext in (".jpg", ".png", ".webp"):
+                    cover_file = cover_dir / f"cover{ext}"
+                    if cover_file.exists():
+                        return send_file(str(cover_file.resolve()))
+
+                return jsonify({"error": "Cover not found"}), 404
+            except Exception as e:
+                logging.warning("Failed to serve cover: %s", e)
+                return jsonify({"error": str(e)}), 500
 
         @self.app.route("/api/watch-progress", methods=["GET"])
         @self._require_api_auth
@@ -3037,6 +3086,50 @@ class WebApp:
                     "success": False,
                     "error": f"Failed to get status: {str(e)}"
                 })
+
+    @staticmethod
+    def _download_cover_image(cover_url: str, site: str, dest_dir: Path) -> None:
+        """Download a cover image and save it to the series folder.
+
+        Args:
+            cover_url: The cover image URL (may be relative for aniworld/s.to).
+            site: The site identifier (e.g. 'aniworld.to', 's.to', 'movie4k.sx').
+            dest_dir: The series directory to save cover.jpg into.
+        """
+        import requests as req_lib
+
+        # Normalize relative URLs to absolute
+        if not cover_url.startswith("http"):
+            if cover_url.startswith("//"):
+                cover_url = "https:" + cover_url
+            else:
+                base_urls = {
+                    "aniworld.to": config.ANIWORLD_TO,
+                    "s.to": config.S_TO,
+                    "movie4k.sx": config.MOVIE4K_SX,
+                }
+                base = base_urls.get(site, config.ANIWORLD_TO)
+                cover_url = base.rstrip("/") + "/" + cover_url.lstrip("/")
+
+        try:
+            resp = req_lib.get(
+                cover_url,
+                timeout=config.DEFAULT_REQUEST_TIMEOUT,
+                headers={"User-Agent": config.RANDOM_USER_AGENT},
+            )
+            if resp.ok and resp.content:
+                content_type = resp.headers.get("Content-Type", "")
+                if "png" in content_type:
+                    ext = ".png"
+                elif "webp" in content_type:
+                    ext = ".webp"
+                else:
+                    ext = ".jpg"
+                cover_file = dest_dir / f"cover{ext}"
+                cover_file.write_bytes(resp.content)
+                logging.debug("Saved cover image to %s", cover_file)
+        except Exception as e:
+            logging.warning("Failed to download cover image: %s", e)
 
     def _count_video_files_recursive(self, directory: Path, video_extensions: set) -> int:
         """
