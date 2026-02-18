@@ -42,6 +42,9 @@ class WebApp:
         self.auth_enabled = (
             getattr(arguments, "enable_web_auth", False) if arguments else False
         )
+        self.mobile = (
+            getattr(arguments, "mobile", False) if arguments else False
+        )
         self.db = UserDatabase() if self.auth_enabled else None
 
         # Download manager with configurable concurrent downloads
@@ -604,6 +607,8 @@ class WebApp:
                 preferences_data["plex_token"] = True
             providers = list(config.SUPPORTED_PROVIDERS)
 
+            template = "mobile.html" if self.mobile else "index.html"
+
             if self.auth_enabled and self.db:
                 # Check if this is first-time setup
                 if not self.db.has_users():
@@ -612,9 +617,9 @@ class WebApp:
                 # Get current user info for template
                 session_token = request.cookies.get("session_token")
                 user = self.db.get_user_by_session(session_token)
-                return render_template("index.html", user=user, auth_enabled=True, preferences=preferences_data, providers=providers)
+                return render_template(template, user=user, auth_enabled=True, preferences=preferences_data, providers=providers)
             else:
-                return render_template("index.html", auth_enabled=False, preferences=preferences_data, providers=providers)
+                return render_template(template, auth_enabled=False, preferences=preferences_data, providers=providers)
 
         @self.app.route("/login", methods=["GET", "POST"])
         def login():
