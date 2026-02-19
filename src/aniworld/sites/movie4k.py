@@ -630,7 +630,6 @@ class Movie:
             logging.error("No supported providers available for '%s'", self.title)
             return None
 
-        last_error = None
         for provider in provider_order:
             try:
                 urls = available.get(provider, [])
@@ -684,15 +683,12 @@ class Movie:
                 logging.warning(
                     "Provider '%s' failed for '%s': %s", provider, self.title, err
                 )
-                last_error = err
                 self.direct_link = None
                 self.embeded_link = None
                 continue
 
         logging.error("All providers failed for '%s'", self.title)
-        if last_error:
-            raise last_error
-        return None
+        raise ValueError("No possible Provider found.")
 
     def __str__(self) -> str:
         return f"Movie(title='{self.title}', year={self.year})"
