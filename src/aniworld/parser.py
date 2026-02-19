@@ -159,6 +159,11 @@ def _add_web_ui_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Enable live reload (auto browser refresh) when running the web UI. Requires 'livereload' package and is only active when specified.",
     )
+    web_opts.add_argument(
+        "--mobile",
+        action="store_true",
+        help="Serve a mobile-optimized web interface instead of the default desktop layout.",
+    )
 
 
 def _add_miscellaneous_arguments(parser: argparse.ArgumentParser) -> None:
