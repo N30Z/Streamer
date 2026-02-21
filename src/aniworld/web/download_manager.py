@@ -1,5 +1,5 @@
 """
-Download Queue Manager for AniWorld Downloader
+Download Queue Manager for AnyLoader
 Handles global download queue processing and status tracking
 Supports parallel downloads with configurable concurrent worker threads
 """

@@ -1,18 +1,20 @@
-# AniWorld Downloader
+# AnyLoader
 
 Web-based downloader for anime, series and movies from [aniworld.to](https://aniworld.to), [s.to](https://s.to) and [movie4k.sx](https://movie4k.sx).
 
 ## Features
 
 - **Web UI** - Flask-based web interface for browsing, searching and downloading
-- **Multi-site support** - aniworld.to, s.to and movie4k.sx
+- **Multi-site support** - Anime (aniworld.to), Serien (s.to) and Movies (movie4k.sx)
 - **Multiple providers** - VOE, Vidmoly, Filemoon, Luluvdo, Doodstream, Vidoza, SpeedFiles, Streamtape, LoadX
 - **Language selection** - German Dub, English Sub, German Sub, English Dub
 - **Parallel downloads** - Configurable concurrent download queue
+- **Subscriptions** - Subscribe to series/anime; get notified or auto-download new episodes
+- **Continue Watching** - Home page shows in-progress content; resume from where you left off
+- **Watch progress tracking** - Progress bars in file browser and download modal; resume any episode
 - **Plex integration** - Sign in with Plex and sync your watchlist
 - **Chromecast support** - Discover and cast to Chromecast devices on your network
 - **Built-in file browser** - Stream or download files directly from the web UI
-- **Watch progress tracking** - Resume where you left off
 - **Authentication** - Optional web interface authentication with user management
 - **Auto FFmpeg** - Automatically downloads FFmpeg if not found on your system
 
@@ -20,7 +22,7 @@ Web-based downloader for anime, series and movies from [aniworld.to](https://ani
 
 ### Windows (Native App)
 
-Download `Streamer.exe` from the [latest release]((https://github.com/N30Z/Streamer/releases)) and run it. No installation or Python required -- FFmpeg is bundled in.
+Download `Streamer.exe` from the [latest release](https://github.com/N30Z/Streamer/releases) and run it. No installation or Python required -- FFmpeg is bundled in.
 
 ### pip (All Platforms)
 
@@ -88,6 +90,15 @@ aniworld -f episodes.txt -o /path/to/downloads
 | `-C`, `--only-command` | Output command only |
 | `-d`, `--debug` | Enable debug logging |
 | `-v`, `--version` | Show version |
+
+## Subscriptions
+
+Open any series in the download modal and click the **Subscribe** button (⭐) to subscribe. You can configure:
+
+- **Notify** — show a browser notification when new episodes are available
+- **Auto-download** — automatically queue new episodes for download
+
+Subscribed series appear in the **Subscriptions panel** (⭐ star icon in the navbar). AnyLoader checks for new episodes every hour in the background. You can also trigger a manual check from the subscriptions panel refresh button.
 
 ## License
 

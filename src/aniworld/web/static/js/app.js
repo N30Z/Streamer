@@ -1,7 +1,7 @@
-// AniWorld Downloader Web Interface JavaScript
+// AnyLoader Web Interface JavaScript
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('AniWorld Downloader Web Interface loaded');
+    console.log('AnyLoader Web Interface loaded');
 
     // Get UI elements
     // const versionDisplay = document.getElementById('version-display');
@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let progressInterval = null;
     let selectionMode = null; // 'local' | 'online' | null
     let currentDescription = '';
+    let modalWatchProgress = {}; // watch progress for episodes in download modal
 
     // Description section elements
     const descriptionSection = document.getElementById('description-section');
@@ -122,6 +123,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Load popular and new anime on page load
     loadPopularAndNewAnime();
+
+    // Load "Continue Watching" section
+    loadContinueWatching();
 
     // Initialize theme (default is dark mode)
     initializeTheme();
@@ -553,14 +557,17 @@ document.addEventListener('DOMContentLoaded', function() {
             reqBody.folder_path = folderPath;
         }
 
-        // Fetch episodes for this series
-        fetch('/api/episodes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(reqBody)
-        })
-        .then(response => response.json())
-        .then(data => {
+        // Fetch episodes and watch progress in parallel
+        Promise.all([
+            fetch('/api/episodes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(reqBody)
+            }).then(r => r.json()),
+            fetch('/api/watch-progress').then(r => r.json()).catch(() => ({ success: false }))
+        ])
+        .then(([data, progressData]) => {
+            modalWatchProgress = progressData.success ? (progressData.progress || {}) : {};
             if (data.success) {
                 availableEpisodes = data.episodes;
                 availableMovies = data.movies || [];
@@ -627,6 +634,163 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         downloadModal.style.display = 'flex';
+
+        // Show subscribe button for series (not for single movies), and check subscription status
+        const subscribeBtn = document.getElementById('subscribe-btn');
+        const subscriptionOptions = document.getElementById('subscription-options');
+        const isMovie = currentDownloadData.site === 'movie4k.sx';
+
+        if (subscribeBtn && !isMovie) {
+            subscribeBtn.style.display = 'inline-flex';
+            subscribeBtn.classList.remove('is-subscribed');
+            subscribeBtn.innerHTML = '<i class="fas fa-star"></i> Subscribe';
+            if (subscriptionOptions) subscriptionOptions.style.display = 'none';
+
+            // Check if already subscribed
+            fetch('/api/subscriptions/check-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ series_url: episodeUrl })
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success && d.subscribed && d.subscription) {
+                    subscribeBtn.classList.add('is-subscribed');
+                    subscribeBtn.innerHTML = '<i class="fas fa-star"></i> Subscribed';
+                    // Pre-fill options from existing sub
+                    const notifyCheck = document.getElementById('sub-opt-notify');
+                    const autoCheck = document.getElementById('sub-opt-auto-download');
+                    if (notifyCheck) notifyCheck.checked = d.subscription.notify;
+                    if (autoCheck) autoCheck.checked = d.subscription.auto_download;
+                }
+            })
+            .catch(() => {});
+        } else if (subscribeBtn) {
+            subscribeBtn.style.display = 'none';
+            if (subscriptionOptions) subscriptionOptions.style.display = 'none';
+        }
+    }
+
+    // Subscribe button toggle logic
+    const subscribeBtn = document.getElementById('subscribe-btn');
+    const subOptNotify = document.getElementById('sub-opt-notify');
+    const subOptAutoDownload = document.getElementById('sub-opt-auto-download');
+    const subConfirmBtn = document.getElementById('sub-confirm-btn');
+    const subUnsubscribeBtn = document.getElementById('sub-unsubscribe-btn');
+    const subCancelBtn = document.getElementById('sub-cancel-btn');
+    const subscriptionOptionsPanel = document.getElementById('subscription-options');
+
+    if (subscribeBtn) {
+        subscribeBtn.addEventListener('click', () => {
+            if (!subscriptionOptionsPanel) return;
+            const isVisible = subscriptionOptionsPanel.style.display !== 'none';
+            subscriptionOptionsPanel.style.display = isVisible ? 'none' : 'block';
+            // Show/hide unsubscribe button based on subscription status
+            if (subUnsubscribeBtn) {
+                subUnsubscribeBtn.style.display = subscribeBtn.classList.contains('is-subscribed') ? 'inline-flex' : 'none';
+            }
+        });
+    }
+
+    if (subCancelBtn) {
+        subCancelBtn.addEventListener('click', () => {
+            if (subscriptionOptionsPanel) subscriptionOptionsPanel.style.display = 'none';
+        });
+    }
+
+    if (subConfirmBtn) {
+        subConfirmBtn.addEventListener('click', () => {
+            if (!currentDownloadData) return;
+            const notify = subOptNotify ? subOptNotify.checked : true;
+            const autoDownload = subOptAutoDownload ? subOptAutoDownload.checked : false;
+            const isCurrentlySubscribed = subscribeBtn && subscribeBtn.classList.contains('is-subscribed');
+
+            if (isCurrentlySubscribed) {
+                // Update existing subscription
+                fetch('/api/subscriptions/check-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ series_url: currentDownloadData.url })
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success && d.subscription) {
+                        return fetch(`/api/subscriptions/${d.subscription.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ notify, auto_download: autoDownload })
+                        });
+                    }
+                })
+                .then(r => r ? r.json() : null)
+                .then(d => {
+                    if (d && d.success) {
+                        showNotification('Subscription updated', 'success');
+                        if (subscriptionOptionsPanel) subscriptionOptionsPanel.style.display = 'none';
+                    }
+                })
+                .catch(() => showNotification('Failed to update subscription', 'error'));
+            } else {
+                // New subscription
+                const coverUrl = currentDownloadData.cover || '';
+                fetch('/api/subscriptions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        series_url: currentDownloadData.url,
+                        title: currentDownloadData.anime,
+                        cover: coverUrl,
+                        site: currentDownloadData.site,
+                        language: getSelectedLanguage() || currentDownloadData.language || '',
+                        notify,
+                        auto_download: autoDownload
+                    })
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) {
+                        showNotification(`Subscribed to ${currentDownloadData.anime}`, 'success');
+                        if (subscribeBtn) {
+                            subscribeBtn.classList.add('is-subscribed');
+                            subscribeBtn.innerHTML = '<i class="fas fa-star"></i> Subscribed';
+                        }
+                        if (subscriptionOptionsPanel) subscriptionOptionsPanel.style.display = 'none';
+                    } else {
+                        showNotification(d.error || 'Failed to subscribe', 'error');
+                    }
+                })
+                .catch(() => showNotification('Failed to subscribe', 'error'));
+            }
+        });
+    }
+
+    if (subUnsubscribeBtn) {
+        subUnsubscribeBtn.addEventListener('click', () => {
+            if (!currentDownloadData) return;
+            fetch('/api/subscriptions/check-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ series_url: currentDownloadData.url })
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success && d.subscription) {
+                    return fetch(`/api/subscriptions/${d.subscription.id}`, { method: 'DELETE' });
+                }
+            })
+            .then(r => r ? r.json() : null)
+            .then(d => {
+                if (d && d.success) {
+                    showNotification('Unsubscribed', 'success');
+                    if (subscribeBtn) {
+                        subscribeBtn.classList.remove('is-subscribed');
+                        subscribeBtn.innerHTML = '<i class="fas fa-star"></i> Subscribe';
+                    }
+                    if (subscriptionOptionsPanel) subscriptionOptionsPanel.style.display = 'none';
+                }
+            })
+            .catch(() => showNotification('Failed to unsubscribe', 'error'));
+        });
     }
 
     function hideDownloadModal() {
@@ -637,6 +801,8 @@ document.addEventListener('DOMContentLoaded', function() {
         availableEpisodes = {};
         availableMovies = [];
         currentDescription = '';
+        // Reset subscription options
+        if (subscriptionOptionsPanel) subscriptionOptionsPanel.style.display = 'none';
     }
 
     function renderEpisodeTree() {
@@ -733,11 +899,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 const tr = document.createElement('tr');
                 tr.className = 'episode-row' + (isLocal ? ' local-episode' : '');
 
+                // Watch progress for this episode (by local_path)
+                const epProgress = (isLocal && episode.local_path) ? (modalWatchProgress[episode.local_path] || null) : null;
+                const epPct = epProgress ? (epProgress.percentage || 0) : 0;
+
                 let localBadge = '';
                 let playBtn = '';
+                let progressHtml = '';
                 if (isLocal) {
                     localBadge = ' <span class="episode-local-badge"><i class="fas fa-check-circle"></i></span>';
-                    playBtn = `<button class="episode-play-btn" title="Play"><i class="fas fa-play"></i></button>`;
+                    if (epPct > 95) {
+                        playBtn = `<button class="episode-play-btn" title="Watched - Play again"><i class="fas fa-play"></i></button>`;
+                        progressHtml = `<span class="ep-watched-badge" title="Watched"><i class="fas fa-check"></i></span>`;
+                    } else if (epPct > 5) {
+                        playBtn = `<button class="episode-play-btn episode-resume-btn" title="Resume from ${Math.round(epPct)}%"><i class="fas fa-redo"></i></button>`;
+                        progressHtml = `<span class="ep-progress-inline" title="${Math.round(epPct)}% watched">
+                            <span class="ep-progress-bar"><span class="ep-progress-fill" style="width:${Math.round(epPct)}%"></span></span>
+                        </span>`;
+                    } else {
+                        playBtn = `<button class="episode-play-btn" title="Play"><i class="fas fa-play"></i></button>`;
+                    }
                 }
 
                 tr.innerHTML = `
@@ -745,7 +926,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <input type="checkbox" class="episode-checkbox" id="episode-${episodeId}" data-local="${isLocal}" ${selectedEpisodes.has(episodeId) ? 'checked' : ''}>
                     </td>
                     <td class="episode-number-cell">${episode.episode}</td>
-                    <td class="episode-title-cell">${escapeHtml(episode.title)}${localBadge}</td>
+                    <td class="episode-title-cell">${escapeHtml(episode.title)}${localBadge}${progressHtml}</td>
                     <td>${playBtn}</td>
                 `;
 
@@ -769,12 +950,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     updateCheckboxDimming();
                 });
 
-                // Play button for local episodes
+                // Play/resume button for local episodes
                 const playButton = tr.querySelector('.episode-play-btn');
                 if (playButton && isLocal && episode.local_path) {
                     playButton.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        window.streamFile({ path: episode.local_path, name: episode.title });
+                        // Resume from saved position if in-progress, else from start
+                        const startTime = (epPct > 5 && epPct < 95 && epProgress) ? epProgress.current_time : 0;
+                        window.streamFile({ path: episode.local_path, name: episode.title }, startTime);
                     });
                 }
 
@@ -828,11 +1011,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 const tr = document.createElement('tr');
                 tr.className = 'episode-row' + (isLocal ? ' local-episode' : '');
 
+                // Watch progress for this movie
+                const mvProgress = (isLocal && movie.local_path) ? (modalWatchProgress[movie.local_path] || null) : null;
+                const mvPct = mvProgress ? (mvProgress.percentage || 0) : 0;
+
                 let localBadge = '';
                 let playBtn = '';
+                let progressHtml = '';
                 if (isLocal) {
                     localBadge = ' <span class="episode-local-badge"><i class="fas fa-check-circle"></i></span>';
-                    playBtn = `<button class="episode-play-btn" title="Play"><i class="fas fa-play"></i></button>`;
+                    if (mvPct > 95) {
+                        playBtn = `<button class="episode-play-btn" title="Watched - Play again"><i class="fas fa-play"></i></button>`;
+                    } else if (mvPct > 5) {
+                        playBtn = `<button class="episode-play-btn episode-resume-btn" title="Resume from ${Math.round(mvPct)}%"><i class="fas fa-redo"></i></button>`;
+                        progressHtml = `<span class="ep-progress-inline" title="${Math.round(mvPct)}% watched">
+                            <span class="ep-progress-bar"><span class="ep-progress-fill" style="width:${Math.round(mvPct)}%"></span></span>
+                        </span>`;
+                    } else {
+                        playBtn = `<button class="episode-play-btn" title="Play"><i class="fas fa-play"></i></button>`;
+                    }
                 }
 
                 tr.innerHTML = `
@@ -840,7 +1037,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <input type="checkbox" class="episode-checkbox" id="movie-${movieId}" data-local="${isLocal}" ${selectedEpisodes.has(movieId) ? 'checked' : ''}>
                     </td>
                     <td class="episode-number-cell">${index + 1}</td>
-                    <td class="episode-title-cell">${escapeHtml(movie.title)}${localBadge}</td>
+                    <td class="episode-title-cell">${escapeHtml(movie.title)}${localBadge}${progressHtml}</td>
                     <td>${playBtn}</td>
                 `;
 
@@ -864,12 +1061,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     updateCheckboxDimming();
                 });
 
-                // Play button for local movies
+                // Play/resume button for local movies
                 const playButton = tr.querySelector('.episode-play-btn');
                 if (playButton && isLocal && movie.local_path) {
                     playButton.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        window.streamFile({ path: movie.local_path, name: movie.title });
+                        const startTime = (mvPct > 5 && mvPct < 95 && mvProgress) ? mvProgress.current_time : 0;
+                        window.streamFile({ path: movie.local_path, name: movie.title }, startTime);
                     });
                 }
 
@@ -1257,9 +1455,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const subscriptionsPanel = document.getElementById('subscriptions-panel');
+
     function showLoadingState() {
         homeContent.style.display = 'none';
         localFiles.style.display = 'none';
+        if (subscriptionsPanel) subscriptionsPanel.style.display = 'none';
         emptyState.style.display = 'none';
         resultsSection.style.display = 'none';
         loadingSection.style.display = 'block';
@@ -1272,6 +1473,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function showResultsSection() {
         homeContent.style.display = 'none';
         localFiles.style.display = 'none';
+        if (subscriptionsPanel) subscriptionsPanel.style.display = 'none';
         emptyState.style.display = 'none';
         loadingSection.style.display = 'none';
         resultsSection.style.display = 'block';
@@ -1280,6 +1482,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function showEmptyState() {
         homeContent.style.display = 'none';
         localFiles.style.display = 'none';
+        if (subscriptionsPanel) subscriptionsPanel.style.display = 'none';
         resultsSection.style.display = 'none';
         loadingSection.style.display = 'none';
         emptyState.style.display = 'block';
@@ -1288,25 +1491,35 @@ document.addEventListener('DOMContentLoaded', function() {
     function showHomeContent() {
         resultsSection.style.display = 'none';
         localFiles.style.display = 'none';
+        if (subscriptionsPanel) subscriptionsPanel.style.display = 'none';
         loadingSection.style.display = 'none';
         emptyState.style.display = 'none';
         homeContent.style.display = 'block';
     }
 
     function toggleFolderIcon() {
-    const icon = document.querySelector('#file-browser-btn i');
-    if (!icon) return;
-
-    icon.classList.toggle('fa-folder');
-    icon.classList.toggle('fa-folder-open');
-}
+        const icon = document.querySelector('#file-browser-btn i');
+        if (!icon) return;
+        icon.classList.toggle('fa-folder');
+        icon.classList.toggle('fa-folder-open');
+    }
 
     function showLocalFiles() {
         homeContent.style.display = 'none';
         resultsSection.style.display = 'none';
         loadingSection.style.display = 'none';
         emptyState.style.display = 'none';
+        if (subscriptionsPanel) subscriptionsPanel.style.display = 'none';
         localFiles.style.display = 'block';
+    }
+
+    function showSubscriptionsPanel() {
+        homeContent.style.display = 'none';
+        resultsSection.style.display = 'none';
+        loadingSection.style.display = 'none';
+        emptyState.style.display = 'none';
+        localFiles.style.display = 'none';
+        if (subscriptionsPanel) subscriptionsPanel.style.display = 'block';
     }
 
     function escapeHtml(text) {
@@ -2000,6 +2213,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.showLocalFiles = showLocalFiles;
     window.showHomeContent = showHomeContent;
     window.toggleFolderIcon = toggleFolderIcon;
+    window.showSubscriptionsPanel = showSubscriptionsPanel;
 
     // ===== Plex Watchlist Integration =====
     const plexBtn = document.getElementById('plex-btn');
@@ -2454,6 +2668,45 @@ document.head.appendChild(style);
     let castStartTime = 0;
     let lastSavedCastTime = 0;
     let localshown = false;
+    let subshown = false;
+
+    // ---- Subscriptions Button ----
+    const subscriptionsBtn = document.getElementById('subscriptions-btn');
+    const subscriptionsBackBtn = document.getElementById('subscriptions-back-btn');
+    const subscriptionsRefreshBtn = document.getElementById('subscriptions-refresh-btn');
+
+    if (subscriptionsBtn) {
+        subscriptionsBtn.addEventListener('click', () => {
+            if (!subshown) {
+                subshown = true;
+                localshown = false;
+                window.showSubscriptionsPanel();
+                loadSubscriptionsPanel();
+            } else {
+                subshown = false;
+                window.showHomeContent();
+            }
+        });
+    }
+
+    if (subscriptionsBackBtn) {
+        subscriptionsBackBtn.addEventListener('click', () => {
+            subshown = false;
+            window.showHomeContent();
+        });
+    }
+
+    if (subscriptionsRefreshBtn) {
+        subscriptionsRefreshBtn.addEventListener('click', () => {
+            fetch('/api/subscriptions/check', { method: 'POST' })
+                .then(r => r.json())
+                .then(() => {
+                    showNotification('Checking for new episodes...', 'info');
+                    setTimeout(() => loadSubscriptionsPanel(), 3000);
+                })
+                .catch(() => showNotification('Check failed', 'error'));
+        });
+    }
 
     // ---- File Browser Button -> show local-files on index ----
     if (fileBrowserBtn) {
@@ -2804,7 +3057,10 @@ document.head.appendChild(style);
                         ${progressHtml}
                     </div>
                     <div class="file-actions">
-                        <button class="file-action-btn stream-btn" title="Stream in browser">
+                        ${(progress && progress.percentage > 5 && progress.percentage < 95)
+                            ? `<button class="file-action-btn continue-btn" title="Resume from ${Math.round(progress.percentage)}%"><i class="fas fa-redo"></i></button>`
+                            : ''}
+                        <button class="file-action-btn stream-btn" title="${(progress && progress.percentage > 5 && progress.percentage < 95) ? 'Play from beginning' : 'Stream in browser'}">
                             <i class="fas fa-play"></i>
                         </button>
                         <button class="file-action-btn cast-file-btn" title="Cast to Chromecast">
@@ -2824,10 +3080,19 @@ document.head.appendChild(style);
                     updateFileModalSelectionCount();
                 });
 
-                // Stream button
+                // Continue (resume) button
+                const continueBtn = item.querySelector('.continue-btn');
+                if (continueBtn) {
+                    continueBtn.addEventListener('click', () => {
+                        streamFile(file, progress.current_time);
+                    });
+                }
+
+                // Stream button (always from beginning when there's also a continue btn)
                 const streamBtn = item.querySelector('.stream-btn');
                 streamBtn.addEventListener('click', () => {
-                    const startTime = (progress && progress.percentage > 0 && progress.percentage < 95) ? progress.current_time : 0;
+                    const startTime = (progress && progress.percentage > 0 && progress.percentage < 95 && !continueBtn)
+                        ? progress.current_time : 0;
                     streamFile(file, startTime);
                 });
 
@@ -3242,6 +3507,270 @@ document.head.appendChild(style);
         div.textContent = text;
         return div.innerHTML;
     }
+
+    // ========================================
+    // Continue Watching Section
+    // ========================================
+
+    function loadContinueWatching() {
+        const section = document.getElementById('continue-watching-section');
+        const grid = document.getElementById('continue-watching-grid');
+        if (!section || !grid) return;
+
+        Promise.all([
+            fetch('/api/watch-progress').then(r => r.json()),
+            fetch('/api/files').then(r => r.json())
+        ]).then(([progressData, filesData]) => {
+            if (!progressData.success) return;
+            const progress = progressData.progress || {};
+
+            // Filter to in-progress files (5% < progress < 95%)
+            const inProgress = Object.entries(progress)
+                .filter(([, p]) => p.percentage > 5 && p.percentage < 95)
+                .sort((a, b) => new Date(b[1].last_watched) - new Date(a[1].last_watched))
+                .slice(0, 10);
+
+            if (inProgress.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+
+            // Build a flat file map for path lookup
+            const fileMap = {};
+            if (filesData.success) {
+                (filesData.files || []).forEach(f => { fileMap[f.path] = f; });
+                (filesData.folders || []).forEach(folder => {
+                    if (folder.files) folder.files.forEach(f => { fileMap[f.path] = f; });
+                });
+            }
+
+            grid.innerHTML = '';
+            const defaultCover = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDIwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+PHRleHQgeD0iMTAwIiB5PSIxNTUiIGZpbGw9IiM2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMjQiPuKWtjwvdGV4dD48L3N2Zz4=';
+
+            inProgress.forEach(([filePath, prog]) => {
+                const fileName = filePath.split('/').pop().split('\\').pop();
+                const card = document.createElement('div');
+                card.className = 'cw-card';
+                card.innerHTML = `
+                    <img src="${defaultCover}" alt="${escapeHtmlFB(fileName)}" loading="lazy">
+                    <div class="cw-play-overlay"><i class="fas fa-redo"></i></div>
+                    <div class="cw-card-info">
+                        <div class="cw-card-title" title="${escapeHtmlFB(fileName)}">${escapeHtmlFB(fileName)}</div>
+                        <div class="cw-card-progress">
+                            <div class="cw-card-progress-fill" style="width: ${Math.round(prog.percentage)}%"></div>
+                        </div>
+                    </div>
+                `;
+                card.title = `Resume from ${Math.round(prog.percentage)}%`;
+                card.addEventListener('click', () => {
+                    // Build a minimal file object for streamFile
+                    const fileObj = fileMap[filePath] || { path: filePath, name: fileName };
+                    streamFile(fileObj, prog.current_time);
+                });
+                grid.appendChild(card);
+            });
+
+            section.style.display = 'block';
+        }).catch(err => {
+            console.error('Failed to load continue watching:', err);
+        });
+    }
+
+    // ========================================
+    // Subscriptions Panel
+    // ========================================
+
+    const subscriptionBadge = document.getElementById('subscription-badge');
+
+    function updateSubscriptionBadge(count) {
+        if (!subscriptionBadge) return;
+        if (count > 0) {
+            subscriptionBadge.textContent = count > 9 ? '9+' : count;
+            subscriptionBadge.style.display = 'flex';
+        } else {
+            subscriptionBadge.style.display = 'none';
+        }
+    }
+
+    function loadSubscriptionsPanel() {
+        const loading = document.getElementById('subscriptions-loading');
+        const grid = document.getElementById('subscriptions-grid');
+        const empty = document.getElementById('subscriptions-empty');
+        if (!grid) return;
+
+        if (loading) loading.style.display = 'block';
+        grid.style.display = 'none';
+        if (empty) empty.style.display = 'none';
+
+        fetch('/api/subscriptions')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.error || 'Failed');
+                const subs = data.subscriptions || [];
+                const notes = data.notifications || [];
+
+                // Show notification badge for new episodes
+                const newSubIds = new Set(notes.map(n => n.sub_id));
+                if (notes.length > 0) {
+                    notes.forEach(n => showNotification(`${n.title}: ${n.new_count} new episode(s)!`, 'success'));
+                }
+                updateSubscriptionBadge(notes.length);
+
+                if (loading) loading.style.display = 'none';
+
+                if (subs.length === 0) {
+                    if (empty) empty.style.display = 'block';
+                    grid.style.display = 'none';
+                    return;
+                }
+
+                grid.innerHTML = '';
+                grid.style.display = 'grid';
+
+                const defaultCover = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDIwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzMzIi8+CjxwYXRoIGQ9Ik0xMDAgMTUwTDEyMCAxNzBMMTAwIDE5MFY3MGwyMCAyMEwxMDAgMTEwVjE1MFoiIGZpbGw9IiM2NjYiLz4KPC9zdmc+';
+
+                subs.forEach(sub => {
+                    const card = document.createElement('div');
+                    card.className = 'home-anime-card subscription-card';
+                    const hasNew = newSubIds.has(sub.id);
+                    const coverUrl = sub.cover || defaultCover;
+
+                    card.innerHTML = `
+                        ${hasNew ? `<span class="sub-new-badge"><i class="fas fa-bell"></i> New</span>` : ''}
+                        <div class="home-anime-cover">
+                            <img src="${escapeHtmlFB(coverUrl)}" alt="${escapeHtmlFB(sub.title)}" loading="lazy"
+                                 onerror="this.src='${defaultCover}'">
+                        </div>
+                        <div class="home-anime-title" title="${escapeHtmlFB(sub.title)}">${escapeHtmlFB(sub.title)}</div>
+                        <div class="sub-info-chips">
+                            ${sub.notify ? `<span class="sub-chip active"><i class="fas fa-bell"></i> Notify</span>` : ''}
+                            ${sub.auto_download ? `<span class="sub-chip active"><i class="fas fa-download"></i> Auto</span>` : ''}
+                            <span class="sub-chip"><i class="fas fa-film"></i> ${sub.last_episode_count} ep</span>
+                        </div>
+                        <div class="sub-card-overlay">
+                            <button class="sub-card-btn open-btn" title="Open series"><i class="fas fa-external-link-alt"></i></button>
+                            <button class="sub-card-btn settings-btn" title="Settings"><i class="fas fa-cog"></i></button>
+                            <button class="sub-card-btn danger remove-btn" title="Unsubscribe"><i class="fas fa-times"></i></button>
+                        </div>
+                    `;
+
+                    card.querySelector('.open-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const isMovie = sub.series_url.includes('movie4k');
+                        const label = isMovie ? 'Movie' : 'Series';
+                        window.showDownloadModal(sub.title, label, sub.series_url, sub.cover);
+                        subshown = false;
+                    });
+
+                    card.querySelector('.settings-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        openSubscriptionSettingsModal(sub);
+                    });
+
+                    card.querySelector('.remove-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (!confirm(`Unsubscribe from "${sub.title}"?`)) return;
+                        fetch(`/api/subscriptions/${sub.id}`, { method: 'DELETE' })
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.success) {
+                                    showNotification('Unsubscribed', 'success');
+                                    loadSubscriptionsPanel();
+                                } else {
+                                    showNotification(d.error || 'Failed', 'error');
+                                }
+                            });
+                    });
+
+                    card.addEventListener('click', () => {
+                        const isMovie = sub.series_url.includes('movie4k');
+                        const label = isMovie ? 'Movie' : 'Series';
+                        window.showDownloadModal(sub.title, label, sub.series_url, sub.cover);
+                        subshown = false;
+                    });
+
+                    grid.appendChild(card);
+                });
+            })
+            .catch(err => {
+                if (loading) loading.style.display = 'none';
+                showNotification('Failed to load subscriptions', 'error');
+                console.error('Subscriptions error:', err);
+            });
+    }
+
+    function openSubscriptionSettingsModal(sub) {
+        // Simple inline settings overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.style.display = 'flex';
+        overlay.innerHTML = `
+            <div class="modal-content" style="max-width: 380px;">
+                <div class="modal-header download-info">
+                    <strong>${escapeHtmlFB(sub.title)}</strong>
+                    <button class="close-btn" id="sub-settings-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="subscription-options-inner">
+                        <h4><i class="fas fa-star"></i> Subscription Settings</h4>
+                        <label class="sub-option-row">
+                            <input type="checkbox" id="sub-settings-notify" ${sub.notify ? 'checked' : ''}>
+                            <span>Notify when new episodes are available</span>
+                        </label>
+                        <label class="sub-option-row">
+                            <input type="checkbox" id="sub-settings-auto" ${sub.auto_download ? 'checked' : ''}>
+                            <span>Auto-download new episodes</span>
+                        </label>
+                        <div class="sub-option-actions">
+                            <button id="sub-settings-save" class="primary-btn sub-save-btn"><i class="fas fa-save"></i> Save</button>
+                            <button id="sub-settings-cancel" class="secondary-btn">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const close = () => overlay.remove();
+        overlay.querySelector('#sub-settings-close').addEventListener('click', close);
+        overlay.querySelector('#sub-settings-cancel').addEventListener('click', close);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+        overlay.querySelector('#sub-settings-save').addEventListener('click', () => {
+            const notify = overlay.querySelector('#sub-settings-notify').checked;
+            const autoDownload = overlay.querySelector('#sub-settings-auto').checked;
+            fetch(`/api/subscriptions/${sub.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notify, auto_download: autoDownload })
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    showNotification('Settings saved', 'success');
+                    close();
+                    loadSubscriptionsPanel();
+                } else {
+                    showNotification(d.error || 'Failed', 'error');
+                }
+            });
+        });
+    }
+
+    // Poll for subscription notifications every 5 minutes
+    setInterval(() => {
+        fetch('/api/subscriptions/notifications')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.notifications && data.notifications.length > 0) {
+                    data.notifications.forEach(n => {
+                        showNotification(`${n.title}: ${n.new_count} new episode(s) available!`, 'success');
+                    });
+                    updateSubscriptionBadge(data.notifications.length);
+                }
+            })
+            .catch(() => {});
+    }, 5 * 60 * 1000);
 
     // Export streamFile so the download modal (DOMContentLoaded scope) can use it
     window.streamFile = streamFile;

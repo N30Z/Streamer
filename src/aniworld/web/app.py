@@ -1,5 +1,5 @@
 """
-Flask web application for AniWorld Downloader
+Flask web application for AnyLoader
 """
 
 import logging
@@ -20,7 +20,7 @@ from .download_manager import get_download_manager
 
 
 class WebApp:
-    """Flask web application wrapper for AniWorld Downloader"""
+    """Flask web application wrapper for AnyLoader"""
 
     def __init__(self, host="127.0.0.1", port=5000, debug=False, arguments=None):
         """
@@ -69,6 +69,13 @@ class WebApp:
 
         # Backfill series metadata for existing download folders (background)
         self._start_metadata_backfill()
+
+        # In-memory store for subscription new-episode notifications
+        self._subscription_notifications = []  # list of dicts: {sub_id, title, new_count, detected_at}
+        self._subscription_lock = threading.Lock()
+
+        # Start background subscription checker
+        self._start_subscription_checker()
 
         # Setup routes
         self._setup_routes()
@@ -862,7 +869,7 @@ class WebApp:
 
                 headers = {
                     "Accept": "application/json",
-                    "X-Plex-Product": "AniWorld Downloader",
+                    "X-Plex-Product": "AnyLoader",
                     "X-Plex-Client-Identifier": client_id,
                 }
 
@@ -886,7 +893,7 @@ class WebApp:
                 oauth_params = urlencode({
                     "clientID": client_id,
                     "code": pin_code,
-                    "context[device][product]": "AniWorld Downloader",
+                    "context[device][product]": "AnyLoader",
                 })
                 oauth_url = f"https://app.plex.tv/auth#?{oauth_params}"
 
@@ -2588,6 +2595,139 @@ class WebApp:
                     "error": str(e)
                 }), 500
 
+        # ---- Subscription Routes ----
+
+        @self.app.route("/api/subscriptions", methods=["GET"])
+        @self._require_api_auth
+        def api_get_subscriptions():
+            """Return all subscriptions."""
+            try:
+                subs = self._load_subscriptions()
+                # Attach any pending notifications
+                with self._subscription_lock:
+                    notifications = list(self._subscription_notifications)
+                return jsonify({"success": True, "subscriptions": subs, "notifications": notifications})
+            except Exception as e:
+                logging.error("Failed to get subscriptions: %s", e)
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/subscriptions", methods=["POST"])
+        @self._require_api_auth
+        def api_add_subscription():
+            """Add a new subscription."""
+            try:
+                data = request.get_json()
+                series_url = (data.get("series_url") or "").strip()
+                title = (data.get("title") or "").strip()
+                if not series_url or not title:
+                    return jsonify({"success": False, "error": "series_url and title are required"}), 400
+
+                subs = self._load_subscriptions()
+                # Check duplicate
+                if any(s["series_url"] == series_url for s in subs):
+                    return jsonify({"success": False, "error": "Already subscribed to this series"}), 409
+
+                new_id = max((s.get("id", 0) for s in subs), default=0) + 1
+                episode_count = self._count_total_episodes(series_url)
+
+                new_sub = {
+                    "id": new_id,
+                    "series_url": series_url,
+                    "title": title,
+                    "cover": data.get("cover") or "",
+                    "site": data.get("site") or "",
+                    "language": data.get("language") or getattr(config, "DEFAULT_LANGUAGE", "German Sub"),
+                    "notify": bool(data.get("notify", True)),
+                    "auto_download": bool(data.get("auto_download", False)),
+                    "last_episode_count": max(episode_count, 0),
+                    "last_checked": datetime.now().isoformat(),
+                    "created_at": datetime.now().isoformat(),
+                }
+                subs.append(new_sub)
+                self._save_subscriptions(subs)
+                return jsonify({"success": True, "subscription": new_sub})
+            except Exception as e:
+                logging.error("Failed to add subscription: %s", e)
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/subscriptions/<int:sub_id>", methods=["DELETE"])
+        @self._require_api_auth
+        def api_delete_subscription(sub_id):
+            """Delete a subscription."""
+            try:
+                subs = self._load_subscriptions()
+                new_subs = [s for s in subs if s.get("id") != sub_id]
+                if len(new_subs) == len(subs):
+                    return jsonify({"success": False, "error": "Subscription not found"}), 404
+                self._save_subscriptions(new_subs)
+                return jsonify({"success": True})
+            except Exception as e:
+                logging.error("Failed to delete subscription: %s", e)
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/subscriptions/<int:sub_id>", methods=["PUT"])
+        @self._require_api_auth
+        def api_update_subscription(sub_id):
+            """Update subscription settings (notify, auto_download, language)."""
+            try:
+                data = request.get_json()
+                subs = self._load_subscriptions()
+                for sub in subs:
+                    if sub.get("id") == sub_id:
+                        if "notify" in data:
+                            sub["notify"] = bool(data["notify"])
+                        if "auto_download" in data:
+                            sub["auto_download"] = bool(data["auto_download"])
+                        if "language" in data:
+                            sub["language"] = data["language"]
+                        break
+                else:
+                    return jsonify({"success": False, "error": "Subscription not found"}), 404
+                self._save_subscriptions(subs)
+                return jsonify({"success": True})
+            except Exception as e:
+                logging.error("Failed to update subscription: %s", e)
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/subscriptions/check", methods=["POST"])
+        @self._require_api_auth
+        def api_check_subscriptions():
+            """Manually trigger a subscription check."""
+            try:
+                # Run in background thread to avoid blocking request
+                t = threading.Thread(target=self._check_subscriptions_once, daemon=True)
+                t.start()
+                return jsonify({"success": True, "message": "Subscription check started"})
+            except Exception as e:
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/subscriptions/notifications", methods=["GET"])
+        @self._require_api_auth
+        def api_get_subscription_notifications():
+            """Get and clear pending new-episode notifications."""
+            try:
+                with self._subscription_lock:
+                    notes = list(self._subscription_notifications)
+                    self._subscription_notifications.clear()
+                return jsonify({"success": True, "notifications": notes})
+            except Exception as e:
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/subscriptions/check-url", methods=["POST"])
+        @self._require_api_auth
+        def api_check_subscription_url():
+            """Check if a URL is already subscribed."""
+            try:
+                data = request.get_json()
+                series_url = (data.get("series_url") or "").strip()
+                subs = self._load_subscriptions()
+                sub = next((s for s in subs if s["series_url"] == series_url), None)
+                return jsonify({"success": True, "subscribed": sub is not None, "subscription": sub})
+            except Exception as e:
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        # ---- End Subscription Routes ----
+
         @self.app.route("/api/files/delete", methods=["POST"])
         @self._require_api_auth
         def api_delete_file():
@@ -3240,6 +3380,181 @@ class WebApp:
         except Exception as e:
             logging.error(f"Failed to save watch progress: {e}")
 
+    # ---- Subscription helpers ----
+
+    def _get_subscriptions_file(self) -> Path:
+        """Get path to subscriptions JSON file (same dir as preferences)."""
+        if os.name == "nt":
+            data_dir = Path(os.getenv("APPDATA", "")) / "aniworld"
+        else:
+            data_dir = Path.home() / ".local" / "share" / "aniworld"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        return data_dir / "subscriptions.json"
+
+    def _load_subscriptions(self) -> list:
+        """Load subscriptions list from JSON file."""
+        import json
+        sub_file = self._get_subscriptions_file()
+        if sub_file.exists():
+            try:
+                with open(sub_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                logging.error("Failed to load subscriptions: %s", e)
+        return []
+
+    def _save_subscriptions(self, subs: list) -> None:
+        """Save subscriptions list to JSON file."""
+        import json
+        sub_file = self._get_subscriptions_file()
+        try:
+            with open(sub_file, "w", encoding="utf-8") as f:
+                json.dump(subs, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logging.error("Failed to save subscriptions: %s", e)
+
+    def _count_total_episodes(self, series_url: str) -> int:
+        """Return total episode (+ movie) count for a series URL, or -1 on error."""
+        try:
+            from ..common import get_season_episode_count, get_movie_episode_count
+            from ..entry import _detect_site_from_url
+            from .. import config as cfg
+
+            if "/anime/stream/" in series_url:
+                slug = series_url.split("/anime/stream/")[-1].rstrip("/")
+                base_url = cfg.ANIWORLD_TO
+            elif "/serie/" in series_url:
+                slug = series_url.split("/serie/")[-1].rstrip("/")
+                base_url = cfg.S_TO
+            elif "movie4k" in series_url or "/watch/" in series_url:
+                return 1  # single movie
+            else:
+                return -1
+
+            season_counts = get_season_episode_count(slug, base_url)
+            total = sum(season_counts.values())
+
+            try:
+                movie_count = get_movie_episode_count(slug, link=base_url)
+                total += movie_count
+            except Exception:
+                pass
+
+            return total
+        except Exception as e:
+            logging.warning("Failed to count episodes for %s: %s", series_url, e)
+            return -1
+
+    def _check_subscriptions_once(self) -> None:
+        """Check all subscriptions for new episodes and create notifications / trigger downloads."""
+        import json
+        subs = self._load_subscriptions()
+        changed = False
+
+        for sub in subs:
+            if not sub.get("notify") and not sub.get("auto_download"):
+                continue
+            try:
+                new_count = self._count_total_episodes(sub["series_url"])
+                if new_count < 0:
+                    continue
+                old_count = sub.get("last_episode_count", 0)
+                sub["last_checked"] = datetime.now().isoformat()
+                changed = True
+
+                if new_count > old_count and old_count > 0:
+                    diff = new_count - old_count
+                    logging.info(
+                        "Subscription '%s' has %d new episode(s) (%d -> %d)",
+                        sub["title"], diff, old_count, new_count
+                    )
+
+                    if sub.get("notify", True):
+                        with self._subscription_lock:
+                            self._subscription_notifications.append({
+                                "sub_id": sub["id"],
+                                "title": sub["title"],
+                                "new_count": diff,
+                                "detected_at": datetime.now().isoformat(),
+                            })
+
+                    if sub.get("auto_download", False):
+                        self._auto_download_new_episodes(sub, old_count, new_count)
+
+                sub["last_episode_count"] = new_count
+
+            except Exception as e:
+                logging.warning("Error checking subscription '%s': %s", sub.get("title", "?"), e)
+
+        if changed:
+            self._save_subscriptions(subs)
+
+    def _auto_download_new_episodes(self, sub: dict, old_count: int, new_count: int) -> None:
+        """Queue new episodes for auto-download."""
+        try:
+            from ..common import get_season_episode_count
+            from .. import config as cfg
+
+            series_url = sub["series_url"]
+            language = sub.get("language", cfg.DEFAULT_LANGUAGE)
+
+            if "/anime/stream/" in series_url:
+                slug = series_url.split("/anime/stream/")[-1].rstrip("/")
+                base_url = cfg.ANIWORLD_TO
+                stream_path = "anime/stream"
+            elif "/serie/" in series_url:
+                slug = series_url.split("/serie/")[-1].rstrip("/")
+                base_url = cfg.S_TO
+                stream_path = "serie"
+            else:
+                return
+
+            season_counts = get_season_episode_count(slug, base_url)
+            # Collect all episode URLs in order and take only the new ones
+            all_urls = []
+            for s_num in sorted(season_counts.keys()):
+                for ep_num in range(1, season_counts[s_num] + 1):
+                    all_urls.append(
+                        f"{base_url}/{stream_path}/{slug}/staffel-{s_num}/episode-{ep_num}"
+                    )
+
+            new_urls = all_urls[old_count:new_count]
+            if not new_urls:
+                return
+
+            download_manager = get_download_manager(self.db, getattr(config, "DEFAULT_MAX_CONCURRENT_DOWNLOADS", 5))
+            download_path = str(config.DEFAULT_DOWNLOAD_PATH)
+            prefs = self._load_preferences()
+            if prefs.get("download_directory"):
+                download_path = prefs["download_directory"]
+
+            for ep_url in new_urls:
+                download_manager.add_download(
+                    url=ep_url,
+                    language=language,
+                    provider=None,
+                    output_dir=download_path,
+                    anime_title=sub["title"],
+                )
+            logging.info("Auto-queued %d new episode(s) for '%s'", len(new_urls), sub["title"])
+        except Exception as e:
+            logging.error("Auto-download failed for subscription '%s': %s", sub.get("title", "?"), e)
+
+    def _start_subscription_checker(self) -> None:
+        """Start background thread that checks subscriptions every hour."""
+        def checker_loop():
+            # Initial delay to let the app fully start
+            time.sleep(30)
+            while True:
+                try:
+                    self._check_subscriptions_once()
+                except Exception as e:
+                    logging.error("Subscription checker error: %s", e)
+                time.sleep(3600)  # check every hour
+
+        t = threading.Thread(target=checker_loop, daemon=True, name="subscription-checker")
+        t.start()
+
     def _format_uptime(self, seconds: int) -> str:
         """Format uptime in human readable format."""
         if seconds < 60:
@@ -3256,7 +3571,7 @@ class WebApp:
 
     def run(self, live: bool = False):
         """Run the Flask web application. If `live` is True, start a livereload server that auto-refreshes the browser on template/static changes."""
-        logging.info("Starting AniWorld Downloader Web Interface...")
+        logging.info("Starting AnyLoader Web Interface...")
         logging.info(f"Server running at http://{self.host}:{self.port}")
 
         # If live reload is requested, import and configure livereload lazily so it is
@@ -3358,7 +3673,7 @@ def start_web_interface(arguments=None, port=5000, debug=False):
     )
 
     print("\n" + "=" * 69)
-    print(" AniWorld Downloader Web Interface")
+    print(" AnyLoader Web Interface")
     print("=" * 69)
     print(f" Server Address:   {server_address}")
     print(f" Security Mode:    {auth_status}")

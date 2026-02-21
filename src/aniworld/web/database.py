@@ -1,5 +1,5 @@
 """
-Database models and utilities for AniWorld Downloader web authentication
+Database models and utilities for AnyLoader web authentication
 """
 
 import hashlib
