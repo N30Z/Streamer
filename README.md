@@ -20,7 +20,7 @@ Web-based downloader for anime, series and movies from [aniworld.to](https://ani
 
 ### Windows (Native App)
 
-Download `Streamer.exe` from the [latest release](https://github.com/phoenixthrush/AniWorld-Downloader/releases) and run it. No installation or Python required -- FFmpeg is bundled in.
+Download `Streamer.exe` from the [latest release]((https://github.com/N30Z/Streamer/releases)) and run it. No installation or Python required -- FFmpeg is bundled in.
 
 ### pip (All Platforms)
 
