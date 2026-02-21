@@ -98,7 +98,7 @@ Open any series in the download modal and click the **Subscribe** button (⭐) t
 - **Notify** — show a browser notification when new episodes are available
 - **Auto-download** — automatically queue new episodes for download
 
-Subscribed series appear in the **Subscriptions panel** (⭐ star icon in the navbar). AnyLoader checks for new episodes every hour in the background. You can also trigger a manual check from the subscriptions panel refresh button.
+Subscribed series appear in the **Subscriptions panel** (star icon in the navbar). AnyLoader checks for new episodes **on every server start** (after a short 30-second delay) and then **every hour** in the background. You can also trigger a manual check from the subscriptions panel refresh button.
 
 ## License
 

@@ -92,6 +92,7 @@ Each site module provides search, episode parsing, and season/episode counting:
 ### Web UI (`web/`)
 
 - `app.py` (~3,400+ lines) - Flask application wrapped in a `WebApp` class. REST API, authentication, download queue, Plex integration, Chromecast support, file streaming, watch progress tracking, **subscription management**.
+  - **`WebApp.__init__()` startup sequence**: (1) init download manager, (2) create Flask app, (3) apply saved preferences, (4) ensure FFmpeg is available, (5) scan media library (log series/season/episode counts), (6) start metadata backfill (background), (7) init subscription notification store, (8) **start subscription checker** (background — 30 s delay then immediate check + hourly loop), (9) set up routes.
 - `download_manager.py` (~764 lines) - `DownloadQueueManager` with ThreadPoolExecutor-based concurrent download queue (default: 5 workers). In-memory job storage with progress tracking and graceful cancellation.
 - `database.py` (~479 lines) - `UserDatabase` class for SQLite user authentication (SHA-256 + salt password hashing)
 - `templates/` - Jinja2 templates:
@@ -382,16 +383,17 @@ Debug scripts in `scripts/` for development:
 
 ### Subscription System
 - Subscriptions stored in `~/.local/share/aniworld/subscriptions.json` (Windows: `%APPDATA%/aniworld/subscriptions.json`)
-- Background thread (`subscription-checker`) polls for new episodes every hour
+- **Startup check**: `_start_subscription_checker()` is called during `WebApp.__init__()`. It spawns a daemon thread that waits 30 seconds (so the app finishes initialising), then runs `_check_subscriptions_once()` immediately. This means subscriptions are verified for new episodes shortly after every server start, not just on the hourly schedule.
+- **Hourly polling**: After the initial startup check the background thread sleeps for 1 hour and re-checks in a loop.
 - **Per-subscription settings**: notify on new episodes, auto-download new episodes, language
-- **Navbar**: Star button (⭐) opens subscriptions panel listing all subscribed series
+- **Navbar**: Star button opens subscriptions panel listing all subscribed series
 - **Download modal**: Subscribe button in footer; expands subscription settings panel
 - Helper methods in `WebApp`:
   - `_get_subscriptions_file()` / `_load_subscriptions()` / `_save_subscriptions()`
   - `_count_total_episodes(series_url)` - counts episodes for new-episode detection
-  - `_check_subscriptions_once()` - runs the check loop body
+  - `_check_subscriptions_once()` - runs the check loop body (iterates every subscription, compares episode counts, fires notifications & auto-downloads)
   - `_auto_download_new_episodes(sub, old, new)` - queues new episodes
-  - `_start_subscription_checker()` - spawns daemon thread
+  - `_start_subscription_checker()` - spawns daemon thread (30 s delay → initial check → hourly loop)
 
 ### Watch Progress in Download Modal
 - When the download modal opens for a series with local files, episode progress is fetched via `/api/watch-progress`
