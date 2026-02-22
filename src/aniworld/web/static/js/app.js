@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('AnyLoader Web Interface loaded');
 
     // Get UI elements
-    // const versionDisplay = document.getElementById('version-display');
+    const versionDisplay = document.getElementById('version-display');
     const navTitle = document.getElementById('nav-title');
     const searchInput = document.getElementById('search-input');
     const searchBtn = document.getElementById('search-btn');
@@ -124,8 +124,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load popular and new anime on page load
     loadPopularAndNewAnime();
 
-    // Load "Continue Watching" section
-    loadContinueWatching();
+    // Load "Continue Watching" section (defined in IIFE, exported to window)
+    if (window.loadContinueWatching) window.loadContinueWatching();
 
     // Initialize theme (default is dark mode)
     initializeTheme();
@@ -209,11 +209,11 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('/api/info')
             .then(response => response.json())
             .then(data => {
-                versionDisplay.textContent = `v${data.version}`;
+                if (versionDisplay) versionDisplay.textContent = `v${data.version}`;
             })
             .catch(error => {
                 console.error('Failed to load version info:', error);
-                versionDisplay.textContent = 'v?.?.?';
+                if (versionDisplay) versionDisplay.textContent = 'v?.?.?';
             });
     }
 
@@ -3772,8 +3772,9 @@ document.head.appendChild(style);
             .catch(() => {});
     }, 5 * 60 * 1000);
 
-    // Export streamFile so the download modal (DOMContentLoaded scope) can use it
+    // Export functions so the DOMContentLoaded scope can use them
     window.streamFile = streamFile;
+    window.loadContinueWatching = loadContinueWatching;
 })();
 
 // ========================================
