@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const emptyState = document.getElementById('empty-state');
     const homeContent = document.getElementById('home-content');
     const localFiles = document.getElementById('local-files');
-    const homeLoading = document.getElementById('home-loading');
+    const subscriptionsPanel = document.getElementById('subscriptions-panel');
     const popularNewSections = document.getElementById('popular-new-sections');
     const popularAnimeGrid = document.getElementById('popular-anime-grid');
     const newAnimeGrid = document.getElementById('new-anime-grid');
@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectionMode = null; // 'local' | 'online' | null
     let currentDescription = '';
     let modalWatchProgress = {}; // watch progress for episodes in download modal
+    let progressPollInterval = null;
 
     // Description section elements
     const descriptionSection = document.getElementById('description-section');
@@ -182,12 +183,23 @@ document.addEventListener('DOMContentLoaded', function() {
         themeToggle.addEventListener('click', toggleTheme);
     }
 
+    // Provider refresh buttons
+    const refreshAniworldBtn = document.getElementById('refresh-aniworld');
+    const refreshStoBtn = document.getElementById('refresh-sto');
+    const refreshMovie4kBtn = document.getElementById('refresh-movie4k');
+    if (refreshAniworldBtn) refreshAniworldBtn.addEventListener('click', loadProviderAniworld);
+    if (refreshStoBtn) refreshStoBtn.addEventListener('click', loadProviderSto);
+    if (refreshMovie4kBtn) refreshMovie4kBtn.addEventListener('click', loadProviderMovie4k);
+
     // Navbar title click functionality
     if (navTitle) {
         navTitle.addEventListener('click', function() {
             // Clear search input
             if (searchInput) {
                 searchInput.value = '';
+            }
+            if (localshown) {
+                localshown = false;
             }
             // Show home content (original state)
             showHomeContent();
@@ -574,6 +586,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentDescription = data.description || '';
                 renderEpisodeTree();
 
+                // Start polling watch progress while modal is open
+                if (progressPollInterval) clearInterval(progressPollInterval);
+                progressPollInterval = setInterval(refreshModalProgress, 10000);
+
                 // Populate language buttons
                 populateLanguageDropdown(
                     currentDownloadData.site,
@@ -793,8 +809,48 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function refreshModalProgress() {
+        if (!downloadModal || downloadModal.style.display === 'none') return;
+        fetch('/api/watch-progress')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+                modalWatchProgress = data.progress || {};
+                episodeTree.querySelectorAll('tr[data-local-path]').forEach(tr => {
+                    const localPath = tr.dataset.localPath;
+                    const prog = modalWatchProgress[localPath] || null;
+                    if (!prog) return; // No data for this path — preserve existing UI
+
+                    const pct = prog.percentage || 0;
+                    const titleCell = tr.querySelector('.episode-title-cell');
+                    const playBtn = tr.querySelector('.episode-play-btn');
+                    if (!titleCell || !playBtn) return;
+
+                    // Update progress/watched badge in-place
+                    titleCell.querySelectorAll('.ep-progress-inline, .ep-watched-badge').forEach(el => el.remove());
+                    if (pct > 95) {
+                        titleCell.insertAdjacentHTML('beforeend', `<span class="ep-watched-badge" title="Watched"><i class="fas fa-check"></i></span>`);
+                        playBtn.className = 'episode-play-btn';
+                        playBtn.title = 'Watched - Play again';
+                        playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    } else if (pct > 5) {
+                        titleCell.insertAdjacentHTML('beforeend', `<span class="ep-progress-inline" title="${Math.round(pct)}% watched"><span class="ep-progress-bar"><span class="ep-progress-fill" style="width:${Math.round(pct)}%"></span></span></span>`);
+                        playBtn.className = 'episode-play-btn episode-resume-btn';
+                        playBtn.title = `Resume from ${Math.round(pct)}%`;
+                        playBtn.innerHTML = '<i class="fas fa-redo"></i>';
+                    } else {
+                        playBtn.className = 'episode-play-btn';
+                        playBtn.title = 'Play';
+                        playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    }
+                });
+            })
+            .catch(() => {});
+    }
+
     function hideDownloadModal() {
         downloadModal.style.display = 'none';
+        if (progressPollInterval) { clearInterval(progressPollInterval); progressPollInterval = null; }
         currentDownloadData = null;
         selectedEpisodes.clear();
         selectionMode = null;
@@ -898,6 +954,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const isLocal = episode.local || false;
                 const tr = document.createElement('tr');
                 tr.className = 'episode-row' + (isLocal ? ' local-episode' : '');
+                if (isLocal && episode.local_path) tr.dataset.localPath = episode.local_path;
 
                 // Watch progress for this episode (by local_path)
                 const epProgress = (isLocal && episode.local_path) ? (modalWatchProgress[episode.local_path] || null) : null;
@@ -955,8 +1012,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (playButton && isLocal && episode.local_path) {
                     playButton.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        // Resume from saved position if in-progress, else from start
-                        const startTime = (epPct > 5 && epPct < 95 && epProgress) ? epProgress.current_time : 0;
+                        // Always read live progress so resume position is current
+                        const liveProg = modalWatchProgress[episode.local_path] || null;
+                        const livePct = liveProg ? (liveProg.percentage || 0) : 0;
+                        const startTime = (livePct > 5 && livePct < 95 && liveProg) ? liveProg.current_time : 0;
                         window.streamFile({ path: episode.local_path, name: episode.title }, startTime);
                     });
                 }
@@ -1010,6 +1069,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const isLocal = movie.local || false;
                 const tr = document.createElement('tr');
                 tr.className = 'episode-row' + (isLocal ? ' local-episode' : '');
+                if (isLocal && movie.local_path) tr.dataset.localPath = movie.local_path;
 
                 // Watch progress for this movie
                 const mvProgress = (isLocal && movie.local_path) ? (modalWatchProgress[movie.local_path] || null) : null;
@@ -1066,7 +1126,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (playButton && isLocal && movie.local_path) {
                     playButton.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        const startTime = (mvPct > 5 && mvPct < 95 && mvProgress) ? mvProgress.current_time : 0;
+                        const liveProg = modalWatchProgress[movie.local_path] || null;
+                        const livePct = liveProg ? (liveProg.percentage || 0) : 0;
+                        const startTime = (livePct > 5 && livePct < 95 && liveProg) ? liveProg.current_time : 0;
                         window.streamFile({ path: movie.local_path, name: movie.title }, startTime);
                     });
                 }
@@ -1454,8 +1516,6 @@ document.addEventListener('DOMContentLoaded', function() {
             confirmDownload.textContent = 'Start Download';
         });
     }
-
-    const subscriptionsPanel = document.getElementById('subscriptions-panel');
 
     function showLoadingState() {
         homeContent.style.display = 'none';
@@ -1961,95 +2021,49 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function loadPopularAndNewAnime() {
-        console.log('Loading popular and new content from all providers...');
+        // Show sections immediately; each column manages its own spinner.
+        popularNewSections.style.display = 'block';
+        showHomeContent();
+        loadProviderAniworld();
+        loadProviderSto();
+        loadProviderMovie4k();
+    }
 
-        // Show loading state for home content
-        homeLoading.style.display = 'block';
-        popularNewSections.style.display = 'none';
-
-        let loadedCount = 0;
-        const totalProviders = 3;
-
-        function checkAllLoaded() {
-            loadedCount++;
-            if (loadedCount >= totalProviders) {
-                homeLoading.style.display = 'none';
-                popularNewSections.style.display = 'block';
-                showHomeContent();
-            }
-        }
-
-        // Load AniWorld
-        if (aniworldLoading) aniworldLoading.style.display = 'flex';
-        if (aniworldContent) aniworldContent.style.display = 'none';
-        fetch('/api/popular-new')
+    function _providerFetch(apiUrl, popularGrid, newGrid, loadingEl, contentEl, btnId) {
+        if (loadingEl) loadingEl.style.display = 'flex';
+        if (contentEl) contentEl.style.display = 'none';
+        const btn = document.getElementById(btnId);
+        if (btn) { btn.disabled = true; btn.querySelector('i').classList.add('fa-spin'); }
+        fetch(apiUrl)
             .then(response => {
                 if (response.status === 401) { window.location.href = '/login'; return; }
                 return response.json();
             })
             .then(data => {
-                if (!data) return;
-                if (data.success) {
-                    displayProviderContent(
-                        data.popular || [], data.new || [],
-                        popularAnimeGrid, newAnimeGrid
-                    );
-                }
+                if (!data || !data.success) return;
+                displayProviderContent(data.popular || [], data.new || [], popularGrid, newGrid);
             })
-            .catch(error => console.error('Error loading aniworld:', error))
+            .catch(error => console.error('Error loading', apiUrl, error))
             .finally(() => {
-                if (aniworldLoading) aniworldLoading.style.display = 'none';
-                if (aniworldContent) aniworldContent.style.display = 'block';
-                checkAllLoaded();
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (contentEl) contentEl.style.display = 'block';
+                if (btn) { btn.disabled = false; btn.querySelector('i').classList.remove('fa-spin'); }
             });
+    }
 
-        // Load S.to
-        if (stoLoading) stoLoading.style.display = 'flex';
-        if (stoContent) stoContent.style.display = 'none';
-        fetch('/api/popular-new-sto')
-            .then(response => {
-                if (response.status === 401) { window.location.href = '/login'; return; }
-                return response.json();
-            })
-            .then(data => {
-                if (!data) return;
-                if (data.success) {
-                    displayProviderContent(
-                        data.popular || [], data.new || [],
-                        popularStoGrid, newStoGrid
-                    );
-                }
-            })
-            .catch(error => console.error('Error loading s.to:', error))
-            .finally(() => {
-                if (stoLoading) stoLoading.style.display = 'none';
-                if (stoContent) stoContent.style.display = 'block';
-                checkAllLoaded();
-            });
+    function loadProviderAniworld() {
+        _providerFetch('/api/popular-new', popularAnimeGrid, newAnimeGrid,
+            aniworldLoading, aniworldContent, 'refresh-aniworld');
+    }
 
-        // Load Movie4k
-        if (movie4kLoading) movie4kLoading.style.display = 'flex';
-        if (movie4kContent) movie4kContent.style.display = 'none';
-        fetch('/api/popular-new-movie4k')
-            .then(response => {
-                if (response.status === 401) { window.location.href = '/login'; return; }
-                return response.json();
-            })
-            .then(data => {
-                if (!data) return;
-                if (data.success) {
-                    displayProviderContent(
-                        data.popular || [], data.new || [],
-                        popularMovie4kGrid, newMovie4kGrid
-                    );
-                }
-            })
-            .catch(error => console.error('Error loading movie4k:', error))
-            .finally(() => {
-                if (movie4kLoading) movie4kLoading.style.display = 'none';
-                if (movie4kContent) movie4kContent.style.display = 'block';
-                checkAllLoaded();
-            });
+    function loadProviderSto() {
+        _providerFetch('/api/popular-new-sto', popularStoGrid, newStoGrid,
+            stoLoading, stoContent, 'refresh-sto');
+    }
+
+    function loadProviderMovie4k() {
+        _providerFetch('/api/popular-new-movie4k', popularMovie4kGrid, newMovie4kGrid,
+            movie4kLoading, movie4kContent, 'refresh-movie4k');
     }
 
     function displayProviderContent(popularItems, newItems, popularGrid, newGrid) {
@@ -2077,6 +2091,15 @@ document.addEventListener('DOMContentLoaded', function() {
         let coverUrl = anime.cover || defaultCover;
         if (coverUrl.includes('_150x225.png')) {
             coverUrl = coverUrl.replace('_150x225.png', '_220x330.png');
+        }
+        // Normalize relative/protocol-relative URLs (same as download modal)
+        if (coverUrl && !coverUrl.startsWith('data:') && !coverUrl.startsWith('http') && !coverUrl.startsWith('/api/')) {
+            if (coverUrl.startsWith('//')) {
+                coverUrl = 'https:' + coverUrl;
+            } else if (coverUrl.startsWith('/')) {
+                const siteBase = { 'aniworld.to': 'https://aniworld.to', 's.to': 'https://s.to', 'movie4k.sx': 'https://movie4k.sx' };
+                coverUrl = (siteBase[anime.site] || 'https://aniworld.to') + coverUrl;
+            }
         }
 
         // Truncate title at word boundaries to stay under 68 characters total
@@ -3537,10 +3560,15 @@ document.head.appendChild(style);
 
             // Build a flat file map for path lookup
             const fileMap = {};
+            // Build a folder cover map: normalized folder path -> cover URL
+            const folderCoverMap = {};
             if (filesData.success) {
                 (filesData.files || []).forEach(f => { fileMap[f.path] = f; });
                 (filesData.folders || []).forEach(folder => {
                     if (folder.files) folder.files.forEach(f => { fileMap[f.path] = f; });
+                    // Prefer local cover (served via API), fall back to remote cover
+                    const cover = folder.local_cover || folder.cover || '';
+                    if (cover) folderCoverMap[folder.path.replace(/\\/g, '/')] = cover;
                 });
             }
 
@@ -3549,11 +3577,17 @@ document.head.appendChild(style);
 
             inProgress.forEach(([filePath, prog]) => {
                 const fileName = filePath.split('/').pop().split('\\').pop();
+                // Look up folder cover by parent directory
+                const parentPath = filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
+                const seriesTitle = parentPath.split('/')[0] || '';
+                const cardCover = folderCoverMap[parentPath] || defaultCover;
                 const card = document.createElement('div');
                 card.className = 'cw-card';
                 card.innerHTML = `
-                    <img src="${defaultCover}" alt="${escapeHtmlFB(fileName)}" loading="lazy">
+                    <img src="${cardCover}" alt="${escapeHtmlFB(fileName)}" loading="lazy"
+                         onerror="this.onerror=null;this.src='${defaultCover}'">
                     <div class="cw-play-overlay"><i class="fas fa-redo"></i></div>
+                    ${seriesTitle ? `<div class="cw-card-series">${escapeHtmlFB(seriesTitle)}</div>` : ''}
                     <div class="cw-card-info">
                         <div class="cw-card-title" title="${escapeHtmlFB(fileName)}">${escapeHtmlFB(fileName)}</div>
                         <div class="cw-card-progress">

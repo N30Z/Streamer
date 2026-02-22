@@ -2400,6 +2400,27 @@ class WebApp:
                                         local_cover = f"/api/files/cover?path={relative_path}"
                                         break
 
+                                # If no local cover and not yet attempted, fetch from TMDB in background
+                                if not local_cover and not (item / ".cover_attempted").exists():
+                                    import threading as _threading
+                                    _cover_title = folder_meta.get("title", item.name)
+                                    _cover_dest = item
+
+                                    def _fetch_cover(_dest=_cover_dest, _title=_cover_title):
+                                        try:
+                                            from ..extractors.cover import download_cover_2x3
+                                            download_cover_2x3(_title, output_path=str(_dest / "cover.jpg"))
+                                            logging.info("Downloaded TMDB cover for '%s'", _title)
+                                        except Exception as _e:
+                                            logging.debug("Could not download cover for '%s': %s", _title, _e)
+                                        finally:
+                                            try:
+                                                (_dest / ".cover_attempted").touch()
+                                            except Exception:
+                                                pass
+
+                                    _threading.Thread(target=_fetch_cover, daemon=True).start()
+
                                 folders.append({
                                     "name": item.name,
                                     "path": str(relative_path),

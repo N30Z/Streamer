@@ -2826,9 +2826,12 @@ body[data-theme="dark"] .episode-progress-text {
 }
 
 .provider-column-header {
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1.5rem;
     border-bottom: 1px solid var(--card-border);
     background: var(--card-bg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .provider-column-header h3 {
@@ -2836,7 +2839,29 @@ body[data-theme="dark"] .episode-progress-text {
     font-size: 1.2rem;
     font-weight: 700;
     margin: 0;
-    text-align: center;
+}
+
+.provider-refresh-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    line-height: 1;
+    transition: color 0.2s, background 0.2s;
+    flex-shrink: 0;
+}
+
+.provider-refresh-btn:hover:not(:disabled) {
+    color: var(--accent-primary);
+    background: var(--hover-bg);
+}
+
+.provider-refresh-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 .provider-column-loading {
@@ -5539,6 +5564,22 @@ body[data-theme="dark"] .episode-progress-text {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.cw-card-series {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 0.35rem 0.5rem;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 2;
 }
 
 .cw-card-info {

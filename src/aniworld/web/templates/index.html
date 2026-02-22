@@ -174,23 +174,21 @@
                     <div class="continue-watching-grid" id="continue-watching-grid"></div>
                 </div>
 
-                <div class="loading-section" id="home-loading">
-                    <div class="loading-spinner"></div>
-                    <p>Loading popular and new content...</p>
-                </div>
-
-                <div class="popular-new-sections" id="popular-new-sections" style="display: none;">
+                <div class="popular-new-sections" id="popular-new-sections">
                     <div class="provider-columns">
                         <!-- AniWorld Column -->
                         <div class="provider-column">
                             <div class="provider-column-header">
                                 <h3>Anime</h3>
+                                <button class="provider-refresh-btn" id="refresh-aniworld" title="Reload Anime">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
                             </div>
-                            <div class="provider-column-loading" id="aniworld-loading" style="display: none;">
+                            <div class="provider-column-loading" id="aniworld-loading">
                                 <div class="loading-spinner-small"></div>
                                 <span>Loading...</span>
                             </div>
-                            <div class="provider-column-content" id="aniworld-content">
+                            <div class="provider-column-content" id="aniworld-content" style="display: none;">
                                 <div class="anime-section" id="popular-section">
                                     <h4><i class="fas fa-fire"></i> Popular</h4>
                                     <div class="anime-grid" id="popular-anime-grid"></div>
@@ -206,12 +204,15 @@
                         <div class="provider-column">
                             <div class="provider-column-header">
                                 <h3>Serien</h3>
+                                <button class="provider-refresh-btn" id="refresh-sto" title="Reload Serien">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
                             </div>
-                            <div class="provider-column-loading" id="sto-loading" style="display: none;">
+                            <div class="provider-column-loading" id="sto-loading">
                                 <div class="loading-spinner-small"></div>
                                 <span>Loading...</span>
                             </div>
-                            <div class="provider-column-content" id="sto-content">
+                            <div class="provider-column-content" id="sto-content" style="display: none;">
                                 <div class="anime-section" id="popular-sto-section">
                                     <h4><i class="fas fa-fire"></i> Popular</h4>
                                     <div class="anime-grid" id="popular-sto-grid"></div>
@@ -227,12 +228,15 @@
                         <div class="provider-column">
                             <div class="provider-column-header">
                                 <h3>Movies</h3>
+                                <button class="provider-refresh-btn" id="refresh-movie4k" title="Reload Movies">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
                             </div>
-                            <div class="provider-column-loading" id="movie4k-loading" style="display: none;">
+                            <div class="provider-column-loading" id="movie4k-loading">
                                 <div class="loading-spinner-small"></div>
                                 <span>Loading...</span>
                             </div>
-                            <div class="provider-column-content" id="movie4k-content">
+                            <div class="provider-column-content" id="movie4k-content" style="display: none;">
                                 <div class="anime-section" id="popular-movie4k-section">
                                     <h4><i class="fas fa-fire"></i> Popular</h4>
                                     <div class="anime-grid" id="popular-movie4k-grid"></div>

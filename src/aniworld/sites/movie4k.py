@@ -200,7 +200,7 @@ def fetch_popular_and_new_movie4k() -> Dict[str, List[Dict[str, str]]]:
     ]:
         api_url = (
             f"{MOVIE4K_SX}/data/browse/?{base}"
-            f"&type={type_param}&order_by={order_by}&page=1&limit=50"
+            f"&type={type_param}&order_by={order_by}&page=1&limit=0"
         )
         try:
             resp = requests.get(
