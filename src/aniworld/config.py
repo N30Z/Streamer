@@ -112,23 +112,31 @@ urllib3.disable_warnings(InsecureRequestWarning)
 
 DEFAULT_REQUEST_TIMEOUT = 30
 
-try:
-    VERSION = version("aniworld")
-except PackageNotFoundError:
-    VERSION = ""
+def _read_version() -> str:
+    """Read version from the repo-root VERSION file, falling back to package metadata."""
+    import pathlib
+    version_file = pathlib.Path(__file__).parent.parent.parent / "VERSION"
+    try:
+        return version_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
+    try:
+        return version("aniworld")
+    except PackageNotFoundError:
+        return ""
+
+VERSION = _read_version()
 
 
 @lru_cache(maxsize=1)
 def get_latest_github_version():
-    """Get latest GitHub version with caching to avoid repeated API calls"""
+    """Fetch latest version from the raw VERSION file on GitHub."""
     try:
-        url = "https://api.github.com/repos/phoenixthrush/AniWorld-Downloader/releases/latest"
-        response = requests.get(url, timeout=DEFAULT_REQUEST_TIMEOUT)
-        return (
-            response.json().get("tag_name", "") if response.status_code == 200 else ""
-        )
+        url = "https://raw.githubusercontent.com/N30Z/Streamer/next/VERSION"
+        response = requests.get(url, timeout=10)
+        return response.text.strip() if response.status_code == 200 else ""
     except requests.RequestException as err:
-        logging.error("Error fetching latest release: %s", err)
+        logging.error("Error fetching latest version: %s", err)
         return ""
 
 
@@ -163,11 +171,9 @@ def is_newest_version():
     return None, False
 
 
-try:
-    LATEST_VERSION, IS_NEWEST_VERSION = is_newest_version()
-except (TypeError, ValueError):  # GitHub API Rate Limit (60/h) #52 or other errors
-    LATEST_VERSION = None
-    IS_NEWEST_VERSION = True
+# Version check runs in background at server start (see WebApp._start_version_check).
+LATEST_VERSION = None
+IS_NEWEST_VERSION = True
 
 PLATFORM_SYSTEM = platform.system()
 

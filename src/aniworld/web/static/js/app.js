@@ -183,13 +183,22 @@ document.addEventListener('DOMContentLoaded', function() {
         themeToggle.addEventListener('click', toggleTheme);
     }
 
+    // Update modal close handlers
+    const updateModal = document.getElementById('update-modal');
+    const closeUpdateModal = document.getElementById('close-update-modal');
+    const closeUpdateModalBtn = document.getElementById('close-update-modal-btn');
+    const _hideUpdateModal = () => { if (updateModal) updateModal.style.display = 'none'; };
+    if (closeUpdateModal) closeUpdateModal.addEventListener('click', _hideUpdateModal);
+    if (closeUpdateModalBtn) closeUpdateModalBtn.addEventListener('click', _hideUpdateModal);
+    if (updateModal) updateModal.addEventListener('click', e => { if (e.target === updateModal) _hideUpdateModal(); });
+
     // Provider refresh buttons
     const refreshAniworldBtn = document.getElementById('refresh-aniworld');
     const refreshStoBtn = document.getElementById('refresh-sto');
     const refreshMovie4kBtn = document.getElementById('refresh-movie4k');
-    if (refreshAniworldBtn) refreshAniworldBtn.addEventListener('click', loadProviderAniworld);
-    if (refreshStoBtn) refreshStoBtn.addEventListener('click', loadProviderSto);
-    if (refreshMovie4kBtn) refreshMovie4kBtn.addEventListener('click', loadProviderMovie4k);
+    if (refreshAniworldBtn) refreshAniworldBtn.addEventListener('click', () => loadProviderAniworld(true));
+    if (refreshStoBtn) refreshStoBtn.addEventListener('click', () => loadProviderSto(true));
+    if (refreshMovie4kBtn) refreshMovie4kBtn.addEventListener('click', () => loadProviderMovie4k(true));
 
     // Navbar title click functionality
     if (navTitle) {
@@ -222,6 +231,13 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (versionDisplay) versionDisplay.textContent = `v${data.version}`;
+                if (!data.is_newest && data.latest_version) {
+                    const curEl = document.getElementById('update-current-version');
+                    const newEl = document.getElementById('update-latest-version');
+                    if (curEl) curEl.textContent = `v${data.version}`;
+                    if (newEl) newEl.textContent = `v${data.latest_version}`;
+                    if (updateModal) updateModal.style.display = 'flex';
+                }
             })
             .catch(error => {
                 console.error('Failed to load version info:', error);
@@ -2029,7 +2045,8 @@ document.addEventListener('DOMContentLoaded', function() {
         loadProviderMovie4k();
     }
 
-    function _providerFetch(apiUrl, popularGrid, newGrid, loadingEl, contentEl, btnId) {
+    function _providerFetch(apiUrl, popularGrid, newGrid, loadingEl, contentEl, btnId, force) {
+        if (force) apiUrl += '?force=true';
         if (loadingEl) loadingEl.style.display = 'flex';
         if (contentEl) contentEl.style.display = 'none';
         const btn = document.getElementById(btnId);
@@ -2051,19 +2068,19 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    function loadProviderAniworld() {
+    function loadProviderAniworld(force) {
         _providerFetch('/api/popular-new', popularAnimeGrid, newAnimeGrid,
-            aniworldLoading, aniworldContent, 'refresh-aniworld');
+            aniworldLoading, aniworldContent, 'refresh-aniworld', force);
     }
 
-    function loadProviderSto() {
+    function loadProviderSto(force) {
         _providerFetch('/api/popular-new-sto', popularStoGrid, newStoGrid,
-            stoLoading, stoContent, 'refresh-sto');
+            stoLoading, stoContent, 'refresh-sto', force);
     }
 
-    function loadProviderMovie4k() {
+    function loadProviderMovie4k(force) {
         _providerFetch('/api/popular-new-movie4k', popularMovie4kGrid, newMovie4kGrid,
-            movie4kLoading, movie4kContent, 'refresh-movie4k');
+            movie4kLoading, movie4kContent, 'refresh-movie4k', force);
     }
 
     function displayProviderContent(popularItems, newItems, popularGrid, newGrid) {

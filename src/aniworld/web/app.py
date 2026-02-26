@@ -55,6 +55,10 @@ class WebApp:
         self._chromecast_cache = {}  # {uuid: {'cast': cast_obj, 'browser': browser, 'last_used': timestamp}}
         self._chromecast_cache_lock = threading.Lock()
 
+        # Daily cache for popular/new content {key: {"data": {...}, "date": "YYYY-MM-DD"}}
+        self._popular_cache: dict = {}
+        self._popular_cache_lock = threading.Lock()
+
         # Create Flask app
         self.app = self._create_app()
 
@@ -76,6 +80,13 @@ class WebApp:
 
         # Start background subscription checker
         self._start_subscription_checker()
+
+        # Load popular/new cache from disk; refresh stale providers in background
+        self._start_popular_cache_warmup()
+
+        # Check for available updates in background
+        self._update_info: dict = {"latest": None, "is_newest": True}
+        self._start_version_check()
 
         # Setup routes
         self._setup_routes()
@@ -1326,18 +1337,13 @@ class WebApp:
             uptime_seconds = int(time.time() - self.start_time)
             uptime_str = self._format_uptime(uptime_seconds)
 
-            # Convert latest_version to string if it's a Version object
-            latest_version = getattr(config, "LATEST_VERSION", None)
-            if latest_version is not None:
-                latest_version = str(latest_version)
-
             return jsonify(
                 {
                     "version": config.VERSION,
                     "status": "running",
                     "uptime": uptime_str,
-                    "latest_version": latest_version,
-                    "is_newest": getattr(config, "IS_NEWEST_VERSION", True),
+                    "latest_version": self._update_info.get("latest"),
+                    "is_newest": self._update_info.get("is_newest", True),
                     "supported_providers": list(config.SUPPORTED_PROVIDERS),
                     "platform": config.PLATFORM_SYSTEM,
                 }
@@ -2234,77 +2240,59 @@ class WebApp:
                 logging.error(f"Failed to cancel download: {e}")
                 return jsonify({"success": False, "error": str(e)}), 500
 
+        def _popular_new_handler(cache_key: str, fetch_fn, error_label: str):
+            """Shared handler for popular/new endpoints with daily caching."""
+            from datetime import date as _date
+            force = request.args.get("force", "false").lower() == "true"
+            today = _date.today().isoformat()
+
+            if not force:
+                with self._popular_cache_lock:
+                    entry = self._popular_cache.get(cache_key, {})
+                    if entry.get("date") == today and entry.get("data"):
+                        data = entry["data"]
+                        return jsonify({
+                            "success": True,
+                            "popular": data.get("popular", []),
+                            "new": data.get("new", []),
+                        })
+            try:
+                fetched = fetch_fn()
+                with self._popular_cache_lock:
+                    self._popular_cache[cache_key] = {"data": fetched, "date": today}
+                    self._save_popular_cache()
+                return jsonify({
+                    "success": True,
+                    "popular": fetched.get("popular", []),
+                    "new": fetched.get("new", []),
+                })
+            except Exception as e:
+                logging.error("Failed to fetch popular/new %s: %s", error_label, e)
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to fetch popular/new {error_label}: {str(e)}",
+                }), 500
+
         @self.app.route("/api/popular-new")
         @self._require_api_auth
         def api_popular_new():
             """Get popular and new anime endpoint."""
-            try:
-                from ..search import fetch_popular_and_new_anime
-
-                anime_data = fetch_popular_and_new_anime()
-                return jsonify(
-                    {
-                        "success": True,
-                        "popular": anime_data.get("popular", []),
-                        "new": anime_data.get("new", []),
-                    }
-                )
-            except Exception as e:
-                logging.error(f"Failed to fetch popular/new anime: {e}")
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": f"Failed to fetch popular/new anime: {str(e)}",
-                    }
-                ), 500
+            from ..search import fetch_popular_and_new_anime
+            return _popular_new_handler("aniworld", fetch_popular_and_new_anime, "anime")
 
         @self.app.route("/api/popular-new-sto")
         @self._require_api_auth
         def api_popular_new_sto():
             """Get popular and new series from s.to."""
-            try:
-                from ..search import fetch_popular_and_new_sto
-
-                sto_data = fetch_popular_and_new_sto()
-                return jsonify(
-                    {
-                        "success": True,
-                        "popular": sto_data.get("popular", []),
-                        "new": sto_data.get("new", []),
-                    }
-                )
-            except Exception as e:
-                logging.error(f"Failed to fetch popular/new from s.to: {e}")
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": f"Failed to fetch popular/new from s.to: {str(e)}",
-                    }
-                ), 500
+            from ..search import fetch_popular_and_new_sto
+            return _popular_new_handler("sto", fetch_popular_and_new_sto, "s.to")
 
         @self.app.route("/api/popular-new-movie4k")
         @self._require_api_auth
         def api_popular_new_movie4k():
             """Get popular and new movies from movie4k.sx."""
-            try:
-                from ..search import fetch_popular_and_new_movie4k
-
-                movie4k_data = fetch_popular_and_new_movie4k()
-                return jsonify(
-                    {
-                        "success": True,
-                        "popular": movie4k_data.get("popular", []),
-                        "new": movie4k_data.get("new", []),
-                    }
-                )
-            except Exception as e:
-                logging.error(f"Failed to fetch popular/new from movie4k: {e}")
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": f"Failed to fetch popular/new from movie4k: {str(e)}",
-                    }
-                ), 500
+            from ..search import fetch_popular_and_new_movie4k
+            return _popular_new_handler("movie4k", fetch_popular_and_new_movie4k, "movie4k")
 
         @self.app.route("/api/files")
         @self._require_api_auth
@@ -2421,15 +2409,29 @@ class WebApp:
 
                                     _threading.Thread(target=_fetch_cover, daemon=True).start()
 
+                                raw_cover = folder_meta.get("cover", "")
+                                _meta_site = folder_meta.get("site", "aniworld.to")
+                                if raw_cover and not raw_cover.startswith("http"):
+                                    if raw_cover.startswith("//"):
+                                        raw_cover = "https:" + raw_cover
+                                    else:
+                                        _base_urls = {
+                                            "aniworld.to": config.ANIWORLD_TO,
+                                            "s.to": config.S_TO,
+                                            "movie4k.sx": config.MOVIE4K_SX,
+                                        }
+                                        _base = _base_urls.get(_meta_site, config.ANIWORLD_TO)
+                                        raw_cover = _base.rstrip("/") + "/" + raw_cover.lstrip("/")
+
                                 folders.append({
                                     "name": item.name,
                                     "path": str(relative_path),
                                     "type": "folder",
                                     "video_count": video_count,
-                                    "cover": folder_meta.get("cover", ""),
+                                    "cover": raw_cover,
                                     "local_cover": local_cover,
                                     "series_url": folder_meta.get("url", ""),
-                                    "site": folder_meta.get("site", ""),
+                                    "site": _meta_site,
                                 })
                         elif item.is_file() and item.suffix.lower() in video_extensions:
                             try:
@@ -3400,6 +3402,88 @@ class WebApp:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
             logging.error(f"Failed to save watch progress: {e}")
+
+    # ---- Popular/new daily cache helpers ----
+
+    def _get_popular_cache_file(self) -> Path:
+        """Get path to the popular/new cache JSON file."""
+        if os.name == "nt":
+            data_dir = Path(os.getenv("APPDATA", "")) / "aniworld"
+        else:
+            data_dir = Path.home() / ".local" / "share" / "aniworld"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        return data_dir / "popular_cache.json"
+
+    def _load_popular_cache(self) -> None:
+        """Load the popular/new cache from disk into self._popular_cache."""
+        import json as _json
+        cache_file = self._get_popular_cache_file()
+        if cache_file.exists():
+            try:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    self._popular_cache = _json.load(f)
+            except Exception as e:
+                logging.error("Error loading popular cache: %s", e)
+                self._popular_cache = {}
+
+    def _save_popular_cache(self) -> None:
+        """Persist self._popular_cache to disk. Caller must hold _popular_cache_lock."""
+        import json as _json
+        cache_file = self._get_popular_cache_file()
+        try:
+            with open(cache_file, "w", encoding="utf-8") as f:
+                _json.dump(self._popular_cache, f)
+        except Exception as e:
+            logging.error("Error saving popular cache: %s", e)
+
+    def _start_popular_cache_warmup(self) -> None:
+        """Load cached data from disk and refresh any stale provider in the background."""
+        self._load_popular_cache()
+
+        def _warmup() -> None:
+            from ..search import (
+                fetch_popular_and_new_anime,
+                fetch_popular_and_new_sto,
+                fetch_popular_and_new_movie4k,
+            )
+            from datetime import date as _date
+            today = _date.today().isoformat()
+
+            for key, fetch_fn in [
+                ("aniworld", fetch_popular_and_new_anime),
+                ("sto", fetch_popular_and_new_sto),
+                ("movie4k", fetch_popular_and_new_movie4k),
+            ]:
+                with self._popular_cache_lock:
+                    if self._popular_cache.get(key, {}).get("date") == today:
+                        logging.info("Popular cache for %s is current, skipping fetch.", key)
+                        continue
+                try:
+                    data = fetch_fn()
+                    with self._popular_cache_lock:
+                        self._popular_cache[key] = {"data": data, "date": today}
+                        self._save_popular_cache()
+                    logging.info("Popular cache for %s refreshed.", key)
+                except Exception as exc:
+                    logging.error("Popular cache warmup for %s failed: %s", key, exc)
+
+        threading.Thread(target=_warmup, daemon=True, name="popular-cache-warmup").start()
+
+    def _start_version_check(self) -> None:
+        """Check GitHub for a newer version in the background and store the result."""
+        def _check() -> None:
+            try:
+                latest, is_newest = config.is_newest_version()
+                self._update_info = {
+                    "latest": str(latest) if latest else None,
+                    "is_newest": is_newest,
+                }
+                if not is_newest and latest:
+                    logging.info("Update available: v%s", latest)
+            except Exception as exc:
+                logging.debug("Version check failed: %s", exc)
+
+        threading.Thread(target=_check, daemon=True, name="version-check").start()
 
     # ---- Subscription helpers ----
 
