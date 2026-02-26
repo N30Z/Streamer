@@ -174,73 +174,61 @@ def _scrape_browse_results(keyword: str) -> List[Dict]:
 
 def fetch_popular_and_new_movie4k() -> Dict[str, List[Dict[str, str]]]:
     """
-    Fetch popular (trending) and new movies from movie4k.sx.
+    Fetch popular (trending) and new movies from movie4k.sx JSON API.
 
-    Uses the movie4k.sx JSON browse API.  The API requires all filter
-    parameters to be present (even as empty strings) or it returns 404.
-
-    Confirmed working endpoints (verified from site network tab):
-      - popular: type= (empty), order_by=trending
-      - new:     type=movies,   order_by=releases
+      - popular: order_by=Trending
+      - new:     order_by=Neu
 
     Returns:
         Dictionary with 'popular' and 'new' keys containing lists of movie data
     """
-    result = {"popular": [], "new": []}
+    result: Dict[str, List[Dict[str, str]]] = {"popular": [], "new": []}
 
-    # All parameters must be present (even empty) or the API returns 404.
-    # Confirmed working endpoints (verified from site network tab):
-    #   trending → type= (empty, all types), order_by=trending
-    #   new      → type=movies,              order_by=releases
-    base = "lang=2&keyword=&year=&rating=&votes=&genre=&country=&cast=&directors="
+    # Must NOT include 'br' — requests cannot decode Brotli and the server
+    # returns Brotli when 'br' is advertised, yielding an unreadable body.
+    headers = {
+        "User-Agent": RANDOM_USER_AGENT,
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Encoding": "gzip, deflate",
+        "Referer": f"{MOVIE4K_SX}/browse?c=movie&m=filter&order_by=Neu&lang=&type=movies",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+    }
 
-    for type_param, order_by, key in [
-        ("", "trending", "popular"),
-        ("movies", "releases", "new"),
-    ]:
+    queries = [("Trending", "popular"), ("Neu", "new")]
+
+    for order_by, key in queries:
         api_url = (
-            f"{MOVIE4K_SX}/data/browse/?{base}"
-            f"&type={type_param}&order_by={order_by}&page=1&limit=0"
+            f"{MOVIE4K_SX}/data/browse/"
+            f"?lang=2&keyword=&year=&networks=&rating=&votes="
+            f"&genre=&country=&cast=&directors="
+            f"&type=movies&order_by={order_by}&page=1&limit=20"
         )
         try:
-            resp = requests.get(
-                api_url,
-                timeout=DEFAULT_REQUEST_TIMEOUT,
-                headers={
-                    "User-Agent": RANDOM_USER_AGENT,
-                    "Accept": "application/json",
-                },
-            )
+            resp = requests.get(api_url, timeout=DEFAULT_REQUEST_TIMEOUT, headers=headers)
             resp.raise_for_status()
             data = resp.json()
+        except requests.RequestException as err:
+            logging.warning("fetch_popular_and_new_movie4k: request failed for %s: %s", key, err)
+            continue
+        except ValueError as err:
+            logging.warning("fetch_popular_and_new_movie4k: JSON parse failed for %s: %s", key, err)
+            continue
 
-            items: list = data.get("movies", []) if isinstance(data, dict) else data
-
-            for movie in items:
-                title = movie.get("title", "")
-                if not title:
-                    continue
-
-                poster = movie.get("poster_path", "")
-                cover = (
-                    f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}"
-                    if poster
-                    else ""
-                )
-
-                if cover:
-                    entry = {"name": title, "cover": cover}
-                    movie_id = movie.get("_id", "")
-                    slug = movie.get("slug", "") or _title_to_slug(title)
-                    if movie_id and slug:
-                        entry["url"] = f"{MOVIE4K_SX}/watch/{slug}/{movie_id}"
-                    result[key].append(entry)
-
-        except (requests.RequestException, ValueError, KeyError) as err:
-            logging.warning(
-                "fetch_popular_and_new_movie4k: failed for %s (order_by=%s): %s",
-                key, order_by, err
-            )
+        for m in data.get("movies", []):
+            title = m.get("title", "")
+            if not title:
+                continue
+            movie_id = m.get("_id", "")
+            poster_path = m.get("poster_path", "")
+            cover = f"https://image.tmdb.org/t/p/w92{poster_path}" if poster_path else ""
+            slug = _title_to_slug(title)
+            result[key].append({
+                "name": title,
+                "cover": cover,
+                "url": f"{MOVIE4K_SX}/watch/{slug}/{movie_id}",
+            })
 
     return result
 
