@@ -1,205 +1,153 @@
-"""
-Simple debug script for `src/aniworld/sites/movie4k.py`.
+import requests
 
-Usage:
-  python scripts/debug_movie4k.py
+BASE_URL = "https://movie4k.sx"
+TMDB_IMG = "https://image.tmdb.org/t/p/w92"
 
-What it does:
-- Loads the sample HTML from `tests/movie4k_test.html`.
-- Mocks `requests.get` to return that HTML for any URL.
-- Calls `_scrape_browse_results` to verify HTML parsing.
-- Tests `_title_to_slug`, `_parse_api_results`, and `_extract_provider_from_url`.
-
-Keep this short and tweak as needed while debugging.
-"""
-from pathlib import Path
-import sys
-import json
-
-# Ensure package imports work when running script from repo root
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-# Importing the package can trigger CLI parsers at import time.
-# Defer importing `movie4k` until after we parse CLI args.
-movie4k = None
-
-SAMPLE_HTML_PATH = ROOT / "tests" / "movie4k_test.html"
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate",
+    "Referer": "https://movie4k.sx/browse?c=movie&m=filter&order_by=Neu&lang=&type=movies&genre=&country=&cast=&year=&networks=&rating=&votes=&yrf=&yrt=&keyword=&view=",
+    "Origin": "https://movie4k.sx",
+    "Connection": "keep-alive",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+}
 
 
-def _ensure_movie4k_imported():
-    """Import the movie4k module lazily and prevent other modules from reading CLI args."""
-    global movie4k
-    if movie4k is None:
-        saved_argv = sys.argv[:]
-        try:
-            # Prevent imported modules from reading CLI args
-            sys.argv[:] = [sys.argv[0]]
-            import importlib
-            movie4k = importlib.import_module("aniworld.sites.movie4k")
-        finally:
-            sys.argv[:] = saved_argv
+def make_session() -> requests.Session:
+    """Create a session pre-warmed with cookies from the browse page."""
+    session = requests.Session()
+    session.headers.update(HEADERS)
+    warm_url = (
+        "https://movie4k.sx/browse?c=movie&m=filter&order_by=Neu"
+        "&lang=&type=movies&genre=&country=&cast=&year="
+        "&networks=&rating=&votes=&yrf=&yrt=&keyword=&view="
+    )
+    print(f"[SESSION] Warming up — GET {warm_url}")
+    resp = session.get(warm_url, timeout=30)
+    print(f"[SESSION] Status: {resp.status_code}  Cookies: {dict(session.cookies)}")
+    return session
 
 
-class MockResponse:
-    def __init__(self, text, status_code=200):
-        self.text = text
-        self.status_code = status_code
+def fetch_movie4k_browse(order_by: str, page: int = 1, limit: int = 20, session: requests.Session | None = None) -> list[dict]:
+    """Fetch movies from movie4k.sx /data/browse/ JSON API.
 
-    def raise_for_status(self):
-        if not (200 <= self.status_code < 300):
-            raise Exception(f"HTTP {self.status_code}")
+    Args:
+        order_by: 'Trending' for popular, 'Neu' for new
+        page:     Page number (1-based)
+        limit:    Results per page
 
-    def json(self):
-        # Not used for the scrape fallback test
-        raise NotImplementedError
+    Returns:
+        List of dicts with keys: _id, title, year, rating, genres, poster, backdrop, url
+    """
+    # Match exact parameter order observed in browser DevTools
+    api_url = (
+        f"{BASE_URL}/data/browse/"
+        f"?lang=2&keyword=&year=&networks=&rating=&votes="
+        f"&genre=&country=&cast=&directors="
+        f"&type=movies&order_by={order_by}&page={page}&limit={limit}"
+    )
+    print(f"[DEBUG] GET {api_url}")
 
+    requester = session or requests
+    response = requester.get(api_url, timeout=30)
+    print(f"[DEBUG] Status: {response.status_code}  Cookies: {dict(response.cookies)}")
+    print(f"[DEBUG] Content-Type: {response.headers.get('Content-Type', 'n/a')}")
+    print(f"[DEBUG] Content-Length header: {response.headers.get('Content-Length', 'n/a')}")
+    print(f"[DEBUG] Actual body length: {len(response.content)} bytes")
+    print(f"[DEBUG] Body (first 500): {response.text[:500]!r}")
+    response.raise_for_status()
 
-def mock_requests_get(*args, **kwargs):
-    # Return the sample HTML regardless of URL
-    html = SAMPLE_HTML_PATH.read_text(encoding="utf-8")
-    return MockResponse(html)
+    if not response.content:
+        print("[DEBUG] ERROR: Empty body — server is blocking the request")
+        return []
 
+    data = response.json()
+    print(f"[DEBUG] Raw JSON keys: {list(data.keys()) if isinstance(data, dict) else type(data).__name__}")
+    print(f"[DEBUG] Raw JSON (first 500 chars): {str(data)[:500]}")
 
-def test_slug():
-    _ensure_movie4k_imported()
-    print("\n== _title_to_slug tests ==")
-    examples = ["Greenland *ENGLISH*", "A Movie: The Sequel!", "  Spaces  Everywhere "]
-    for t in examples:
-        print(f"{t!r} -> {movie4k._title_to_slug(t)}")
+    pager = data.get("pager", {})
+    print(
+        f"[DEBUG] Page {pager.get('currentPage')}/{pager.get('totalPages')} "
+        f"— totalItems: {pager.get('totalItems')}"
+    )
 
+    raw_movies = data.get("movies", [])
+    print(f"[DEBUG] Movies in response: {len(raw_movies)}")
 
-def test_provider_extraction():
-    _ensure_movie4k_imported()
-    print("\n== _extract_provider_from_url tests ==")
-    urls = [
-        "https://streamtape.com/e/abcd",
-        "https://filemoon.sx/f/1234",
-        "https://doodstream.com/d/abcd",
-        "https://unknown.example.com/v/1",
-    ]
-    for u in urls:
-        print(f"{u} -> {movie4k._extract_provider_from_url(u)}")
+    movies = []
+    for m in raw_movies:
+        # genres can be a list (sometimes with cast mixed in) or a plain string
+        genres_raw = m.get("genres", "")
+        if isinstance(genres_raw, list):
+            genres = ", ".join(g for g in genres_raw if g and not g.startswith(" "))
+        else:
+            genres = genres_raw
 
+        poster_path = m.get("poster_path", "")
+        backdrop_path = m.get("backdrop_path", "")
+        movie_id = m.get("_id", "")
 
-def test_parse_api_results():
-    _ensure_movie4k_imported()
-    print("\n== _parse_api_results tests ==")
-    sample_list = [
-        {"_id": "abc123", "title": "Test Movie", "poster_path": "/path.jpg", "storyline": "A story", "year": 2020}
-    ]
-    print("list input ->", movie4k._parse_api_results(sample_list))
+        movies.append({
+            "_id": movie_id,
+            "title": m.get("title", ""),
+            "year": m.get("year", ""),
+            "rating": m.get("rating", ""),
+            "genres": genres,
+            "poster": TMDB_IMG + poster_path if poster_path else "",
+            "backdrop": TMDB_IMG + backdrop_path if backdrop_path else "",
+            "url": f"{BASE_URL}/watch/{movie_id}" if movie_id else "",
+        })
 
-    sample_dict = {
-        "movies": sample_list
-    }
-    print("dict input (movies wrapper) ->", movie4k._parse_api_results(sample_dict))
-
-
-def test_scrape_fallback():
-    _ensure_movie4k_imported()
-    print("\n== _scrape_browse_results (HTML fallback) ==")
-    # Monkeypatch requests.get inside module
-    import requests
-    orig_get = requests.get
-    try:
-        requests.get = mock_requests_get
-        results = movie4k._scrape_browse_results("outlander")
-        print(f"Found {len(results)} results")
-        for r in results[:5]:
-            print(json.dumps(r, ensure_ascii=False, indent=2))
-    finally:
-        requests.get = orig_get
-
-
-def test_is_url_and_movieobj():
-    _ensure_movie4k_imported()
-    print("\n== URL checks and Movie parsing ==")
-    url = "https://movie4k.sx/watch/outlander/6195193258607cdfb9fa2e98"
-    print(f"is_movie4k_url('{url}') ->", movie4k.is_movie4k_url(url))
-    m = movie4k.Movie(url=url)
-    print("Parsed movie_id, slug ->", m.movie_id, m.slug)
+    return movies
 
 
 if __name__ == "__main__":
-    import argparse
+    sess = make_session()
 
-    parser = argparse.ArgumentParser(description="Debug movie4k module")
-    parser.add_argument("--live-search", "-s", help="Perform a live search against movie4k.sx using the provided keyword")
-    parser.add_argument("--limit", "-n", type=int, default=10, help="Number of results to print for live search")
-    parser.add_argument("--test-api", action="store_true", help="Spin up the app and call /api/search to validate processed results")
-    args = parser.parse_args()
-
-    if args.live_search:
-        # Warning: this will perform real network requests to movie4k.sx
-        print(f"Performing live search for keyword: '{args.live_search}'")
-        _ensure_movie4k_imported()
+    # Probe which order_by values the API accepts
+    for probe in ("Trending", "Neu", "Popular", "trending", "neu"):
+        url = (
+            f"{BASE_URL}/data/browse/"
+            f"?lang=2&keyword=&year=&networks=&rating=&votes="
+            f"&genre=&country=&cast=&directors="
+            f"&type=movies&order_by={probe}&page=1&limit=1"
+        )
         try:
-            results = movie4k.fetch_movie4k_search_results(args.live_search)
-            print(f"Found {len(results)} results")
-            for r in results[: args.limit]:
-                print(json.dumps(r, ensure_ascii=False, indent=2))
+            r = sess.get(url, timeout=10)
+            data = r.json() if r.ok else {}
+            count = len(data.get("movies", []))
+            print(f"[PROBE] order_by={probe!r:12s} -> HTTP {r.status_code}, movies={count}")
+        except requests.exceptions.Timeout:
+            print(f"[PROBE] order_by={probe!r:12s} -> TIMEOUT")
         except Exception as e:
-            print("Live search failed:", e)
-        sys.exit(0)
+            print(f"[PROBE] order_by={probe!r:12s} -> ERROR: {e}")
 
-    if args.test_api:
-        print("Testing /api/search using Flask test client (movie4k only)")
-        # Prevent other modules from parsing our CLI args during import
-        saved_argv = sys.argv[:]
-        try:
-            sys.argv[:] = [sys.argv[0]]
-            from aniworld.web.app import WebApp
-            webapp = WebApp(host='127.0.0.1', port=0, debug=False, arguments=None)
-        finally:
-            sys.argv[:] = saved_argv
+    print()
+    print("=== TRENDING (Popular) ===")
+    popular = fetch_movie4k_browse("Trending", session=sess)
+    for m in popular:
+        print(f"  [{m['year']}] {m['title']} | {m['genres']} | rating: {m['rating']}")
+        print(f"         url:     {m['url']}")
+        print(f"         poster:  {m['poster']}")
 
-        client = webapp.app.test_client()
-        resp = client.post('/api/search', json={'query':'outlander', 'sites':['movie4k.sx']})
-        print('Status code:', resp.status_code)
-        try:
-            data = resp.get_json()
-            print('Response:', json.dumps(data, ensure_ascii=False, indent=2))
-        except Exception as e:
-            print('Failed to parse JSON response:', e)
+    print(f"\nTotal: {len(popular)}\n")
 
-        # Also test the episodes endpoint for a movie URL
-        movie_url = 'https://movie4k.sx/watch/outlander/6195193258607cdfb9fa2e98'
-        resp2 = client.post('/api/episodes', json={'series_url': movie_url})
-        print('\nEpisodes endpoint test for movie URL:')
-        print('Status code:', resp2.status_code)
-        try:
-            data2 = resp2.get_json()
-            print('Response:', json.dumps(data2, ensure_ascii=False, indent=2))
-        except Exception as e:
-            print('Failed to parse JSON response:', e)
+    print("=== NEU (New) ===")
+    new = fetch_movie4k_browse("Neu", session=sess)
+    for m in new:
+        print(f"  [{m['year']}] {m['title']} | {m['genres']} | rating: {m['rating']}")
+        print(f"         url:     {m['url']}")
+        print(f"         poster:  {m['poster']}")
 
-        # Test that _group_episodes_by_series creates a MovieAnime for movie links
-        from aniworld.entry import _group_episodes_by_series
-        movie_test = _group_episodes_by_series([movie_url])
-        print('\n_group_episodes_by_series result types:')
-        print([type(x).__name__ for x in movie_test])
-
-        # New test: ensure Episode.get_direct_link delegates to Movie for movie links
-        from aniworld.models import Episode
-        print('\nTesting Episode -> Movie delegation for get_direct_link:')
-        ep = Episode(link=movie_url)
-        # Monkeypatch Movie.get_direct_link to ensure delegation
-        import aniworld.sites.movie4k as mv4k_mod
-        orig_get_direct = mv4k_mod.Movie.get_direct_link
-        try:
-            mv4k_mod.Movie.get_direct_link = lambda self: 'http://direct.movie.example/stream'
-            direct = ep.get_direct_link()
-            print('Delegated direct link:', direct)
-        finally:
-            mv4k_mod.Movie.get_direct_link = orig_get_direct
-
-        sys.exit(0)
-
-    print("Debugging movie4k module (local tests)")
-    test_slug()
-    test_provider_extraction()
-    test_parse_api_results()
-    test_scrape_fallback()
-    test_is_url_and_movieobj()
-    print("\nDone.")
+    print(f"\nTotal: {len(new)}")

@@ -15,7 +15,7 @@ import importlib
 import inspect
 import logging
 import re
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse, quote, urljoin
 
 import requests
@@ -70,59 +70,6 @@ def _title_to_slug(title: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower())
     return slug.strip("-")
 
-
-def _parse_api_results(data: Any) -> List[Dict]:
-    """
-    Parse movie4k.sx API response into a list of result dicts.
-
-    Handles both list responses and dict responses with nested arrays.
-    The browse API returns ``{"pager": {...}, "movies": [...]}``.
-    Individual movie objects may or may not contain a ``slug`` field;
-    when missing, it is derived from the title.
-    """
-    movies = []
-    items = []
-
-    if isinstance(data, list):
-        items = data
-    elif isinstance(data, dict):
-        # Try common response wrapper keys
-        for key in ("movies", "results", "data", "items"):
-            if key in data and isinstance(data[key], list):
-                items = data[key]
-                break
-        if not items:
-            # Maybe the dict itself is a single movie
-            if "_id" in data:
-                items = [data]
-    else:
-        return movies
-
-    for movie in items:
-        movie_id = movie.get("_id", "")
-        title = movie.get("title", "")
-        if not movie_id:
-            continue
-
-        slug = movie.get("slug", "") or _title_to_slug(title)
-        if not slug:
-            continue
-
-        poster = movie.get("poster_path", "")
-        cover = (
-            f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}"
-            if poster
-            else ""
-        )
-        movies.append({
-            "name": title,
-            "link": f"{MOVIE4K_SX}/watch/{slug}/{movie_id}",
-            "description": movie.get("storyline", movie.get("overview", "")),
-            "cover": cover,
-            "productionYear": movie.get("year", ""),
-        })
-
-    return movies
 
 
 def _scrape_browse_results(keyword: str) -> List[Dict]:
@@ -227,68 +174,61 @@ def _scrape_browse_results(keyword: str) -> List[Dict]:
 
 def fetch_popular_and_new_movie4k() -> Dict[str, List[Dict[str, str]]]:
     """
-    Fetch popular (trending) and new movies from movie4k.sx.
+    Fetch popular (trending) and new movies from movie4k.sx JSON API.
 
-    Uses the movie4k.sx JSON browse API with order_by parameters
-    to get trending and newest movies.
+      - popular: order_by=Trending
+      - new:     order_by=Neu
 
     Returns:
         Dictionary with 'popular' and 'new' keys containing lists of movie data
     """
-    result = {"popular": [], "new": []}
+    result: Dict[str, List[Dict[str, str]]] = {"popular": [], "new": []}
 
-    # Fetch trending/popular movies
-    for order_by, key in [("trending", "popular"), ("Neu", "new")]:
+    # Must NOT include 'br' — requests cannot decode Brotli and the server
+    # returns Brotli when 'br' is advertised, yielding an unreadable body.
+    headers = {
+        "User-Agent": RANDOM_USER_AGENT,
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Encoding": "gzip, deflate",
+        "Referer": f"{MOVIE4K_SX}/browse?c=movie&m=filter&order_by=Neu&lang=&type=movies",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+    }
+
+    queries = [("Trending", "popular"), ("Neu", "new")]
+
+    for order_by, key in queries:
         api_url = (
             f"{MOVIE4K_SX}/data/browse/"
-            f"?order_by={order_by}&type=movies&lang=2"
+            f"?lang=2&keyword=&year=&networks=&rating=&votes="
+            f"&genre=&country=&cast=&directors="
+            f"&type=movies&order_by={order_by}&page=1&limit=20"
         )
         try:
-            resp = requests.get(
-                api_url,
-                timeout=DEFAULT_REQUEST_TIMEOUT,
-                headers={
-                    "User-Agent": RANDOM_USER_AGENT,
-                    "Accept": "application/json",
-                },
-            )
+            resp = requests.get(api_url, timeout=DEFAULT_REQUEST_TIMEOUT, headers=headers)
             resp.raise_for_status()
             data = resp.json()
+        except requests.RequestException as err:
+            logging.warning("fetch_popular_and_new_movie4k: request failed for %s: %s", key, err)
+            continue
+        except ValueError as err:
+            logging.warning("fetch_popular_and_new_movie4k: JSON parse failed for %s: %s", key, err)
+            continue
 
-            items = []
-            if isinstance(data, dict):
-                for k in ("movies", "results", "data", "items"):
-                    if k in data and isinstance(data[k], list):
-                        items = data[k]
-                        break
-            elif isinstance(data, list):
-                items = data
-
-            for movie in items:
-                title = movie.get("title", "")
-                if not title:
-                    continue
-
-                poster = movie.get("poster_path", "")
-                cover = (
-                    f"https://image.tmdb.org/t/p/w220_and_h330_face{poster}"
-                    if poster
-                    else ""
-                )
-
-                if cover:
-                    entry = {"name": title, "cover": cover}
-                    # Build URL from slug and _id if available
-                    movie_id = movie.get("_id", "")
-                    slug = movie.get("slug", "") or _title_to_slug(title)
-                    if movie_id and slug:
-                        entry["url"] = f"{MOVIE4K_SX}/watch/{slug}/{movie_id}"
-                    result[key].append(entry)
-
-        except (requests.RequestException, ValueError, KeyError) as err:
-            logging.warning(
-                "movie4k.sx browse API failed for %s: %s", order_by, err
-            )
+        for m in data.get("movies", []):
+            title = m.get("title", "")
+            if not title:
+                continue
+            movie_id = m.get("_id", "")
+            poster_path = m.get("poster_path", "")
+            cover = f"https://image.tmdb.org/t/p/w92{poster_path}" if poster_path else ""
+            slug = _title_to_slug(title)
+            result[key].append({
+                "name": title,
+                "cover": cover,
+                "url": f"{MOVIE4K_SX}/watch/{slug}/{movie_id}",
+            })
 
     return result
 
@@ -297,8 +237,9 @@ def fetch_movie4k_search_results(keyword: str) -> List[Dict]:
     """
     Search movie4k.sx for movies/series matching keyword.
 
-    Tries the JSON API first (with and without language filter),
-    then falls back to HTML scraping if the API returns no results.
+    The /data/search/ API is currently disabled by the site and
+    /data/browse/ with a keyword parameter returns 404, so this
+    function falls back directly to HTML scraping.
 
     Args:
         keyword: The search term
@@ -306,44 +247,11 @@ def fetch_movie4k_search_results(keyword: str) -> List[Dict]:
     Returns:
         List of result dicts with keys: name, link, description, cover, productionYear
     """
-    results = []
-
-    # Try JSON API without language filter first (broader results)
-    for api_url in [
-        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}&type=movies",
-        f"{MOVIE4K_SX}/data/browse/?keyword={quote(keyword)}&lang=2&type=movies",
-    ]:
-        try:
-            resp = requests.get(
-                api_url,
-                timeout=DEFAULT_REQUEST_TIMEOUT,
-                headers={
-                    "User-Agent": RANDOM_USER_AGENT,
-                    "Accept": "application/json",
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            results = _parse_api_results(data)
-            if results:
-                logging.debug(
-                    "movie4k.sx API returned %d results from %s", len(results), api_url
-                )
-                return results
-            logging.debug("movie4k.sx API returned empty results from %s", api_url)
-        except requests.RequestException as err:
-            logging.warning("movie4k.sx API request failed (%s): %s", api_url, err)
-        except (ValueError, KeyError) as err:
-            logging.warning("movie4k.sx API response parse error: %s", err)
-
-    # Fallback: scrape the HTML browse page
-    logging.info("movie4k.sx API returned no results, trying HTML scrape fallback")
     results = _scrape_browse_results(keyword)
     if results:
         logging.debug("movie4k.sx HTML scrape returned %d results", len(results))
     else:
         logging.warning("movie4k.sx: no results found for keyword '%s'", keyword)
-
     return results
 
 
@@ -441,7 +349,7 @@ class Movie:
         )
         response.raise_for_status()
         self._api_data_cache = response.json()
-        return self._api_data_cache
+        return self._api_data_cache or {}
 
     def _fetch_lang_list(self) -> List[Dict]:
         """Fetch available languages for the movie."""
@@ -460,7 +368,7 @@ class Movie:
             )
             response.raise_for_status()
             self._lang_list_cache = response.json()
-            return self._lang_list_cache
+            return self._lang_list_cache or []
         except requests.RequestException as err:
             logging.error("Failed to fetch movie4k.sx language list: %s", err)
             return []
@@ -477,42 +385,47 @@ class Movie:
         if self._year is None:
             data = self._fetch_api_data()
             self._year = data.get("year", 0)
-        return self._year
+        return self._year or 0
 
     @property
     def overview(self) -> str:
         if self._overview is None:
             data = self._fetch_api_data()
             self._overview = data.get("storyline") or data.get("overview", "")
-        return self._overview
+        return self._overview or ""
 
     @property
     def runtime(self) -> str:
         if self._runtime is None:
             data = self._fetch_api_data()
             self._runtime = data.get("runtime", "")
-        return self._runtime
+        return self._runtime or ""
 
     @property
     def rating(self) -> str:
         if self._rating is None:
             data = self._fetch_api_data()
             self._rating = data.get("rating", "")
-        return self._rating
+        return self._rating or ""
 
     @property
     def genres(self) -> str:
         if self._genres is None:
             data = self._fetch_api_data()
-            self._genres = data.get("genres", "")
-        return self._genres
+            raw = data.get("genres", "")
+            # API sometimes returns a list mixing genres and cast names
+            if isinstance(raw, list):
+                self._genres = ", ".join(g for g in raw if g and not g.startswith(" "))
+            else:
+                self._genres = raw
+        return self._genres or ""
 
     @property
     def streams(self) -> List[Dict]:
         if self._streams is None:
             data = self._fetch_api_data()
             self._streams = data.get("streams", [])
-        return self._streams
+        return self._streams or []
 
     @property
     def available_languages(self) -> List[str]:

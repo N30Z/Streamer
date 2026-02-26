@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AniWorld Downloader - Web Interface</title>
+    <title>AnyLoader - Web Interface</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <!-- Fallback for file preview: relative path to static folder -->
@@ -38,7 +38,8 @@
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-brand">
-                <h1 id="nav-title" style="cursor: pointer;">AniWorld Downloader</h1>
+                <h1 id="nav-title" style="cursor: pointer;">AnyLoader</h1>
+                <span id="version-display" class="nav-version"></span>
             </div>
             <div class="nav-actions">
                 <button id="search-modal" class="search-modal nav-btn" title="Search">
@@ -46,6 +47,10 @@
                 </button>
                 <button id="file-browser-btn" class="nav-btn file-browser-btn" title="Downloaded Files">
                     <i class="fas fa-folder"></i>
+                </button>
+                <button id="subscriptions-btn" class="nav-btn subscriptions-btn" title="Subscriptions">
+                    <i class="fas fa-star"></i>
+                    <span class="subscription-badge" id="subscription-badge" style="display: none;"></span>
                 </button>
                 <button id="download-queue-btn" class="nav-btn download-queue-btn" title="Download Queue">
                     <i class="fas fa-download"></i>
@@ -107,15 +112,15 @@
                     <div class="site-selection">
                         <label class="site-option">
                             <input type="checkbox" name="site" value="aniworld.to" id="site-aniworld" checked>
-                            <span class="checkbox-label">AniWorld.to</span>
+                            <span class="checkbox-label">Anime</span>
                         </label>
                         <label class="site-option">
                             <input type="checkbox" name="site" value="s.to" id="site-sto" checked>
-                            <span class="checkbox-label">S.to</span>
+                            <span class="checkbox-label">Serien</span>
                         </label>
                         <label class="site-option">
                             <input type="checkbox" name="site" value="movie4k.sx" id="site-movie4k" checked>
-                            <span class="checkbox-label">Movie4k.sx</span>
+                            <span class="checkbox-label">Movies</span>
                         </label>
                     </div>
                 </div>
@@ -162,23 +167,29 @@
             </div>
 
             <div class="home-content" id="home-content">
-                <div class="loading-section" id="home-loading">
-                    <div class="loading-spinner"></div>
-                    <p>Loading popular and new content...</p>
+                <!-- Continue Watching Section -->
+                <div class="continue-watching-section" id="continue-watching-section" style="display: none;">
+                    <div class="continue-watching-header">
+                        <h3><i class="fas fa-play-circle"></i> Continue Watching</h3>
+                    </div>
+                    <div class="continue-watching-grid" id="continue-watching-grid"></div>
                 </div>
 
-                <div class="popular-new-sections" id="popular-new-sections" style="display: none;">
+                <div class="popular-new-sections" id="popular-new-sections">
                     <div class="provider-columns">
                         <!-- AniWorld Column -->
                         <div class="provider-column">
                             <div class="provider-column-header">
-                                <h3>AniWorld.to</h3>
+                                <h3>Anime</h3>
+                                <button class="provider-refresh-btn" id="refresh-aniworld" title="Reload Anime">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
                             </div>
-                            <div class="provider-column-loading" id="aniworld-loading" style="display: none;">
+                            <div class="provider-column-loading" id="aniworld-loading">
                                 <div class="loading-spinner-small"></div>
                                 <span>Loading...</span>
                             </div>
-                            <div class="provider-column-content" id="aniworld-content">
+                            <div class="provider-column-content" id="aniworld-content" style="display: none;">
                                 <div class="anime-section" id="popular-section">
                                     <h4><i class="fas fa-fire"></i> Popular</h4>
                                     <div class="anime-grid" id="popular-anime-grid"></div>
@@ -193,13 +204,16 @@
                         <!-- S.to Column -->
                         <div class="provider-column">
                             <div class="provider-column-header">
-                                <h3>S.to</h3>
+                                <h3>Serien</h3>
+                                <button class="provider-refresh-btn" id="refresh-sto" title="Reload Serien">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
                             </div>
-                            <div class="provider-column-loading" id="sto-loading" style="display: none;">
+                            <div class="provider-column-loading" id="sto-loading">
                                 <div class="loading-spinner-small"></div>
                                 <span>Loading...</span>
                             </div>
-                            <div class="provider-column-content" id="sto-content">
+                            <div class="provider-column-content" id="sto-content" style="display: none;">
                                 <div class="anime-section" id="popular-sto-section">
                                     <h4><i class="fas fa-fire"></i> Popular</h4>
                                     <div class="anime-grid" id="popular-sto-grid"></div>
@@ -214,13 +228,16 @@
                         <!-- Movie4k Column -->
                         <div class="provider-column">
                             <div class="provider-column-header">
-                                <h3>Movie4k.sx</h3>
+                                <h3>Movies</h3>
+                                <button class="provider-refresh-btn" id="refresh-movie4k" title="Reload Movies">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
                             </div>
-                            <div class="provider-column-loading" id="movie4k-loading" style="display: none;">
+                            <div class="provider-column-loading" id="movie4k-loading">
                                 <div class="loading-spinner-small"></div>
                                 <span>Loading...</span>
                             </div>
-                            <div class="provider-column-content" id="movie4k-content">
+                            <div class="provider-column-content" id="movie4k-content" style="display: none;">
                                 <div class="anime-section" id="popular-movie4k-section">
                                     <h4><i class="fas fa-fire"></i> Popular</h4>
                                     <div class="anime-grid" id="popular-movie4k-grid"></div>
@@ -232,6 +249,30 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Subscriptions Panel (shown when star button clicked) -->
+            <div class="local-files" id="subscriptions-panel" style="display: none;">
+                <div class="local-files-header">
+                    <button class="local-files-back-btn" id="subscriptions-back-btn" title="Back to Home">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <h3><i class="fas fa-star"></i> Subscriptions</h3>
+                    <button class="local-files-refresh-btn" id="subscriptions-refresh-btn" title="Check for new episodes">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="local-files-loading" id="subscriptions-loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading subscriptions...</p>
+                </div>
+                <div class="local-files-grid" id="subscriptions-grid" style="display: none;">
+                    <!-- Subscription cards populated dynamically -->
+                </div>
+                <div class="local-files-empty" id="subscriptions-empty" style="display: none;">
+                    <i class="fas fa-star"></i>
+                    <p>No subscriptions yet.<br>Open a series in the download modal and click Subscribe.</p>
                 </div>
             </div>
 
@@ -435,8 +476,36 @@
                     <span id="selected-episode-count">0 episodes selected</span>
                 </div>
                 <div class="modal-actions">
+                    <!-- Subscribe button -->
+                    <button id="subscribe-btn" class="subscribe-btn secondary-btn" title="Subscribe to this series" style="display: none;">
+                        <i class="fas fa-star"></i> Subscribe
+                    </button>
                     <button id="cancel-download" class="secondary-btn">Cancel</button>
                     <button id="confirm-download" class="primary-btn">Start Download</button>
+                </div>
+            </div>
+
+            <!-- Subscription Options Panel (shown when subscribe-btn is expanded) -->
+            <div class="subscription-options" id="subscription-options" style="display: none;">
+                <div class="subscription-options-inner">
+                    <h4><i class="fas fa-star"></i> Subscription Settings</h4>
+                    <label class="sub-option-row">
+                        <input type="checkbox" id="sub-opt-notify" checked>
+                        <span>Notify when new episodes are available</span>
+                    </label>
+                    <label class="sub-option-row">
+                        <input type="checkbox" id="sub-opt-auto-download">
+                        <span>Auto-download new episodes</span>
+                    </label>
+                    <div class="sub-option-actions">
+                        <button id="sub-confirm-btn" class="primary-btn sub-save-btn">
+                            <i class="fas fa-star"></i> Save Subscription
+                        </button>
+                        <button id="sub-unsubscribe-btn" class="secondary-btn danger-btn" style="display: none;">
+                            <i class="fas fa-star-half-alt"></i> Unsubscribe
+                        </button>
+                        <button id="sub-cancel-btn" class="secondary-btn">Cancel</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -607,6 +676,31 @@
             }
         });
     </script>
+
+    <!-- Update Available Modal -->
+    <div id="update-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 420px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-arrow-up"></i> Update Available</h3>
+                <button id="close-update-modal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body update-modal-body">
+                <i class="fas fa-rocket update-modal-icon"></i>
+                <p class="update-modal-text">A new version of AnyLoader is available.</p>
+                <p class="update-modal-versions">
+                    <span id="update-current-version" class="update-version-tag"></span>
+                    <i class="fas fa-arrow-right update-arrow"></i>
+                    <span id="update-latest-version" class="update-version-tag update-version-new"></span>
+                </p>
+            </div>
+            <div class="modal-footer" style="justify-content: center; gap: 0.75rem;">
+                <a href="https://github.com/N30Z/Streamer/releases/latest" target="_blank" rel="noopener" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Download Update
+                </a>
+                <button id="close-update-modal-btn" class="btn">Later</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Preferences Modal -->
     {% include 'preferences_modal.html' %}

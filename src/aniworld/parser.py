@@ -9,7 +9,6 @@ from typing import List, Optional
 
 import requests
 
-from .extractors.provider.hanime import get_direct_link_from_hanime
 from . import config
 
 
@@ -225,33 +224,6 @@ def _handle_provider_links(args: argparse.Namespace) -> None:
     if invalid_links:
         logging.error("Invalid provider episode URLs: %s", ", ".join(invalid_links))
         sys.exit(1)
-
-    hanime_links = [
-        link
-        for link in args.provider_link
-        if link.startswith("https://hanime.tv/videos/")
-    ]
-
-    if hanime_links:
-        for link in hanime_links:
-            try:
-                direct_link = get_direct_link_from_hanime(link)
-                if direct_link:
-                    print(f"-> {link}")
-                    print(f'"{direct_link}"')
-                    print("-" * 40)
-                else:
-                    logging.error(
-                        "Could not extract direct link from hanime URL: %s", link
-                    )
-            except Exception as err:
-                logging.error("Error processing hanime link '%s': %s", link, err)
-
-        args.provider_link = [
-            link
-            for link in args.provider_link
-            if not link.startswith("https://hanime.tv/videos/")
-        ]
 
     if not args.provider_link:
         sys.exit(0)

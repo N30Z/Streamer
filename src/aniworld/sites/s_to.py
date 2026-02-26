@@ -290,15 +290,10 @@ def fetch_popular_and_new_sto() -> Dict[str, List[Dict[str, str]]]:
 
         # Extract new series from "Neu auf S.to" section
         # Structure: h4 with "Neu auf S.to" text, followed by div.row.g-3 with show-card links
-        new_heading = soup.find(
-            ["h4", "h3", "h2"],
-            string=lambda text: text and "neu" in text.lower() and "s.to" in text.lower(),
-        )
+        new_heading = soup.find("section", class_="continue-widget")
         if new_heading:
-            # Find the next row container with show-cards
-            new_container = new_heading.find_next("div", class_="row")
-            if new_container:
-                result["new"] = _extract_new_series(new_container)
+            result["new"] = _extract_new_series(new_heading)
+                
 
         return result
 
@@ -358,35 +353,23 @@ def _extract_new_series(row_container) -> List[Dict[str, str]]:
     """
     series_list = []
 
-    # Find show-card links or column divs containing cards
-    cards = row_container.find_all("a", class_="show-card")
-    if not cards:
-        # Fallback: look for column divs with links
-        cards = row_container.find_all("div", class_=re.compile(r"col"))
-
+    cards = row_container.find_all("article", class_="continue-card")
     for card in cards:
         try:
             name = None
-            # Try h6 title first
-            h6 = card.find("h6") or card.find_next_sibling("div", class_="mt-2")
-            if h6:
-                name = h6.get_text(strip=True)
-            # Fallback to img alt
+            title_tag = card.find("h3", class_="continue-title")
+            if title_tag:
+                name = title_tag.get_text(strip=True)
             if not name:
-                img = card.find("img")
-                if img:
-                    name = img.get("alt", "")
-            # Fallback to link title
-            if not name:
-                link = card if card.name == "a" else card.find("a")
+                link = card.find("a", href=re.compile(r"/serie/"))
                 if link:
-                    name = link.get("title", "")
+                    name = link.get_text(strip=True) or link.get("title", "")
 
             cover = _extract_picture_url(card)
 
-            # Extract URL from the card link
+            # Extract URL from link
             url = None
-            link = card if card.name == "a" else card.find("a", href=True)
+            link = card.find("a", href=True)
             if link:
                 href = link.get("href", "")
                 if href.startswith("/"):

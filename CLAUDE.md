@@ -1,10 +1,12 @@
 # Claude Code Project Guide
 
-This document provides guidance for AI assistants working on the AniWorld Downloader codebase.
+This document provides guidance for AI assistants working on the AnyLoader codebase.
 
 ## Project Overview
 
-**AniWorld Downloader** (v3.9.0) is a Python 3.9+ application for downloading anime, series, and movies from streaming sites (aniworld.to, s.to, movie4k.sx). It provides a Flask-based web UI as the primary interface, with a full-featured CLI for direct downloads and automation. A native Windows desktop app (via pywebview + PyInstaller) is also supported.
+**AnyLoader** (formerly AniWorld Downloader, v3.9.0) is a Python 3.9+ application for downloading anime, series, and movies from streaming sites (aniworld.to, s.to, movie4k.sx). It provides a Flask-based web UI as the primary interface, with a full-featured CLI for direct downloads and automation. A native Windows desktop app (via pywebview + PyInstaller) is also supported.
+
+The web UI branding is **AnyLoader**. The underlying Python package name remains `aniworld` for backward compatibility.
 
 **Package name:** `aniworld`
 **Entry point:** `aniworld = "aniworld.__main__:main"` (defined in `pyproject.toml`)
@@ -89,19 +91,20 @@ Each site module provides search, episode parsing, and season/episode counting:
 
 ### Web UI (`web/`)
 
-- `app.py` (~3,266 lines) - Flask application wrapped in a `WebApp` class. REST API, authentication, download queue, Plex integration, Chromecast support, file streaming, watch progress tracking.
+- `app.py` (~3,400+ lines) - Flask application wrapped in a `WebApp` class. REST API, authentication, download queue, Plex integration, Chromecast support, file streaming, watch progress tracking, **subscription management**.
+  - **`WebApp.__init__()` startup sequence**: (1) init download manager, (2) create Flask app, (3) apply saved preferences, (4) ensure FFmpeg is available, (5) scan media library (log series/season/episode counts), (6) start metadata backfill (background), (7) init subscription notification store, (8) **start subscription checker** (background — 30 s delay then immediate check + hourly loop), (9) set up routes.
 - `download_manager.py` (~764 lines) - `DownloadQueueManager` with ThreadPoolExecutor-based concurrent download queue (default: 5 workers). In-memory job storage with progress tracking and graceful cancellation.
 - `database.py` (~479 lines) - `UserDatabase` class for SQLite user authentication (SHA-256 + salt password hashing)
 - `templates/` - Jinja2 templates:
-  - `index.html` - Main page with search, results, download queue
+  - `index.html` - Main page with search, results, download queue, **subscriptions panel**, **continue watching**
   - `login.html` - Authentication form
   - `settings.html` - Application settings
   - `preferences.html` - User preferences page
   - `preferences_modal.html` - Preferences modal variant
   - `setup.html` - First-run setup wizard
 - `static/` - Frontend assets (no build pipeline, edit directly):
-  - `css/style.css` (~101 KB) - Complete styling with responsive design
-  - `js/app.js` (~129 KB) - Vanilla JavaScript, no frameworks
+  - `css/style.css` (~103 KB) - Complete styling with responsive design
+  - `js/app.js` (~140+ KB) - Vanilla JavaScript, no frameworks
 
 ### Supporting Modules
 
@@ -150,6 +153,17 @@ POST /api/files/play                 Launch file in local media player
 GET  /api/watch-progress             Get watch progress for files
 POST /api/watch-progress             Save watch progress
 DELETE /api/watch-progress           Clear watch progress
+```
+
+### Subscriptions
+```
+GET  /api/subscriptions              List all subscriptions (+ pending notifications)
+POST /api/subscriptions              Add a new subscription
+DELETE /api/subscriptions/<id>       Remove a subscription
+PUT  /api/subscriptions/<id>         Update subscription settings (notify, auto_download, language)
+POST /api/subscriptions/check        Manually trigger a new-episode check (background)
+GET  /api/subscriptions/notifications Get and clear pending new-episode notifications
+POST /api/subscriptions/check-url    Check if a series URL is already subscribed
 ```
 
 ### Plex Integration
@@ -365,6 +379,38 @@ Debug scripts in `scripts/` for development:
 - `test_doodstream.py` - Doodstream tests
 - `test_sto_title.py` - S.to title tests
 
+## New Features (AnyLoader)
+
+### Subscription System
+- Subscriptions stored in `~/.local/share/aniworld/subscriptions.json` (Windows: `%APPDATA%/aniworld/subscriptions.json`)
+- **Startup check**: `_start_subscription_checker()` is called during `WebApp.__init__()`. It spawns a daemon thread that waits 30 seconds (so the app finishes initialising), then runs `_check_subscriptions_once()` immediately. This means subscriptions are verified for new episodes shortly after every server start, not just on the hourly schedule.
+- **Hourly polling**: After the initial startup check the background thread sleeps for 1 hour and re-checks in a loop.
+- **Per-subscription settings**: notify on new episodes, auto-download new episodes, language
+- **Navbar**: Star button opens subscriptions panel listing all subscribed series
+- **Download modal**: Subscribe button in footer; expands subscription settings panel
+- Helper methods in `WebApp`:
+  - `_get_subscriptions_file()` / `_load_subscriptions()` / `_save_subscriptions()`
+  - `_count_total_episodes(series_url)` - counts episodes for new-episode detection
+  - `_check_subscriptions_once()` - runs the check loop body (iterates every subscription, compares episode counts, fires notifications & auto-downloads)
+  - `_auto_download_new_episodes(sub, old, new)` - queues new episodes
+  - `_start_subscription_checker()` - spawns daemon thread (30 s delay → initial check → hourly loop)
+
+### Watch Progress in Download Modal
+- When the download modal opens for a series with local files, episode progress is fetched via `/api/watch-progress`
+- Episodes/movies with partial progress (5%–95%) show an **orange progress bar** and a **Resume** (↩) button
+- Episodes with >95% progress show a **Watched** ✓ badge
+- Clicking Resume starts playback from the saved timestamp
+
+### Continue Watching (Home Page)
+- The home page shows a "Continue Watching" horizontal grid of in-progress files
+- Files with 5%–95% watch progress appear; clicking starts from saved position
+- Updates on every page load
+
+### AnyLoader Branding
+- UI title, page titles, and all user-facing text now say **AnyLoader**
+- Index columns renamed: `aniworld.to → Anime`, `s.to → Serien`, `movie4k.sx → Movies`
+- Search checkboxes reflect the same labels
+
 ## Data Storage Paths
 
 | Platform | Location |
@@ -376,6 +422,7 @@ Debug scripts in `scripts/` for development:
 Files stored:
 - `aniworld.db` - SQLite authentication database
 - `preferences.json` - User settings
+- `subscriptions.json` - Series subscriptions (notify/auto-download settings)
 - `ffmpeg/` - Auto-downloaded FFmpeg/FFprobe binaries
 
 ## CLI Arguments
