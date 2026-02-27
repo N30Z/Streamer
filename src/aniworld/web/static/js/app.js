@@ -128,6 +128,30 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load "Continue Watching" section (defined in IIFE, exported to window)
     if (window.loadContinueWatching) window.loadContinueWatching();
 
+    // Load media library stats
+    fetch('/api/media-stats')
+        .then(r => r.json())
+        .then(stats => {
+            if (!stats || !stats.episodes) return;
+            const box = document.getElementById('media-stats-box');
+            const items = document.getElementById('media-stats-items');
+            if (!box || !items) return;
+            const rows = [
+                ['Series', stats.series],
+                ['Seasons', stats.seasons],
+                ['Episodes', stats.episodes],
+                ['Size', stats.size],
+            ];
+            items.innerHTML = rows.map(([label, val]) =>
+                `<div class="media-stat-row">
+                    <span class="media-stat-label">${label}</span>
+                    <span class="media-stat-value">${val}</span>
+                </div>`
+            ).join('');
+            box.style.display = 'block';
+        })
+        .catch(() => {});
+
     // Initialize theme (default is dark mode)
     initializeTheme();
 
@@ -157,6 +181,23 @@ document.addEventListener('DOMContentLoaded', function() {
         searchInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 performSearch();
+            }
+        });
+    }
+
+    // Filter dropdown toggle
+    const filterBtn = document.getElementById('filter-btn');
+    const filterDropdown = document.getElementById('nav-search-filters');
+    if (filterBtn && filterDropdown) {
+        filterBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const open = filterDropdown.classList.toggle('open');
+            filterBtn.classList.toggle('open', open);
+        });
+        document.addEventListener('click', function(e) {
+            if (!filterBtn.contains(e.target) && !filterDropdown.contains(e.target)) {
+                filterDropdown.classList.remove('open');
+                filterBtn.classList.remove('open');
             }
         });
     }
@@ -3594,10 +3635,22 @@ document.head.appendChild(style);
 
             inProgress.forEach(([filePath, prog]) => {
                 const fileName = filePath.split('/').pop().split('\\').pop();
-                // Look up folder cover by parent directory
-                const parentPath = filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
+                // Look up folder cover by walking up the directory tree
+                // (handles season subfolders: Fallout/Season 1/ep.mkv → finds cover under Fallout)
+                const normalizedPath = filePath.replace(/\\/g, '/');
+                let parentPath = normalizedPath.split('/').slice(0, -1).join('/');
                 const seriesTitle = parentPath.split('/')[0] || '';
-                const cardCover = folderCoverMap[parentPath] || defaultCover;
+                let cardCover = defaultCover;
+                let searchPath = parentPath;
+                while (searchPath) {
+                    if (folderCoverMap[searchPath]) {
+                        cardCover = folderCoverMap[searchPath];
+                        break;
+                    }
+                    const lastSlash = searchPath.lastIndexOf('/');
+                    if (lastSlash === -1) break;
+                    searchPath = searchPath.substring(0, lastSlash);
+                }
                 const card = document.createElement('div');
                 card.className = 'cw-card';
                 card.innerHTML = `

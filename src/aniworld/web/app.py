@@ -18,6 +18,11 @@ from .. import config
 from .database import UserDatabase
 from .download_manager import get_download_manager
 
+# In-memory set of folder paths currently being fetched for cover images.
+# Prevents duplicate concurrent downloads; resets on server restart so
+# previous failures are retried automatically.
+_cover_fetch_in_progress: set = set()
+
 
 class WebApp:
     """Flask web application wrapper for AnyLoader"""
@@ -67,6 +72,9 @@ class WebApp:
 
         # Ensure FFmpeg is available (download if missing)
         self._ensure_ffmpeg()
+
+        # Media library stats (populated by _scan_media_library)
+        self._media_stats: dict = {}
 
         # Scan for manually placed files at startup
         self._scan_media_library()
@@ -316,6 +324,13 @@ class WebApp:
                         return f"{size_bytes:.1f} {unit}"
                     size_bytes /= 1024.0
                 return f"{size_bytes:.1f} PB"
+
+            self._media_stats = {
+                "series": series_count,
+                "seasons": season_count,
+                "episodes": episode_count,
+                "size": format_size(total_size),
+            }
 
             if episode_count > 0:
                 logging.info(
@@ -1349,6 +1364,12 @@ class WebApp:
                 }
             )
 
+        @self.app.route("/api/media-stats")
+        @self._require_api_auth
+        def api_media_stats():
+            """Return media library statistics."""
+            return jsonify(self._media_stats)
+
         @self.app.route("/health")
         def health():
             """Health check endpoint."""
@@ -1829,10 +1850,10 @@ class WebApp:
                     meta_path.parent.mkdir(parents=True, exist_ok=True)
                     meta_path.write_text(json_mod.dumps(meta, ensure_ascii=False), encoding="utf-8")
 
-                    # Download and save cover image locally
+                    # Download and save cover image locally (TMDB primary, site URL fallback)
                     cover_url = data.get("cover", "")
-                    if cover_url:
-                        self._download_cover_image(cover_url, meta_site, meta_path.parent)
+                    if anime_title or cover_url:
+                        self._download_cover_image(cover_url, meta_site, meta_path.parent, title=anime_title)
                 except Exception as meta_err:
                     logging.warning("Failed to save series metadata: %s", meta_err)
 
@@ -2385,27 +2406,37 @@ class WebApp:
                                 local_cover = ""
                                 for ext in (".jpg", ".png", ".webp"):
                                     if (item / f"cover{ext}").exists():
-                                        local_cover = f"/api/files/cover?path={relative_path}"
+                                        from urllib.parse import quote as _url_quote
+                                        _rel_str = str(relative_path).replace("\\", "/")
+                                        local_cover = f"/api/files/cover?path={_url_quote(_rel_str)}"
                                         break
 
-                                # If no local cover and not yet attempted, fetch from TMDB in background
-                                if not local_cover and not (item / ".cover_attempted").exists():
+                                # If no local cover and not already downloading, fetch in background.
+                                # Uses an in-memory set instead of a .cover_attempted marker so
+                                # that failures are retried on each server restart.
+                                _dest_key = str(item)
+                                if not local_cover and _dest_key not in _cover_fetch_in_progress:
                                     import threading as _threading
                                     _cover_title = folder_meta.get("title", item.name)
                                     _cover_dest = item
+                                    _cover_fallback_url = folder_meta.get("cover", "")
+                                    _cover_fallback_site = folder_meta.get("site", "aniworld.to")
+                                    _cover_fetch_in_progress.add(_dest_key)
 
-                                    def _fetch_cover(_dest=_cover_dest, _title=_cover_title):
+                                    def _fetch_cover(_dest=_cover_dest, _title=_cover_title,
+                                                     _url=_cover_fallback_url, _site=_cover_fallback_site,
+                                                     _key=_dest_key):
                                         try:
                                             from ..extractors.cover import download_cover_2x3
                                             download_cover_2x3(_title, output_path=str(_dest / "cover.jpg"))
                                             logging.info("Downloaded TMDB cover for '%s'", _title)
                                         except Exception as _e:
-                                            logging.debug("Could not download cover for '%s': %s", _title, _e)
+                                            logging.debug("Could not download TMDB cover for '%s': %s", _title, _e)
+                                            # Fallback: download site cover URL
+                                            if _url:
+                                                WebApp._download_cover_image(_url, _site, _dest)
                                         finally:
-                                            try:
-                                                (_dest / ".cover_attempted").touch()
-                                            except Exception:
-                                                pass
+                                            _cover_fetch_in_progress.discard(_key)
 
                                     _threading.Thread(target=_fetch_cover, daemon=True).start()
 
@@ -3292,15 +3323,33 @@ class WebApp:
                 })
 
     @staticmethod
-    def _download_cover_image(cover_url: str, site: str, dest_dir: Path) -> None:
+    def _download_cover_image(cover_url: str, site: str, dest_dir: Path, title: str = "") -> None:
         """Download a cover image and save it to the series folder.
+
+        Tries TMDB via cover.py first (primary). Falls back to the site's own
+        cover URL if TMDB lookup fails or no title is provided.
 
         Args:
             cover_url: The cover image URL (may be relative for aniworld/s.to).
             site: The site identifier (e.g. 'aniworld.to', 's.to', 'movie4k.sx').
             dest_dir: The series directory to save cover.jpg into.
+            title: Series/movie title for TMDB lookup (primary source).
         """
         import requests as req_lib
+
+        # --- Primary: TMDB via cover.py ---
+        if title:
+            try:
+                from ..extractors.cover import download_cover_2x3
+                download_cover_2x3(title, output_path=str(dest_dir / "cover.jpg"))
+                logging.debug("Saved TMDB cover for '%s'", title)
+                return
+            except Exception as tmdb_err:
+                logging.debug("TMDB cover failed for '%s', falling back to site cover: %s", title, tmdb_err)
+
+        # --- Fallback: site cover URL ---
+        if not cover_url:
+            return
 
         # Normalize relative URLs to absolute
         if not cover_url.startswith("http"):
@@ -3331,9 +3380,9 @@ class WebApp:
                     ext = ".jpg"
                 cover_file = dest_dir / f"cover{ext}"
                 cover_file.write_bytes(resp.content)
-                logging.debug("Saved cover image to %s", cover_file)
+                logging.debug("Saved site cover image to %s", cover_file)
         except Exception as e:
-            logging.warning("Failed to download cover image: %s", e)
+            logging.warning("Failed to download site cover image: %s", e)
 
     def _count_video_files_recursive(self, directory: Path, video_extensions: set) -> int:
         """

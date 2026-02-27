@@ -36,6 +36,7 @@ dependencies = [
     'packaging',
     'jsbeautifier',
     'flask',
+    'Pillow',
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
