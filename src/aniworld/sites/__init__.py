@@ -5,6 +5,7 @@ Each module encapsulates the logic for a specific streaming site:
 - aniworld: AniWorld.to (anime streaming)
 - s_to: S.to (series streaming)
 - movie4k: Movie4k.sx (movie streaming)
+- huhu: huhu.to (movie streaming, parallel/fallback)
 """
 
 from .aniworld import (
@@ -21,6 +22,7 @@ from .s_to import (
     get_movie_episode_count as sto_get_movie_episode_count,
 )
 from .movie4k import Movie, MovieAnime, is_movie4k_url, fetch_movie4k_search_results
+from .huhu import HuhuMovie, HuhuMovieAnime, is_huhu_url, fetch_huhu_search_results
 
 __all__ = [
     "search_anime",
@@ -36,4 +38,8 @@ __all__ = [
     "MovieAnime",
     "is_movie4k_url",
     "fetch_movie4k_search_results",
+    "HuhuMovie",
+    "HuhuMovieAnime",
+    "is_huhu_url",
+    "fetch_huhu_search_results",
 ]

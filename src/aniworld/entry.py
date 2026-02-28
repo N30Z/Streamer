@@ -5,6 +5,7 @@ from typing import List
 
 from .models import Anime, Episode, SUPPORTED_SITES
 from .movie4k import Movie, MovieAnime, is_movie4k_url
+from .sites.huhu import HuhuMovie, HuhuMovieAnime, is_huhu_url
 from .parser import get_arguments
 
 from .search import search_anime
@@ -72,11 +73,12 @@ def _collect_episode_links() -> List[str]:
     links = [link.rstrip("/") for link in links]
 
     movie4k_links = [link for link in links if is_movie4k_url(link)]
-    series_links = [link for link in links if not is_movie4k_url(link)]
+    huhu_links = [link for link in links if is_huhu_url(link)]
+    series_links = [link for link in links if not is_movie4k_url(link) and not is_huhu_url(link)]
 
     processed_links = generate_links(series_links, arguments) if series_links else []
 
-    return processed_links + movie4k_links
+    return processed_links + movie4k_links + huhu_links
 
 
 def _group_episodes_by_series(links: List[str]) -> List[Anime]:
@@ -116,6 +118,23 @@ def _group_episodes_by_series(links: List[str]) -> List[Anime]:
                 logging.error("Failed to create Movie from '%s': %s", link, err)
             continue
 
+        # If this is a huhu.to link, flush and append a HuhuMovieAnime.
+        if is_huhu_url(link):
+            if episode_list:
+                episode_site = (
+                    episode_list[0].site if episode_list else "aniworld.to"
+                )
+                anime_list.append(Anime(episode_list=episode_list, site=episode_site))
+                episode_list = []
+                current_anime = None
+
+            try:
+                movie = HuhuMovie(url=link)
+                anime_list.append(HuhuMovieAnime(movie))
+            except Exception as err:
+                logging.error("Failed to create HuhuMovie from '%s': %s", link, err)
+            continue
+
         series_slug = _extract_series_slug(link)
         if series_slug is None:
             logging.warning("Invalid episode link format: %s", link)
@@ -152,7 +171,8 @@ def _handle_episode_mode() -> None:
         anime_list = [Anime(episode_list=[episode])]
     else:
         movie4k_links = [link for link in links if is_movie4k_url(link)]
-        series_links = [link for link in links if not is_movie4k_url(link)]
+        huhu_links_mode = [link for link in links if is_huhu_url(link)]
+        series_links = [link for link in links if not is_movie4k_url(link) and not is_huhu_url(link)]
 
         anime_list = []
 
@@ -162,6 +182,13 @@ def _handle_episode_mode() -> None:
                 anime_list.append(MovieAnime(movie))
             except Exception as err:
                 logging.error("Failed to create Movie from '%s': %s", link, err)
+
+        for link in huhu_links_mode:
+            try:
+                movie = HuhuMovie(url=link)
+                anime_list.append(HuhuMovieAnime(movie))
+            except Exception as err:
+                logging.error("Failed to create HuhuMovie from '%s': %s", link, err)
 
         if series_links:
             anime_list.extend(_group_episodes_by_series(series_links))

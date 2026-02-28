@@ -345,7 +345,7 @@ class WebApp:
         except Exception as e:
             logging.warning(f"Failed to scan media library: {e}")
 
-    def _start_metadata_backfill(self):
+    def _start_metadata_backfill(self): 
         """Start a background thread to backfill .series_meta.json for existing folders."""
         t = threading.Thread(target=self._backfill_series_metadata, daemon=True)
         t.start()
@@ -1445,22 +1445,49 @@ class WebApp:
                             logging.warning(f"Failed to fetch from s.to: {e}")
 
                     if "movie4k.sx" in sites:
-                        try:
-                            from ..sites.movie4k import fetch_movie4k_search_results
-                            movie_results = fetch_movie4k_search_results(keyword)
-                            for movie in movie_results:
-                                link = movie.get("link", "")
-                                if link and link not in seen_slugs:
-                                    # Mark movie entries so the frontend can treat them specially
-                                    movie["site"] = "movie4k.sx"
-                                    movie["base_url"] = config.MOVIE4K_SX
-                                    movie["stream_path"] = "watch"
-                                    movie["type"] = "movie"
-                                    movie["is_movie"] = True
-                                    all_results.append(movie)
-                                    seen_slugs.add(link)
-                        except Exception as e:
-                            logging.warning(f"Failed to fetch from movie4k.sx: {e}")
+                        import concurrent.futures as _cf
+                        from ..sites.movie4k import fetch_movie4k_search_results
+                        from ..sites.huhu import fetch_huhu_search_results as _fetch_huhu
+
+                        def _search_movie4k(kw):
+                            return fetch_movie4k_search_results(kw)
+
+                        def _search_huhu(kw):
+                            return _fetch_huhu(kw)
+
+                        with _cf.ThreadPoolExecutor(max_workers=2) as _pool:
+                            _f_m4k = _pool.submit(_search_movie4k, keyword)
+                            _f_huhu = _pool.submit(_search_huhu, keyword)
+
+                            try:
+                                movie_results = _f_m4k.result(timeout=30)
+                                for movie in movie_results:
+                                    link = movie.get("link", "")
+                                    if link and link not in seen_slugs:
+                                        movie["site"] = "movie4k.sx"
+                                        movie["base_url"] = config.MOVIE4K_SX
+                                        movie["stream_path"] = "watch"
+                                        movie["type"] = "movie"
+                                        movie["is_movie"] = True
+                                        all_results.append(movie)
+                                        seen_slugs.add(link)
+                            except Exception as e:
+                                logging.warning(f"Failed to fetch from movie4k.sx: {e}")
+
+                            try:
+                                huhu_results = _f_huhu.result(timeout=30)
+                                for movie in huhu_results:
+                                    link = movie.get("link", "")
+                                    if link and link not in seen_slugs:
+                                        movie["site"] = "huhu.to"
+                                        movie["base_url"] = config.HUHU_TO
+                                        movie["stream_path"] = "web-vod/item"
+                                        movie["type"] = "movie"
+                                        movie["is_movie"] = True
+                                        all_results.append(movie)
+                                        seen_slugs.add(link)
+                            except Exception as e:
+                                logging.warning(f"Failed to fetch from huhu.to: {e}")
 
                     return all_results
 
@@ -1495,6 +1522,17 @@ class WebApp:
                             slug_val = parts[-2] if len(parts) >= 2 else link
                         except Exception:
                             slug_val = link
+                    elif anime_site == "huhu.to":
+                        # URL is https://huhu.to/web-vod/item?id=movie.911430
+                        # Use the movie ID (with dots replaced) as slug
+                        try:
+                            from urllib.parse import urlparse as _up, parse_qs as _pqs
+                            _parsed = _up(full_url)
+                            _params = _pqs(_parsed.query)
+                            _movie_id = _params.get("id", ["unknown"])[0]
+                            slug_val = _movie_id.replace(".", "_")
+                        except Exception:
+                            slug_val = link.split("=")[-1] if "=" in link else link
                     else:
                         slug_val = link if not link.startswith("http") else link.split("/")[-1]
 
@@ -1558,12 +1596,13 @@ class WebApp:
                     is_movie4k = "movie4k" in domain
                     is_sto = "s.to" in domain
                     is_aniworld = "aniworld.to" in domain
+                    is_huhu = "huhu.to" in domain
 
-                    if not is_movie4k and not is_sto and not is_aniworld:
+                    if not is_movie4k and not is_sto and not is_aniworld and not is_huhu:
                         return jsonify(
                             {
                                 "success": False,
-                                "error": "URL must be from aniworld.to, s.to, or movie4k.sx",
+                                "error": "URL must be from aniworld.to, s.to, movie4k.sx, or huhu.to",
                             }
                         ), 400
 
@@ -1622,6 +1661,44 @@ class WebApp:
                                 "cover": "",
                             }
 
+                        return jsonify(
+                            {
+                                "success": True,
+                                "result": anime_result,
+                                "source": "direct_url",
+                            }
+                        )
+
+                    # Handle huhu.to direct URLs
+                    if is_huhu:
+                        from ..sites.huhu import HuhuMovie as _HuhuMovieDirect
+                        try:
+                            movie_obj = _HuhuMovieDirect(url=url)
+                            anime_result = {
+                                "title": movie_obj.title,
+                                "url": url,
+                                "slug": movie_obj.slug,
+                                "site": "huhu.to",
+                                "description": movie_obj.overview or "",
+                                "cover": movie_obj.cover or "",
+                            }
+                        except Exception as huhu_err:
+                            logging.warning(f"Failed to fetch huhu.to details: {huhu_err}")
+                            # Best-effort fallback from URL query params
+                            try:
+                                from urllib.parse import parse_qs as _pqs2
+                                _params2 = _pqs2(parsed_url.query)
+                                _movie_id = _params2.get("id", ["unknown"])[0]
+                            except Exception:
+                                _movie_id = "unknown"
+                            anime_result = {
+                                "title": _movie_id.replace("movie.", "").replace(".", " ").title(),
+                                "url": url,
+                                "slug": _movie_id.replace(".", "_"),
+                                "site": "huhu.to",
+                                "description": "",
+                                "cover": "",
+                            }
                         return jsonify(
                             {
                                 "success": True,
@@ -1838,6 +1915,8 @@ class WebApp:
                         meta_site = "s.to"
                     elif "movie4k" in first_url or "/watch/" in first_url:
                         meta_site = "movie4k.sx"
+                    elif "huhu.to" in first_url:
+                        meta_site = "huhu.to"
 
                     meta = {
                         "url": series_base_url,
@@ -1945,6 +2024,18 @@ class WebApp:
                             except Exception:
                                 movie_title = "Movie"
                             # No seasons/episodes for movies; return a movies list with single item
+                            return {}, [{"movie": 1, "title": movie_title, "url": series_url}], series_url, movie_description
+
+                        # huhu.to movie URLs: https://huhu.to/web-vod/item?id=movie.{tmdb_id}
+                        if "huhu.to" in series_url:
+                            from ..sites.huhu import HuhuMovie as _HuhuMovie
+                            movie_description = ""
+                            try:
+                                movie_obj = _HuhuMovie(url=series_url)
+                                movie_title = movie_obj.title
+                                movie_description = movie_obj.overview or ""
+                            except Exception:
+                                movie_title = "Movie"
                             return {}, [{"movie": 1, "title": movie_title, "url": series_url}], series_url, movie_description
 
                         raise ValueError("Invalid series URL format")
@@ -2055,6 +2146,17 @@ class WebApp:
                                 logging.warning("Failed to create Movie object for URL: %s, error: %s", sample_url, e)
                             return available_providers, available_languages
 
+                        # huhu.to uses HuhuMovie (no named providers exposed)
+                        if site == "huhu.to":
+                            from ..sites.huhu import HuhuMovie as _HuhuMovieScan
+                            try:
+                                movie = _HuhuMovieScan(url=sample_url)
+                                available_providers = movie.provider_names  # []
+                                available_languages = movie.available_languages
+                            except Exception as e:
+                                logging.warning("Failed to create HuhuMovie for URL: %s, error: %s", sample_url, e)
+                            return available_providers, available_languages
+
                         try:
                             ep = Episode(link=sample_url, site=site)
                         except Exception as e:
@@ -2105,6 +2207,8 @@ class WebApp:
                     site = "s.to"
                 elif "movie4k.sx" in series_url or "/watch/" in series_url:
                     site = "movie4k.sx"
+                elif "huhu.to" in series_url:
+                    site = "huhu.to"
 
                 # Pick first available episode or movie as sample
                 for season_eps in episodes_by_season.values():

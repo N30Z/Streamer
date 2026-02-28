@@ -5,7 +5,8 @@
       "Bash(node -e:*)",
       "Bash(curl:*)",
       "Bash(python3:*)",
-      "WebFetch(domain:movie4k.sx)"
+      "WebFetch(domain:movie4k.sx)",
+      "Bash(python -c \"from src.aniworld.sites.huhu import HuhuMovie, HuhuMovieAnime, is_huhu_url, fetch_huhu_search_results; print\\(''huhu.py OK''\\)\")"
     ]
   }
 }

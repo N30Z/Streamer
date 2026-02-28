@@ -20,12 +20,14 @@ from fake_useragent import UserAgent
 ANIWORLD_TO = "https://aniworld.to"
 S_TO = "https://s.to"
 MOVIE4K_SX = "https://movie4k.sx"
+HUHU_TO = "https://huhu.to"
 
 # Supported streaming sites with their URL patterns
 SUPPORTED_SITES = {
     "aniworld.to": {"base_url": ANIWORLD_TO, "stream_path": "anime/stream"},
     "s.to": {"base_url": S_TO, "stream_path": "serie"},
     "movie4k.sx": {"base_url": MOVIE4K_SX, "stream_path": "watch", "type": "movie"},
+    "huhu.to": {"base_url": HUHU_TO, "stream_path": "web-vod/item", "type": "movie"},
 }
 
 # Language code mappings for consistent handling
