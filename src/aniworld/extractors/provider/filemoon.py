@@ -149,12 +149,31 @@ def get_direct_link_from_filemoon(embeded_filemoon_link: str) -> str:
         # Convert embed URL to download URL
         download_url = _convert_embed_to_download_url(embeded_filemoon_link)
 
-        # Get initial page content
-        logging.debug("Fetching download page content...")
-        response = _make_request(download_url)
+        # Derive the /e/ embed URL as a fallback in case the /d/ download page
+        # no longer contains an iframe (filemoon.to changed their page structure).
+        if "/d/" in embeded_filemoon_link:
+            embed_url_fallback = embeded_filemoon_link.replace("/d/", "/e/", 1)
+        elif "/e/" in embeded_filemoon_link:
+            embed_url_fallback = embeded_filemoon_link
+        else:
+            embed_url_fallback = None
 
-        # Extract iframe src
-        iframe_src = _extract_iframe_src(response.text, download_url)
+        # Get initial page content and extract iframe src.
+        # If the download page has no iframe, fall back to the /e/ embed URL directly.
+        logging.debug("Fetching download page content...")
+        iframe_src = None
+        try:
+            response = _make_request(download_url)
+            iframe_src = _extract_iframe_src(response.text, download_url)
+        except Exception:
+            if embed_url_fallback:
+                logging.debug(
+                    "Download page has no iframe; using embed URL directly: %s",
+                    embed_url_fallback,
+                )
+                iframe_src = embed_url_fallback
+            else:
+                raise
 
         # Get iframe content with proper headers
         logging.debug("Fetching iframe content...")

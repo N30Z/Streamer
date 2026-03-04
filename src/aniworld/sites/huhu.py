@@ -366,9 +366,21 @@ class HuhuMovie:
                     )
                     continue
 
-                # Unknown provider – let yt-dlp try directly
+                # Unknown provider — could be a VOE custom domain.
+                # Try the VOE extractor before falling back to yt-dlp.
                 logging.warning(
-                    "huhu.to: unknown provider for server '%s', passing to yt-dlp: %s",
+                    "huhu.to: unknown provider for server '%s', trying VOE extractor: %s",
+                    server_name, final_url,
+                )
+                direct = _try_extractor(final_url, "VOE", server_name)
+                if direct:
+                    self.embeded_link = final_url
+                    self.direct_link = direct
+                    return direct
+
+                # Last resort: pass the URL to yt-dlp as-is
+                logging.warning(
+                    "huhu.to: VOE extractor failed for '%s', passing to yt-dlp: %s",
                     server_name, final_url,
                 )
                 self.embeded_link = final_url

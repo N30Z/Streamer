@@ -119,6 +119,12 @@ def get_direct_link_from_voe(embeded_voe_link: str, referer: Optional[str] = Non
         )
         response.raise_for_status()
 
+        # Method 1 (fast path): VOE rotates to custom domains — try script-tag extraction
+        # on the initial response before attempting the redirect flow.
+        extracted = extract_voe_from_script(response.text)
+        if extracted:
+            return extracted
+
         # Find redirect URL using compiled regex
         redirect_match = REDIRECT_PATTERN.search(response.text)
         if not redirect_match:
