@@ -185,6 +185,7 @@ _IS_WINDOWS = PLATFORM_SYSTEM == "Windows"
 SUPPORTED_PROVIDERS = (
     "LoadX",
     "VOE",
+    "Veev",
     "Vidmoly",
     "Filemoon",
     "Luluvdo",
