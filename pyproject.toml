@@ -69,6 +69,7 @@ classifiers = [
 
 [project.optional-dependencies]
 chromecast = ['pychromecast']
+browser = ['playwright']
 
 [project.urls]
 Homepage = "https://github.com/phoenixthrush/AniWorld-Downloader"

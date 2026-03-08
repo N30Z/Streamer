@@ -6,7 +6,11 @@
       "Bash(curl:*)",
       "Bash(python3:*)",
       "WebFetch(domain:movie4k.sx)",
-      "Bash(python -c \"from src.aniworld.sites.huhu import HuhuMovie, HuhuMovieAnime, is_huhu_url, fetch_huhu_search_results; print\\(''huhu.py OK''\\)\")"
+      "Bash(python -c \"from src.aniworld.sites.huhu import HuhuMovie, HuhuMovieAnime, is_huhu_url, fetch_huhu_search_results; print\\(''huhu.py OK''\\)\")",
+      "Bash(node \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\veev_strings3.js\")",
+      "Bash(node \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\veev_strings4.js\")",
+      "WebFetch(domain:veev.to)",
+      "WebFetch(domain:s-eri-983105.veev.to)"
     ]
   }
 }

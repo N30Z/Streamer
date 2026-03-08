@@ -23,3 +23,7 @@ pywebview
  
 # Optional: Chromecast support
 # pychromecast
+
+# Optional: headless browser extraction (veev.to and future providers)
+# playwright
+# After install: playwright install chromium

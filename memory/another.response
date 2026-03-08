@@ -1,0 +1,62 @@
+Request URL
+https://veev.to/dl?op=player_api&cmd=gi&file_code=27kYAOe9AbsIceAnuwJ36B2xKnlZdIfwhFzjjJc&r=&ch=201311041000-91-27kYAOe9AbsIceAnuwJ36B2xKnlZdIfwhFzjjJc-106-1772905578-f3bd403f04c85c7a1cf4e4a73bf06abe&rback=1&ie=1
+Request Method
+GET
+
+Payload
+op=player_api&cmd=gi&file_code=27kYAOe9AbsIceAnuwJ36B2xKnlZdIfwhFzjjJc&r=&ch=201311041000-91-27kYAOe9AbsIceAnuwJ36B2xKnlZdIfwhFzjjJc-106-1772905578-f3bd403f04c85c7a1cf4e4a73bf06abe&rback=1&ie=1
+
+
+
+
+Response:
+
+{
+    "status": "success",
+    "mm": "fee7847d5858dd21b1cc5b0b7da65bd9",
+    "file": {
+        "file_a": 0,
+        "file_title": "3twuTi1AZfJkSzRu264mO0l78VNJIvyyEFrXp9GPG8hCFV",
+        "file_created_txt": "Apr 8, 2024",
+        "captions_list": [
+            {
+                "language": "ger",
+                "src": "https://s-eri-983105.veev.to/vtt/01/00014/lthyuha1ktj9_ger.vtt",
+                "label": "German"
+            }
+        ],
+        "img_screenlist_thumb": "https://s-eri-983105.veev.to/P8oXctcBgbiYTMqAbtnWBdx81navDGJcLcs2jn7dh",
+        "vtt_timeslide_url": "https://s-eri-983105.veev.to/CinXGRjNh6jTPcrxBQnSF6X9KK3QToBgVzGGxRAp3XvXuGWb",
+        "img_timeslide_url": null,
+        "file_code": "27kYAOe9AbsIceAnuwJ36B2xKnlZdIfwhFzjjJc",
+        "disable_adb": 0,
+        "file_skip_time": "",
+        "video_img_url": "https://s-eri-983105.veev.to/FvwoDnA8imCuXUKDsHxpFx1PzkwcX1bLT1J5d",
+        "file_name": "3twuTi1AZfJkSzRu264mO0l78VNJIvyyEFrXp9GPG8hCFV.mkv",
+        "hide_poster": 0,
+        "dv": [
+            {
+                "s": "335Ā6437ā39Ĉ13ąćĀČą2Ćā663ēĂąĀ5ĖĈćđĘĄ383ėĥąėė4Ğĩ30ĈēĀę3ġććĴĥĠģėĂĜĘĔķĈĀĮĖėČĀĿĥėćĚĦŃčőĊăĔĝĒĞōĈĂĴĊŎćĥĂŝŉńĈŌĤĔņŉĽģŋĔą1ģġĺĵőąĂīĉċģďťŹĐŪŉēĒőĪčģŎČřėĿĂĸĞƅĬŦĳőŤĎŴƓƖĪĞġŸĥŤĜƛ6šŉĊćěğŴĠŨƁŉİżƅĽŵŏƂƆąŠŧħĔĿĴũƍŚŏŇƢĦĞœǃŇƲŞŴŸŤŦěģƑƲƥŧƦĔŰƅƾŔƶƲŦƋŚļƁģǒĀƪďŬĔēƯőƎŶŏżČǇĳĞ2ǲƏ6ēũƖĝǷŕŏŷǭĕĴĀİſţĀƞžƆēĊėǨŽĬĲŨǶǃēŰţćƮǪșŭĬńƋƜǏǲĈƷĮd3ȥ14f4dǶ585Ĭ",
+                "sz": "6458526d4f413dČ36343538ē32ďĀđ6ĐĒċďĒġ3ĤĐĤĢėĤĖĤĔĤęĥďđĤĲĐĦĲĤĠĳĞĳİĨļ0ļŁłįłŅ7ŅļĶľŅŊňŅĹļĨĶĶőĺĳŋİŃŅĭŁīŁŜŕł6",
+                "t": "6458526d4f413dČ363đ4đ35Ĕ8ĔĖđ2ĔĐĒď3ēđĐĐĢ3ċĔĔēĞĪĠ7ĝİđ9ıġĴĚĠģĠĜĹĤĭĐįđ0ĩĭďĢĀĔċ46ĥŇĐĜĖĘĖī"
+            }
+        ],
+        "file_h": "70646-91-106-1772902579-1b13465c3d8de993f065284b828e4ad2",
+        "versions": null,
+        "vid_container": "mp4",
+        "video_thumb_url": "https://s-eri-983105.veev.to/61rxsj3yguQnLvVqnDvMHEGVXa91CGXSJ41dybG3",
+        "img_screenlist": "https://s-eri-983105.veev.to/61rxsj5b3KMDY5LZdjC5qaNArr5WHR3TKpraJvXR",
+        "file_mime_type": "video/x-matroska",
+        "captions_json": 0,
+        "download_link": "https://veev.to/d/27kYAOe9AbsIceAnuwJ36B2xKnlZdIfwhFzjjJc",
+        "player_img": "https://s-eri-983105.veev.to/FvwoDnA8imCuXUKDsHxpFx1PzkwcX1bLT1J5d",
+        "video_uvi": "027kYAOe9AbsIceAnuwJ36B2xKnlZdIfwhFzjjJc1",
+        "file_status": "OK",
+        "player_watermark": {
+            "src": "",
+            "link": "https://veev.to/d/27kYAOe9AbsIceAnuwJ36B2xKnlZdIfwhFzjjJc"
+        },
+        "hide_title": 1,
+        "vast_ad": null
+    }
+}

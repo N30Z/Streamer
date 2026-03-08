@@ -51,6 +51,7 @@ PROVIDER_DOMAINS: dict[str, str] = {
     "vidmoly.to":       "Vidmoly",
     "vidmoly.net":      "Vidmoly",
     "luluvdo.com":      "Luluvdo",
+    "veev.to":          "Veev",
 }
 
 OK   = "✓"

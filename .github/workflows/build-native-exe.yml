@@ -55,6 +55,8 @@ jobs:
             --hidden-import aniworld.extractors.provider.vidmoly `
             --hidden-import aniworld.extractors.provider.vidoza `
             --hidden-import aniworld.extractors.provider.voe `
+            --hidden-import aniworld.extractors.provider.veev `
+            --hidden-import aniworld.extractors.browser_interceptor `
             native_launcher.py
 
       - name: Upload artifact

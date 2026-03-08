@@ -2,14 +2,18 @@
 veev.to video extractor.
 
 Extraction flow:
-  1. Fetch the /e/{id} embed page with browser-like headers (session keeps cookies
-     to pass bot-protection challenges).
-  2. Try to find the CDN streaming URL directly in the page HTML (fast path).
-  3. Parse the __VEEVPLAYER__ JS config for fc token(s) and apiUri.
-  4. Use those tokens to call the veev.to API and get the signed CDN URL.
+  1. Fetch the embed page with requests to get file_code, real_fc (LZW token),
+     and the cmd=gi API endpoint parameters.
+  2. Call  POST /dl?op=player_api&cmd=gi  to get the signed stream URL
+     (returned inside dv[0].s, but also resolvable via network intercept).
+  3. If the requests path fails (bot-protection, decode error, etc.),
+     fall back to a headless Playwright browser that intercepts the first
+     network request to veevcdn.co/px/ — the direct MP4 stream URL.
+
+The stream URL format (no auth required, CORS *):
+    https://prx-{geo}-{id}.veevcdn.co/px/{token}?osr={cdn_origin}
 """
 
-import json
 import logging
 import re
 from typing import Optional
@@ -17,25 +21,21 @@ from typing import Optional
 import requests
 
 from ... import config
+from ..browser_interceptor import intercept_url as _browser_intercept
 
-# CDN URL pattern — matches both veev.to and veevcdn.co CDN nodes
-CDN_PATTERN = re.compile(
-    r"https://s-[A-Za-z0-9]+-\d+\.veev(?:cdn\.co|\.to)/[A-Za-z0-9_\-]{20,}"
+log = logging.getLogger(__name__)
+
+# Embed URL:  https://veev.to/e/{file_code}[?rback=1]
+_FILE_CODE_RE = re.compile(r"/e/([A-Za-z0-9]+)")
+
+# The real fc token is the LAST assignment to window._vvto[...]:
+#   window._vvto[__xx]="30104Ăā200-8ĉ<vid_id>-155..."
+_REAL_FC_RE = re.compile(r'window\._vvto\[[^\]]+\]\s*=\s*"([^"]+)"')
+
+# Direct proxy stream URL (captured from network / decoded from dv[0].s)
+_STREAM_RE = re.compile(
+    r"https://prx-[A-Za-z0-9]+-\d+\.veevcdn\.co/px/[A-Za-z0-9_\-]+\?osr=[^\s\"'<>]+"
 )
-
-# fc values embedded in JS objects: { ..., fc: "...", ... }
-FC_PATTERN = re.compile(r"""['\"]?fc['\"]?\s*:\s*['"]([^'"]{10,})['"]""")
-
-# The REAL api key: the page overwrites window._vvto.fc at the very end
-# e.g.  window._vvto[__pqrsww]="30104Ăā200-8ĉ<vid_id>-155..."
-REAL_FC_PATTERN = re.compile(r'window\._vvto\[[^\]]+\]\s*=\s*"([^"]+)"')
-
-# apiUri lives in the __VEEVPLAYER__ config object
-API_URI_PATTERN = re.compile(r"""apiUri\s*:\s*['"]([^'"]+)['"]""")
-
-# Fallback: generic m3u8 / mp4 URL in the page source
-HLS_PATTERN = re.compile(r"https?://[^\s'\"<>]+\.m3u8[^\s'\"<>]*")
-MP4_PATTERN = re.compile(r"https?://[^\s'\"<>]+\.mp4[^\s'\"<>]*")
 
 _BROWSER_HEADERS = {
     "User-Agent": (
@@ -43,195 +43,157 @@ _BROWSER_HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": (
-        "text/html,application/xhtml+xml,application/xml;"
-        "q=0.9,image/avif,image/webp,*/*;q=0.8"
-    ),
+    "Accept-Encoding": "gzip, deflate",   # NOT brotli — requests can't decode it
     "Accept-Language": "en-US,en;q=0.5",
-    "Accept-Encoding": "gzip, deflate",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "iframe",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "cross-site",
-}
-
-_API_HEADERS = {
-    "User-Agent": _BROWSER_HEADERS["User-Agent"],
-    "Accept": "application/json, text/javascript, */*; q=0.01",
-    "Accept-Language": "en-US,en;q=0.5",
-    "X-Requested-With": "XMLHttpRequest",
     "Connection": "keep-alive",
 }
 
 
-def _extract_fc_tokens(html: str) -> list[str]:
-    return FC_PATTERN.findall(html)
+def _lzw_decompress(s: str) -> str:
+    """LZW decompress a veev.to token string (Unicode codepoints > 255 = dict indices)."""
+    k = list(s)
+    if not k:
+        return ""
+    D: dict[int, str] = {}
+    C = k[0]
+    M = C
+    U = [C]
+    y = 256
+    for G in range(1, len(k)):
+        Y = ord(k[G])
+        I = k[G] if Y < 256 else D.get(Y, M + C)
+        U.append(I)
+        C = I[0]
+        D[y] = M + C
+        y += 1
+        M = I
+    return "".join(U)
 
 
-def _find_cdn_in_json_resp(data: dict) -> Optional[str]:
-    """Recursively search a JSON dict for a CDN URL."""
-    for key in ("url", "file", "stream", "source", "src", "hls", "link"):
-        val = data.get(key)
-        if isinstance(val, str) and val.startswith("http"):
-            return val
-    # Some APIs return a nested 'data' object
-    if isinstance(data.get("data"), dict):
-        return _find_cdn_in_json_resp(data["data"])
-    return None
-
-
-def _api_probe(
-    session: requests.Session,
-    embed_url: str,
-    vid_id: str,
-    fc_tokens: list[str],
-    api_uri: str,
-) -> Optional[str]:
-    """Try the known veev.to API patterns with the extracted fc tokens.
-
-    fc_tokens[0] is the real_fc (final override value) when available,
-    followed by the two values extracted from the JS objects:
-      fc_tokens[1] = short slug (video identifier, e.g. 'Gujal00_loving...')
-      fc_tokens[2] = long token (intermediate key)
+def _fetch_embed(embed_url: str) -> Optional[tuple[str, str, str]]:
     """
-    base = api_uri.rstrip("/")
-    # Token roles (positions may vary — cover all combinations)
-    real_fc  = fc_tokens[0] if fc_tokens else ""
-    fc_short = fc_tokens[1] if len(fc_tokens) > 1 else real_fc
-    fc_long  = fc_tokens[2] if len(fc_tokens) > 2 else real_fc
+    Fetch the embed page and return (file_code, ch, query_suffix) or None.
 
-    hdrs = {**_API_HEADERS, "Referer": embed_url, "Origin": "https://veev.to"}
-
-    candidates = [
-        # Primary: real fc as key, short slug as video id
-        ("GET",  f"{base}/api/video/{fc_short}?key={real_fc}", None),
-        ("GET",  f"{base}/api/video/{fc_short}?k={real_fc}", None),
-        # vid_id (URL path fragment) as identifier
-        ("GET",  f"{base}/api/video/{vid_id}?key={real_fc}", None),
-        # POST variants
-        ("POST", f"{base}/api/source/{vid_id}",
-         {"r": embed_url, "d": "veev.to", "key": real_fc}),
-        ("POST", f"{base}/api/source/{fc_short}",
-         {"r": embed_url, "d": "veev.to", "key": real_fc}),
-        # Fallbacks with the long intermediate token
-        ("GET",  f"{base}/api/video/{fc_short}?key={fc_long}", None),
-        ("GET",  f"{base}/api/video/{fc_short}", None),
-        ("GET",  f"{base}/api/embed/{vid_id}?key={real_fc}", None),
-    ]
-
-    for method, url, body in candidates:
-        try:
-            if method == "POST":
-                resp = session.post(url, json=body, headers=hdrs,
-                                    timeout=config.DEFAULT_REQUEST_TIMEOUT)
-            else:
-                resp = session.get(url, headers=hdrs,
-                                   timeout=config.DEFAULT_REQUEST_TIMEOUT)
-
-            if resp.status_code != 200:
-                continue
-
-            # Direct CDN URL in response body (not JSON)
-            cdn = CDN_PATTERN.search(resp.text)
-            if cdn:
-                return cdn.group(0)
-
-            try:
-                data = resp.json()
-                found = _find_cdn_in_json_resp(data)
-                if found:
-                    return found
-            except (ValueError, KeyError):
-                pass
-
-        except requests.RequestException as exc:
-            logging.debug("veev API %s %s → %s", method, url, exc)
-
-    return None
-
-
-def _make_session():
-    """Return a session that can bypass bot protection if cloudscraper is available."""
+    *ch* is the LZW-decoded real_fc value used as the &ch= parameter in
+    the cmd=gi API call.  *query_suffix* is the raw query string from the
+    embed URL (e.g. "rback=1") forwarded to the API.
+    """
+    s = requests.Session()
+    s.headers.update(_BROWSER_HEADERS)
     try:
-        import cloudscraper  # type: ignore
-        return cloudscraper.create_scraper(
-            browser={"browser": "chrome", "platform": "windows", "mobile": False}
+        resp = s.get(embed_url, timeout=config.DEFAULT_REQUEST_TIMEOUT,
+                     allow_redirects=True)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        log.debug("veev: embed page fetch failed: %s", exc)
+        return None
+
+    html = resp.text
+    fc_m = _REAL_FC_RE.search(html)
+    if not fc_m:
+        log.debug("veev: real_fc not found in embed page")
+        return None
+
+    file_code_m = _FILE_CODE_RE.search(embed_url)
+    file_code = file_code_m.group(1) if file_code_m else ""
+    ch = _lzw_decompress(fc_m.group(1))
+    qs = embed_url.split("?", 1)[1] if "?" in embed_url else ""
+    return file_code, ch, qs
+
+
+def _cmd_gi(embed_url: str, file_code: str, ch: str, qs: str) -> Optional[str]:
+    """
+    Call the veev.to player API (POST /dl, cmd=gi) and extract the stream URL.
+
+    The API returns the signed proxy URL inside dv[0].s (LZW-encoded), but
+    we also match it from the raw response text using the known URL pattern.
+    """
+    s = requests.Session()
+    s.headers.update({
+        **_BROWSER_HEADERS,
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": embed_url,
+        "Origin": "https://veev.to",
+    })
+
+    # Step 1: prime server session
+    try:
+        s.get("https://veev.to/dl?op=player_api&cmd=gvnp",
+              timeout=config.DEFAULT_REQUEST_TIMEOUT)
+    except requests.RequestException:
+        pass
+
+    # Step 2: cmd=gi — POST (confirmed from browser network inspection)
+    params = (
+        f"op=player_api&cmd=gi"
+        f"&file_code={file_code}"
+        f"&r="
+        f"&ch={ch}"
+        + (f"&{qs}" if qs else "")
+        + "&ie=1"
+    )
+    try:
+        resp = s.post(
+            "https://veev.to/dl",
+            data=params,
+            headers={**s.headers,
+                     "Content-Type": "application/x-www-form-urlencoded"},
+            timeout=config.DEFAULT_REQUEST_TIMEOUT,
         )
-    except ImportError:
-        s = requests.Session()
-        s.headers.update(_BROWSER_HEADERS)
-        return s
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        log.debug("veev: cmd=gi failed: %s", exc)
+        return None
+
+    # Try to find the proxy stream URL directly in the response text
+    m = _STREAM_RE.search(resp.text)
+    if m:
+        return m.group(0)
+
+    log.debug("veev: stream URL not found in cmd=gi response (dv decode needed)")
+    return None
 
 
 def get_direct_link_from_veev(embeded_veev_link: str) -> str:
     """
-    Extract a direct (CDN) streaming URL from a veev.to embed URL.
+    Extract a direct MP4 stream URL from a veev.to embed URL.
+
+    Tries a lightweight requests-based path first; falls back to a headless
+    Playwright browser that intercepts the actual stream request.
 
     Args:
         embeded_veev_link: Full embed URL, e.g.
             https://veev.to/e/27kYAOe9AbsIceAnuwJ36B2xKnlZdIfwhFzjjJc?rback=1
 
     Returns:
-        Direct streaming URL (M3U8 or MP4).
+        Direct proxy stream URL:
+            https://prx-{geo}-{id}.veevcdn.co/px/{token}?osr={cdn}
 
     Raises:
-        ValueError: If no streaming URL could be extracted.
+        ValueError: If no stream URL could be extracted.
     """
-    session = _make_session()
+    # ── Fast path: requests + cmd=gi API ─────────────────────────────────────
+    embed_data = _fetch_embed(embeded_veev_link)
+    if embed_data:
+        file_code, ch, qs = embed_data
+        stream_url = _cmd_gi(embeded_veev_link, file_code, ch, qs)
+        if stream_url:
+            log.debug("veev: stream URL via API: %s", stream_url)
+            return stream_url
 
-    try:
-        resp = session.get(
-            embeded_veev_link,
-            timeout=config.DEFAULT_REQUEST_TIMEOUT,
-            allow_redirects=True,
-        )
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        raise ValueError(f"Failed to fetch veev.to embed page: {exc}") from exc
-
-    html = resp.text
-
-    # ── Fast path: CDN URL is already present in the page ─────────────────
-    cdn_match = CDN_PATTERN.search(html)
-    if cdn_match:
-        logging.debug("veev: CDN URL found directly in page source")
-        return cdn_match.group(0)
-
-    hls_match = HLS_PATTERN.search(html)
-    if hls_match:
-        return hls_match.group(0)
-
-    mp4_match = MP4_PATTERN.search(html)
-    if mp4_match:
-        return mp4_match.group(0)
-
-    # ── Slow path: hit the API ─────────────────────────────────────────────
-    # The page injects three fc values; the LAST assignment to window._vvto.fc
-    # is the actual signed API key used by the player.
-    real_fc_match = REAL_FC_PATTERN.search(html)
-    real_fc = real_fc_match.group(1) if real_fc_match else None
-
-    fc_tokens = _extract_fc_tokens(html)
-    api_uri_match = API_URI_PATTERN.search(html)
-    raw_uri = api_uri_match.group(1) if api_uri_match else ""
-    api_uri = raw_uri if raw_uri else "https://veev.to"
-
-    vid_id = embeded_veev_link.split("/")[-1].split("?")[0]
-
-    # Build token list: real_fc goes first so it's tried as the primary key
-    tokens = []
-    if real_fc:
-        tokens.append(real_fc)
-    tokens.extend(fc_tokens)
-
-    if tokens:
-        result = _api_probe(session, embeded_veev_link, vid_id, tokens, api_uri)
-        if result:
-            return result
+    # ── Fallback: Playwright browser intercept ────────────────────────────────
+    log.debug("veev: falling back to browser intercept for %s", embeded_veev_link)
+    stream_url = _browser_intercept(
+        embeded_veev_link,
+        match=["veevcdn.co/px/"],
+        timeout=25,
+        referrer="https://veev.to/",
+    )
+    if stream_url:
+        return stream_url
 
     raise ValueError(
-        f"No streaming URL found for veev.to embed: {embeded_veev_link}\n"
-        "The page may have changed its structure or the bot-protection blocked the request.\n"
-        "Try a different provider or report this issue."
+        f"veev.to: could not extract stream URL from {embeded_veev_link}\n"
+        "Ensure playwright is installed: pip install playwright && playwright install chromium"
     )
