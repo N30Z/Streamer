@@ -256,6 +256,8 @@ DEFAULT_PROVIDER = "VOE"
 DEFAULT_MAX_CONCURRENT_DOWNLOADS = 5
 # Seconds to wait per provider when auto-selecting
 DEFAULT_PROVIDER_TIMEOUT = 5
+# Number of parallel fragment/segment downloads per video (yt-dlp concurrent_fragment_downloads)
+DEFAULT_CONCURRENT_FRAGMENT_DOWNLOADS = 5
 
 # https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
 INVALID_PATH_CHARS = ("<", ">", ":", '"', "/", "\\", "|", "?", "*", "&")

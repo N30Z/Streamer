@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import requests
 
 from ... import config
+from .common import with_fallbacks
 
 # Setup module logger
 logger = logging.getLogger(__name__)
@@ -181,6 +182,7 @@ def _extract_video_url(response_text: str) -> str:
         raise ValueError(f"Failed to extract video URL: {err}") from err
 
 
+@with_fallbacks()
 def get_direct_link_from_luluvdo(
     embeded_luluvdo_link: str, arguments: Optional[Any] = None
 ) -> str:

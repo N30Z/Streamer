@@ -4,12 +4,14 @@ import requests
 from bs4 import BeautifulSoup
 
 from ...config import DEFAULT_REQUEST_TIMEOUT, RANDOM_USER_AGENT
+from .common import with_fallbacks
 
 
 # Compile regex pattern once for better performance
 SOURCE_LINK_PATTERN = re.compile(r'src:\s*"([^"]+)"')
 
 
+@with_fallbacks()
 def get_direct_link_from_vidoza(embeded_vidoza_link: str) -> str:
     """
     Extract direct video link from Vidoza embed page.

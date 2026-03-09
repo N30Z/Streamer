@@ -29,6 +29,7 @@ class DownloadQueueManager:
         # Parallel download configuration
         self.max_concurrent_downloads = max_concurrent_downloads
         self.provider_timeout: int = 5
+        self.concurrent_fragment_downloads: int = 5
         self.thread_pool = None
         self.active_workers = set()  # Track active worker jobs
 
@@ -468,6 +469,8 @@ class DownloadQueueManager:
 
                             # Import and call the download function with progress callback
                             from ..action.download import download
+                            from .. import config as _config
+                            _config.DEFAULT_CONCURRENT_FRAGMENT_DOWNLOADS = self.concurrent_fragment_downloads
 
                             download(temp_anime, web_progress_callback)
 

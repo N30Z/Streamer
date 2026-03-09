@@ -7,8 +7,10 @@ Web-based downloader for anime, series and movies from [aniworld.to](https://ani
 - **Web UI** - Flask-based web interface for browsing, searching and downloading
 - **Multi-site support** - Anime (aniworld.to), Serien (s.to) and Movies (movie4k.sx)
 - **Multiple providers** - VOE, Vidmoly, Filemoon, Luluvdo, Doodstream, Vidoza, SpeedFiles, Streamtape, LoadX
+- **Provider fallback chain** - If a provider's primary extractor fails, automatically tries Playwright browser intercept, then native yt-dlp extraction
 - **Language selection** - German Dub, English Sub, German Sub, English Dub
 - **Parallel downloads** - Configurable concurrent download queue
+- **Parallel segments** - Configurable parallel HLS/DASH segment downloads per video (default: 5, see Preferences)
 - **Subscriptions** - Subscribe to series/anime; get notified or auto-download new episodes
 - **Continue Watching** - Home page shows in-progress content; resume from where you left off
 - **Watch progress tracking** - Progress bars in file browser and download modal; resume any episode
@@ -35,6 +37,15 @@ Optional Chromecast support:
 ```bash
 pip install aniworld[chromecast]
 ```
+
+Optional browser-based provider fallback (Playwright):
+
+```bash
+pip install aniworld[browser]
+playwright install chromium
+```
+
+When installed, Playwright is used as an automatic fallback when a provider's standard extractor fails — it loads the embed page in headless Chromium and intercepts the stream URL.
 
 ### Requirements (pip install)
 

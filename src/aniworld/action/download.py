@@ -9,7 +9,7 @@ from ..models import Anime
 from ..config import PROVIDER_HEADERS_D
 from ..parser import get_arguments
 from .common import get_direct_link, sanitize_filename
-
+from .. import config as _config
 
 
 class QuietLogger:
@@ -30,11 +30,6 @@ class QuietLogger:
         logging.error(msg)
 
 
-def _create_quiet_logger():
-    """Create a quiet logger for yt-dlp."""
-    return QuietLogger()
-
-
 def _format_bytes(bytes_value: int) -> str:
     """Format bytes to human-readable string (e.g., 1.5GiB, 500MiB)."""
     size = float(bytes_value)
@@ -42,7 +37,6 @@ def _format_bytes(bytes_value: int) -> str:
         if size < 1024.0:
             return f"{size:.2f}{unit}"
         size /= 1024.0
-    # Just in case :^)
     return f"{size:.2f}PiB"
 
 
@@ -51,18 +45,15 @@ def _format_episode_title(anime: Anime, episode) -> str:
     season = getattr(episode, 'season', None)
     episode_num = getattr(episode, 'episode', None)
 
-    # Movie case
     if season == 0:
         ep_str = f"{episode_num:03}" if isinstance(episode_num, int) else str(episode_num or '1')
         return f"{anime.title} - Movie {ep_str} - ({anime.language}).mp4"
 
-    # If season/episode info missing, use a generic format
     if season is None or episode_num is None:
         season_str = str(season) if season is not None else 'Unknown'
         ep_str = str(episode_num) if episode_num is not None else 'Unknown'
         return f"{anime.title} - Episode {ep_str} (Season {season_str}) - ({anime.language}).mp4"
 
-    # Regular episode
     return f"{anime.title} - S{season:02}E{episode_num:03} - ({anime.language}).mp4"
 
 
@@ -101,22 +92,21 @@ def _build_ytdl_options(
     output_path: str, anime: Anime, progress_hook: Optional[Callable] = None
 ) -> dict:
     """Build yt-dlp options dictionary with all necessary parameters."""
+    concurrent_frags = getattr(_config, "DEFAULT_CONCURRENT_FRAGMENT_DOWNLOADS", 5)
     options = {
         "nocheckcertificate": True,
         "fragment_retries": float("inf"),
-        "concurrent_fragment_downloads": 4,
+        "concurrent_fragment_downloads": concurrent_frags,
         "outtmpl": output_path,
-        "quiet": False,  # Allow progress hooks to work
+        "quiet": False,
         "no_warnings": True,
-        "logger": _create_quiet_logger(),  # Custom logger to suppress most output
+        "logger": QuietLogger(),
     }
 
-    # Set FFmpeg location for PyInstaller bundles
     ffmpeg_location = _get_ffmpeg_location()
     if ffmpeg_location:
         options["ffmpeg_location"] = ffmpeg_location
 
-    # Add provider-specific headers
     if anime.provider in PROVIDER_HEADERS_D:
         headers = {}
         for header in PROVIDER_HEADERS_D[anime.provider]:
@@ -126,7 +116,6 @@ def _build_ytdl_options(
         if headers:
             options["http_headers"] = headers
 
-    # Add progress hook if provided
     if progress_hook:
         options["progress_hooks"] = [progress_hook]
 
@@ -145,25 +134,23 @@ def _cleanup_partial_files(output_dir: Path) -> None:
 
     for file_path in output_dir.iterdir():
         if partial_pattern.search(file_path.name):
-            # Retry with delay for Windows file locking
             for attempt in range(3):
                 try:
                     file_path.unlink()
                     break
                 except OSError as err:
                     if attempt < 2:
-                        time.sleep(0.5)  # Wait for file handle release
+                        time.sleep(0.5)
                     else:
                         logging.debug("Could not remove partial file %s: %s", file_path, err)
         else:
             is_empty = False
 
-    # Remove empty directory
     if is_empty:
         try:
             output_dir.rmdir()
         except OSError:
-            pass  # Directory not empty or still in use
+            pass
 
 
 class CliProgressBar:
@@ -181,10 +168,8 @@ class CliProgressBar:
                 print(f"Starting download: {self.episode_title}")
                 self.downloading = True
 
-            # Try multiple methods to extract progress percentage
             percentage = 0.0
 
-            # Method 1: _percent_str field
             percent_str = d.get("_percent_str")
             if percent_str:
                 try:
@@ -192,47 +177,33 @@ class CliProgressBar:
                 except (ValueError, TypeError):
                     pass
 
-            # Method 2: Calculate from downloaded/total bytes
             if percentage == 0.0:
                 downloaded = d.get("downloaded_bytes", 0)
                 total = d.get("total_bytes", 0)
                 if total and total > 0:
                     percentage = (downloaded / total) * 100
 
-            # Method 3: Use fragment info if available
             if percentage == 0.0:
                 fragment_index = d.get("fragment_index", 0)
                 fragment_count = d.get("fragment_count", 0)
                 if fragment_count and fragment_count > 0:
                     percentage = (fragment_index / fragment_count) * 100
 
-            # Get speed and ETA with cleaning
             speed_str = d.get("_speed_str", "N/A")
             eta_str = d.get("_eta_str", "N/A")
 
-            # Try multiple methods to get total size
             total_bytes_str = "N/A"
-
-            # Method 1: Use formatted string from yt-dlp (check for actual content, not just existence)
             _total_bytes_str = d.get("_total_bytes_str", "").strip()
             if _total_bytes_str and _total_bytes_str != "N/A":
                 total_bytes_str = _total_bytes_str
             else:
-                # Try estimate string
-                _total_bytes_estimate_str = d.get(
-                    "_total_bytes_estimate_str", ""
-                ).strip()
+                _total_bytes_estimate_str = d.get("_total_bytes_estimate_str", "").strip()
                 if _total_bytes_estimate_str and _total_bytes_estimate_str != "N/A":
                     total_bytes_str = _total_bytes_estimate_str
-                # Method 2: Calculate from raw bytes
                 elif d.get("total_bytes"):
-                    total_bytes = d.get("total_bytes")
-                    total_bytes_str = _format_bytes(total_bytes)
+                    total_bytes_str = _format_bytes(d["total_bytes"])
                 elif d.get("total_bytes_estimate"):
-                    total_bytes = d.get("total_bytes_estimate")
-                    total_bytes_str = f"~{_format_bytes(total_bytes)}"
-
-            # Clean ANSI color codes
+                    total_bytes_str = f"~{_format_bytes(d['total_bytes_estimate'])}"
 
             if speed_str != "N/A" and speed_str:
                 speed_str = re.sub(r"\x1b\[[0-9;]*m", "", str(speed_str)).strip()
@@ -244,16 +215,12 @@ class CliProgressBar:
                 eta_str = "N/A"
 
             if total_bytes_str != "N/A" and total_bytes_str:
-                total_bytes_str = re.sub(
-                    r"\x1b\[[0-9;]*m", "", str(total_bytes_str)
-                ).strip()
+                total_bytes_str = re.sub(r"\x1b\[[0-9;]*m", "", str(total_bytes_str)).strip()
 
-            # Create progress bar (ASCII-safe for Windows console compatibility)
             bar_width = 40
             filled_width = int(bar_width * percentage / 100)
             bar = "#" * filled_width + "-" * (bar_width - filled_width)
 
-            # Only update if percentage changed significantly to reduce flickering
             if abs(percentage - self.last_percentage) >= 0.5:
                 try:
                     sys.stdout.write(
@@ -261,7 +228,7 @@ class CliProgressBar:
                     )
                     sys.stdout.flush()
                 except (UnicodeEncodeError, OSError):
-                    pass  # Ignore encoding errors on Windows
+                    pass
                 self.last_percentage = percentage
 
         elif d["status"] == "finished":
@@ -281,32 +248,24 @@ def _execute_download(
 ) -> bool:
     """Execute download using yt-dlp Python API with progress tracking."""
     try:
-        # Create CLI progress bar
         cli_progress = CliProgressBar(episode_title)
 
         def combined_progress_hook(d):
-            """Combined progress hook for both CLI and web progress."""
-            # Update CLI progress
             cli_progress.update(d)
-
-            # Update web progress if callback provided
             if web_progress_callback:
                 try:
                     web_progress_callback(d)
                 except KeyboardInterrupt:
-                    # Re-raise KeyboardInterrupt to stop download
                     raise
                 except Exception as e:
                     logging.warning(f"Web progress callback error: {e}")
 
-        # Build yt-dlp options
         options = _build_ytdl_options(str(output_path), anime, combined_progress_hook)
 
-        # Execute download with yt-dlp
         with yt_dlp.YoutubeDL(options) as ydl:
             ydl.download([direct_link])
 
-        print("")  # New line after progress bar
+        print("")
         return True
 
     except yt_dlp.DownloadError as e:
@@ -322,7 +281,6 @@ def _execute_download(
         import traceback
         logging.error(f"Unexpected download error: {e}\n{traceback.format_exc()}")
         print(f"\n[ERROR] Unexpected error: {e}")
-        print(f"[DEBUG] Traceback:\n{traceback.format_exc()}")
         return False
 
 
@@ -333,7 +291,6 @@ def download(anime: Anime, web_progress_callback: Optional[Callable] = None) -> 
     for episode in anime:
         episode_title = _format_episode_title(anime, episode)
 
-        # Get direct link
         direct_link = get_direct_link(episode, episode_title)
         if not direct_link:
             logging.warning(
@@ -342,32 +299,26 @@ def download(anime: Anime, web_progress_callback: Optional[Callable] = None) -> 
             continue
 
         arguments = get_arguments()
-        # Handle direct link only mode
         if arguments.only_direct_link:
             print(episode_title)
             print(f"{direct_link}\n")
             continue
 
-        # Generate output path with series/seasonX/episode structure
         season_folder = _get_season_folder(episode)
         output_file = _get_output_filename(anime, episode, sanitized_anime_title)
         output_path = Path(arguments.output_dir) / sanitized_anime_title / season_folder / output_file
 
-        # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Handle command only mode - build equivalent yt-dlp command for display
         if arguments.only_command:
-            _options = _build_ytdl_options(str(output_path), anime)
-            # Convert back to command format for display
+            concurrent_frags = getattr(_config, "DEFAULT_CONCURRENT_FRAGMENT_DOWNLOADS", 5)
             command = ["yt-dlp", direct_link]
             command.extend(["--no-check-certificate"])
             command.extend(["--fragment-retries", "infinite"])
-            command.extend(["--concurrent-fragments", "4"])
+            command.extend(["--concurrent-fragments", str(concurrent_frags)])
             command.extend(["-o", str(output_path)])
             command.extend(["--quiet", "--no-warnings"])
 
-            # Add headers if any
             if anime.provider in PROVIDER_HEADERS_D:
                 for header in PROVIDER_HEADERS_D[anime.provider]:
                     command.extend(["--add-header", header])
@@ -378,7 +329,6 @@ def download(anime: Anime, web_progress_callback: Optional[Callable] = None) -> 
             print(" ".join(command))
             continue
 
-        # Execute download
         _execute_download(
             direct_link, output_path, anime, episode_title, web_progress_callback
         )

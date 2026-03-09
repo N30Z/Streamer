@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import requests
 
 from ...config import DEFAULT_REQUEST_TIMEOUT, RANDOM_USER_AGENT
+from .common import with_fallbacks
 
 # Constants
 SPEEDFILES_PATTERN = re.compile(r'var _0x5opu234 = "(?P<encoded_data>.*?)";')
@@ -180,6 +181,7 @@ def _decode_speedfiles_data(encoded_data: str) -> str:
         raise ValueError(f"Unexpected decoding error: {err}") from err
 
 
+@with_fallbacks()
 def get_direct_link_from_speedfiles(embeded_speedfiles_link: str) -> str:
     """
     Extract direct video link from SpeedFiles embedded URL.

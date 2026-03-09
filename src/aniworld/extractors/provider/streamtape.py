@@ -5,6 +5,7 @@ from typing import Optional
 import requests
 
 from ...config import RANDOM_USER_AGENT, DEFAULT_REQUEST_TIMEOUT
+from .common import with_fallbacks
 
 
 def _make_request(url: str) -> requests.Response:
@@ -45,6 +46,7 @@ def _extract_direct_from_html(html: str, source_url: str) -> Optional[str]:
     return None
 
 
+@with_fallbacks()
 def get_direct_link_from_streamtape(embeded_streamtape_link: str) -> str:
     """Extract direct link from Streamtape embed or video URL.
 

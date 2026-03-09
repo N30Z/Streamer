@@ -10,6 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from ... import config
+from .common import with_fallbacks
 
 
 # Compile regex patterns once for better performance
@@ -91,6 +92,7 @@ def extract_voe_from_script(html: str) -> Optional[str]:
     return None
 
 
+@with_fallbacks()
 def get_direct_link_from_voe(embeded_voe_link: str, referer: Optional[str] = None) -> str:
     """
     Extract direct video link from VOE embed page.

@@ -74,6 +74,11 @@ Each site module provides search, episode parsing, and season/episode counting:
 
 **Dynamic loading:** `extractors/__init__.py` uses `pkgutil.iter_modules` to auto-discover provider modules. Any file in `provider/` with a `get_direct_link_from_<name>()` function is automatically registered.
 
+**Provider fallback chain:** Every provider extractor is decorated with `@with_fallbacks()` from `common.py`. On extraction failure the chain is:
+1. Provider-specific requests-based extraction (primary)
+2. Playwright headless browser intercept (captures first `.m3u8`/`.mp4`/HLS network request)
+3. Native yt-dlp: embed URL returned directly so yt-dlp attempts its own extractors
+
 **Provider extractors** (`provider/`):
 - `voe.py` (~263 lines) - Multi-step decoding: ROT13 -> pattern replacement -> Base64 -> JSON -> M3U8 URL
 - `filemoon.py` (~240 lines) - JavaScript beautification, iframe extraction
@@ -85,7 +90,7 @@ Each site module provides search, episode parsing, and season/episode counting:
 - `vidmoly.py` (~100 lines) - Vidmoly extractor
 - `vidoza.py` (~62 lines) - Vidoza extractor
 - `streamtape.py` (~87 lines) - Streamtape extractor
-- `common.py` - Shared extractor utilities
+- `common.py` - Shared extractor utilities: `playwright_fallback()`, `with_fallbacks()` decorator (adds playwright browser intercept + native yt-dlp fallback to any provider)
 
 **Note:** The `extractors/site/` directory referenced in older docs does not exist. Site-level extraction logic is handled within `models.py` and the site modules themselves.
 
@@ -256,6 +261,8 @@ DEFAULT_LANGUAGE = "German Sub"
 DEFAULT_PROVIDER = "VOE"
 DEFAULT_DOWNLOAD_PATH = ~/Downloads
 DEFAULT_MAX_CONCURRENT_DOWNLOADS = 5
+DEFAULT_PROVIDER_TIMEOUT = 5
+DEFAULT_CONCURRENT_FRAGMENT_DOWNLOADS = 5  # parallel HLS/DASH segments per video
 DEFAULT_REQUEST_TIMEOUT = 30
 ```
 

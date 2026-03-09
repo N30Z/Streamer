@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 import requests
 
 from ...config import RANDOM_USER_AGENT, DEFAULT_REQUEST_TIMEOUT
+from .common import with_fallbacks
 
 # Constants
 DOODSTREAM_BASE_URL = "https://dood.li"
@@ -96,6 +97,7 @@ def _build_direct_link(video_base_url: str, token: str) -> str:
     return direct_link
 
 
+@with_fallbacks()
 def get_direct_link_from_doodstream(embeded_doodstream_link: str) -> str:
     """
     Extract direct download link from Doodstream embed URL.

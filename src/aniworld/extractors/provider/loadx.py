@@ -6,6 +6,7 @@ from typing import Dict, Optional
 from urllib.parse import urlparse
 
 from ...config import DEFAULT_REQUEST_TIMEOUT
+from .common import with_fallbacks
 
 # Setup module logger
 logger = logging.getLogger(__name__)
@@ -170,6 +171,7 @@ def _parse_video_response(response_text: str) -> str:
         raise ValueError(f"Failed to parse video data: {err}") from err
 
 
+@with_fallbacks()
 def get_direct_link_from_loadx(embeded_loadx_link: str) -> str:
     """
     Extract direct video link from LoadX embedded URL.

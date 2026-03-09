@@ -141,6 +141,12 @@ class WebApp:
                 self.download_manager.provider_timeout = prefs["provider_timeout"]
                 logging.info(f"Applied saved provider timeout: {prefs['provider_timeout']}s")
 
+            # Apply concurrent fragment downloads
+            if prefs.get("concurrent_fragment_downloads"):
+                self.download_manager.concurrent_fragment_downloads = prefs["concurrent_fragment_downloads"]
+                config.DEFAULT_CONCURRENT_FRAGMENT_DOWNLOADS = prefs["concurrent_fragment_downloads"]
+                logging.info(f"Applied saved concurrent fragment downloads: {prefs['concurrent_fragment_downloads']}")
+
         except Exception as e:
             logging.warning(f"Could not apply saved preferences: {e}")
 
@@ -178,6 +184,7 @@ class WebApp:
             "custom_color": None,
             "animations_enabled": True,
             "provider_timeout": getattr(config, "DEFAULT_PROVIDER_TIMEOUT", 5),
+            "concurrent_fragment_downloads": getattr(config, "DEFAULT_CONCURRENT_FRAGMENT_DOWNLOADS", 5),
             "plex_enabled": False,
             "plex_token": None,
         }
@@ -213,6 +220,10 @@ class WebApp:
             val = int(data["provider_timeout"])
             data["provider_timeout"] = max(1, min(30, val))
 
+        if "concurrent_fragment_downloads" in data:
+            val = int(data["concurrent_fragment_downloads"])
+            data["concurrent_fragment_downloads"] = max(1, min(16, val))
+
         if "download_directory" in data:
             download_dir = Path(data["download_directory"])
             # Create directory if it doesn't exist
@@ -238,6 +249,10 @@ class WebApp:
 
         if "provider_timeout" in data:
             self.download_manager.provider_timeout = data["provider_timeout"]
+
+        if "concurrent_fragment_downloads" in data:
+            self.download_manager.concurrent_fragment_downloads = data["concurrent_fragment_downloads"]
+            config.DEFAULT_CONCURRENT_FRAGMENT_DOWNLOADS = data["concurrent_fragment_downloads"]
 
         # Update download directory in runtime arguments
         if "download_directory" in data:

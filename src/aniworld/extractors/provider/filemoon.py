@@ -7,6 +7,7 @@ import jsbeautifier
 from bs4 import BeautifulSoup
 
 from ...config import RANDOM_USER_AGENT, DEFAULT_REQUEST_TIMEOUT
+from .common import with_fallbacks
 
 # Constants
 FILEMOON_BASE_URL = "https://filemoon.to/"
@@ -126,6 +127,7 @@ def _extract_file_url(content: str, source_url: str) -> str:
     return file_url
 
 
+@with_fallbacks()
 def get_direct_link_from_filemoon(embeded_filemoon_link: str) -> str:
     """
     Extract direct download link from Filemoon embed URL.
