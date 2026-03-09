@@ -184,12 +184,16 @@ def get_direct_link_from_veev(embeded_veev_link: str) -> str:
 
     # ── Fallback: Playwright browser intercept ────────────────────────────────
     log.debug("veev: falling back to browser intercept for %s", embeded_veev_link)
-    stream_url = _browser_intercept(
-        embeded_veev_link,
-        match=["veevcdn.co/px/"],
-        timeout=25,
-        referrer="https://veev.to/",
-    )
+    try:
+        stream_url = _browser_intercept(
+            embeded_veev_link,
+            match=["veevcdn.co/px/"],
+            timeout=25,
+            referrer="https://veev.to/",
+        )
+    except ImportError:
+        log.debug("veev: playwright not available, browser fallback skipped")
+        stream_url = None
     if stream_url:
         return stream_url
 

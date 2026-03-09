@@ -35,6 +35,11 @@ def with_fallbacks(playwright_patterns: Optional[list] = None):
       2. Playwright: headless Chromium intercepts the first matching network request
       3. Native yt-dlp: embed URL is returned directly so yt-dlp uses its own extractors
 
+    The wrapper accepts ``*args, **kwargs`` so providers can be called either
+    positionally or with their original keyword-argument names (e.g.
+    ``embeded_voe_link="..."`` as done by ``models.py``).  The embed URL is
+    extracted from the first positional argument or the first keyword value.
+
     Usage::
 
         @with_fallbacks()
@@ -43,10 +48,18 @@ def with_fallbacks(playwright_patterns: Optional[list] = None):
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(embed_url: str, *args, **kwargs) -> str:
+        def wrapper(*args, **kwargs) -> str:
+            # Extract the embed URL for fallback use.
+            # models.py calls providers as func(embeded_{name}_link="...") so
+            # the URL may arrive as a keyword arg rather than positional.
+            if args:
+                embed_url: str = args[0]
+            else:
+                embed_url = next(iter(kwargs.values()), "")
+
             # ── Primary: provider-specific extraction ──────────────────────
             try:
-                result = func(embed_url, *args, **kwargs)
+                result = func(*args, **kwargs)
                 if result:
                     return result
             except Exception as exc:
