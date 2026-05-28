@@ -20,27 +20,47 @@ Web-based downloader for anime, series and movies from [aniworld.to](https://ani
 
 ## Installation
 
-### Windows (Native App)
+### Requirements
 
-Download `Streamer.exe` from the [latest release](https://github.com/N30Z/Streamer/releases) and run it. No installation or Python required -- FFmpeg is bundled in.
+- Python 3.9+
+- Git
+- FFmpeg (auto-downloaded if missing)
 
-### pip (All Platforms)
+### All Platforms (Manual)
+
+**1. Clone the repository**
 
 ```bash
-pip install aniworld
+git clone https://github.com/N30Z/Streamer.git
+cd Streamer
+```
+
+**2. Install dependencies**
+
+```bash
+pip install .
 ```
 
 Optional Chromecast support:
 
 ```bash
-pip install aniworld[chromecast]
+pip install ".[chromecast]"
 ```
 
-### Requirements (pip install)
+**3. Run**
 
-- Python 3.9+
-- FFmpeg (auto-downloaded if missing)
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (installed automatically as dependency)
+```bash
+aniworld
+```
+
+---
+
+To update to the latest version:
+
+```bash
+git pull
+pip install .
+```
 
 ## Usage
 
