@@ -9,7 +9,6 @@ npyscreen
 tqdm
 fake_useragent
 packaging
-windows-curses
 winfcntl
 jsbeautifier
 flask
